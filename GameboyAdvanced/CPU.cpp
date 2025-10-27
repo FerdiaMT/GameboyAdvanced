@@ -297,17 +297,37 @@ const inline uint8_t CPU::DPgetRotate() { return (instruction >> 8) & 0xF; }
 const inline bool CPU::DPs() { return (instruction >> 20) & 0b1; } // condition code
 const inline bool CPU::DPi() { return (instruction >> 25) & 0b1; } // immediate code
 
+const inline uint8_t CPU::DPgetOp2() {return  DPi()? (DPgetImmed() << DPgetRotate()) : (DPgetRm() << DPgetShift());}
+
+inline void CPU::setN (uint32_t res) {
+  N = (res < 0);
+}
+inline void CPU::setZ (uint32_t res) {
+  Z = (res == 0);
+}
+inline void CPU::setC (uint32_t res, uint32_t op1) {
+  C = (res<a);
+}
+inline void CPU::setV (uint32_t res , uint32_t op1, uint32_t op2) {
+  V = ((op1 ^ result) & (op2 ^ result)) < 0;
+}
+
 
 
 inline void CPU::op_AND() 
 {
-	uint8_t op2 = DPi()? (DPgetImmed() << DPgetRotate()) : (DPgetRm() << DPgetShift());
+  uint32_t op1 = DPgetRn(); uint32_t op2 = DpgetOp2();
+  uint32_t res = op1 & op2; 
+  reg[DPgetRd()] = res;
 
-
+  if(DPs()) { setN(res); setZ(res); setC(res,op1) ; setV(res,op1,op2);  }
 }
+
 inline void CPU::op_EOR() 
 {
+  reg[DPgetRd()] = DPgetRn() ^ DpgetOp2();
 }
+
 inline void CPU::op_SUB() {}
 inline void CPU::op_RSB() {}
 inline void CPU::op_ADD() {}
