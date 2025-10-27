@@ -278,6 +278,94 @@ void CPU::execute()
 	(this->*op_functions[op_index])();
 }
 
+/////////////////////////////////////////////
+///             OPCODE INSTRS()           ///
+/////////////////////////////////////////////
+
+
+//HELPER FUNCTIONS FOR DATA PROCESSING
+const inline uint8_t DPgetRn(uint32_t ins) {return (ins >> 16) & 0xF;}
+
+const inline uint8_t DPgetRd(uint32_t ins) {return (ins >> 12) & 0xF;}
+
+const inline uint8_t DPgetRm(uint32_t ins) { return ins & 0xF;}
+const inline uint8_t DPgetShift(uint32_t ins) { return (ins >> 4) & 0xFF; }
+
+const inline uint8_t DPgetImmed(uint32_t ins) { return ins & 0xFF; }
+const inline uint8_t DPgetRotate(uint32_t ins) { return (ins >> 8) & 0xF; }
+
+const inline bool DPs(uint32_t ins) { return (ins >> 20) & 0b1; } // condition code
+const inline bool DPi(uint32_t ins) { return (ins >> 25) & 0b1; } // immediate code
+
+
+
+inline void CPU::op_AND() 
+{
+	
+}
+inline void CPU::op_EOR() 
+{
+}
+inline void CPU::op_SUB() {}
+inline void CPU::op_RSB() {}
+inline void CPU::op_ADD() {}
+inline void CPU::op_ADC() {}
+inline void CPU::op_SBC() {}
+inline void CPU::op_RSC() {}
+inline void CPU::op_TST() {}
+inline void CPU::op_TEQ() {}
+inline void CPU::op_CMP() {}
+inline void CPU::op_CMN() {}
+inline void CPU::op_ORR() {}
+inline void CPU::op_MOV() {}
+inline void CPU::op_BIC() {}
+inline void CPU::op_MVN() {}
+
+void op_LDR();
+void op_STR();
+void op_LDRH();
+void op_STRH();
+void op_LDRSB();
+void op_LDRSH();
+void op_LDM();
+void op_STM();
+
+void op_B();
+void op_BL();
+void op_BX();
+
+void op_MUL();
+void op_MLA();
+void op_UMULL();
+void op_UMLAL();
+void op_SMULL();
+void op_SMLAL();
+
+void op_LDRH();
+void op_STRH();
+void op_LDRSB();
+void op_LDRSH();
+
+void op_SWP();
+void op_SWPB();
+void op_SWI();
+
+void op_LDC();
+void op_STC();
+void op_CDP();
+void op_MRC();
+void op_MCR();
+
+void op_UNKNOWN();
+void op_UNASSIGNED();
+void op_CONDITIONALSKIP();
+void op_SINGLEDATATRANSFERUNDEFINED();
+void op_DECODEFAIL();
+
+/////////////////////////////////////////////
+///             READ FUNCTIONS            ///
+/////////////////////////////////////////////
+
 uint8_t CPU::read8(uint16_t addr, bool bReadOnly = false)
 {
 	return bus->read8(addr, bReadOnly);
