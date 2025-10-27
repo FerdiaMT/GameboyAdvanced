@@ -3,7 +3,94 @@
 
 CPU::CPU(Bus* bus) : bus(bus) , sp(reg[13]) , lr(reg[14]) , pc(reg[15])
 {
+	for (int i = 0; i < 16; i++)
+	{
+		reg[i] = 0;
+	}
+	CPSR = 0;
 
+	instruction = 0;
+	curOP = Operation::UNKNOWN;
+
+	initializeOpFunctions();
+}
+
+void CPU::initializeOpFunctions()
+{
+	for (int i = 0; i < static_cast<int>(Operation::COUNT); i++)
+	{
+		op_functions[i] = nullptr;
+	}
+
+	// DATA 
+	op_functions[static_cast<int>(Operation::AND)] = &CPU::op_AND;
+	op_functions[static_cast<int>(Operation::EOR)] = &CPU::op_EOR;
+	op_functions[static_cast<int>(Operation::SUB)] = &CPU::op_SUB;
+	op_functions[static_cast<int>(Operation::RSB)] = &CPU::op_RSB;
+	op_functions[static_cast<int>(Operation::ADD)] = &CPU::op_ADD;
+	op_functions[static_cast<int>(Operation::ADC)] = &CPU::op_ADC;
+	op_functions[static_cast<int>(Operation::SBC)] = &CPU::op_SBC;
+	op_functions[static_cast<int>(Operation::RSC)] = &CPU::op_RSC;
+	op_functions[static_cast<int>(Operation::TST)] = &CPU::op_TST;
+	op_functions[static_cast<int>(Operation::TEQ)] = &CPU::op_TEQ;
+	op_functions[static_cast<int>(Operation::CMP)] = &CPU::op_CMP;
+	op_functions[static_cast<int>(Operation::CMN)] = &CPU::op_CMN;
+	op_functions[static_cast<int>(Operation::ORR)] = &CPU::op_ORR;
+	op_functions[static_cast<int>(Operation::MOV)] = &CPU::op_MOV;
+	op_functions[static_cast<int>(Operation::BIC)] = &CPU::op_BIC;
+	op_functions[static_cast<int>(Operation::MVN)] = &CPU::op_MVN;
+
+	// LOAD
+	op_functions[static_cast<int>(Operation::LDR)] = &CPU::op_LDR;
+	op_functions[static_cast<int>(Operation::STR)] = &CPU::op_STR;
+	op_functions[static_cast<int>(Operation::LDRH)] = &CPU::op_LDRH;
+	op_functions[static_cast<int>(Operation::STRH)] = &CPU::op_STRH;
+	op_functions[static_cast<int>(Operation::LDRSB)] = &CPU::op_LDRSB;
+	op_functions[static_cast<int>(Operation::LDRSH)] = &CPU::op_LDRSH;
+	op_functions[static_cast<int>(Operation::LDM)] = &CPU::op_LDM;
+	op_functions[static_cast<int>(Operation::STM)] = &CPU::op_STM;
+
+	// BRANCH
+	op_functions[static_cast<int>(Operation::B)] = &CPU::op_B;
+	op_functions[static_cast<int>(Operation::BL)] = &CPU::op_BL;
+	op_functions[static_cast<int>(Operation::BX)] = &CPU::op_BX;
+
+	// MULT
+	op_functions[static_cast<int>(Operation::MUL)] = &CPU::op_MUL;
+	op_functions[static_cast<int>(Operation::MLA)] = &CPU::op_MLA;
+	op_functions[static_cast<int>(Operation::UMULL)] = &CPU::op_UMULL;
+	op_functions[static_cast<int>(Operation::UMLAL)] = &CPU::op_UMLAL;
+	op_functions[static_cast<int>(Operation::SMULL)] = &CPU::op_SMULL;
+	op_functions[static_cast<int>(Operation::SMLAL)] = &CPU::op_SMLAL;
+
+	// HALDWORD
+	op_functions[static_cast<int>(Operation::LDR)] = &CPU::op_LDR;
+	op_functions[static_cast<int>(Operation::STR)] = &CPU::op_STR;
+	op_functions[static_cast<int>(Operation::LDRH)] = &CPU::op_LDRH;
+	op_functions[static_cast<int>(Operation::STRH)] = &CPU::op_STRH;
+	op_functions[static_cast<int>(Operation::LDRSB)] = &CPU::op_LDRSB;
+	op_functions[static_cast<int>(Operation::LDRSH)] = &CPU::op_LDRSH;
+	op_functions[static_cast<int>(Operation::LDM)] = &CPU::op_LDM;
+	op_functions[static_cast<int>(Operation::STM)] = &CPU::op_STM;
+
+	// SPECIAL
+	op_functions[static_cast<int>(Operation::SWP)] = &CPU::op_SWP;
+	op_functions[static_cast<int>(Operation::SWPB)] = &CPU::op_SWPB;
+	op_functions[static_cast<int>(Operation::SWI)] = &CPU::op_SWI;
+
+	// COPROCESSOR
+	op_functions[static_cast<int>(Operation::LDC)] = &CPU::op_LDC;
+	op_functions[static_cast<int>(Operation::STC)] = &CPU::op_STC;
+	op_functions[static_cast<int>(Operation::CDP)] = &CPU::op_CDP;
+	op_functions[static_cast<int>(Operation::MRC)] = &CPU::op_MRC;
+	op_functions[static_cast<int>(Operation::MCR)] = &CPU::op_MCR;
+
+	// ERRORS
+	op_functions[static_cast<int>(Operation::UNKNOWN)] = &CPU::op_UNKNOWN;
+	op_functions[static_cast<int>(Operation::UNASSIGNED)] = &CPU::op_UNASSIGNED;
+	op_functions[static_cast<int>(Operation::CONDITIONALSKIP)] = &CPU::op_CONDITIONALSKIP;
+	op_functions[static_cast<int>(Operation::SINGLEDATATRANSFERUNDEFINED)] = &CPU::op_SINGLEDATATRANSFERUNDEFINED;
+	op_functions[static_cast<int>(Operation::DECODEFAIL)] = &CPU::op_DECODEFAIL;
 }
 
 uint32_t CPU::thumbConversion(uint16_t thumbOp)
@@ -57,10 +144,11 @@ inline bool CPU::checkConditional(uint8_t cond) const
 	}
 }
 
-
-//MRS AND MSR ARE NOT INCLUDED . THEY ARE DONE BY CERTAIN DATA TRANSFER OPERATIONS
 CPU::Operation CPU::decode()
 {
+	//MRS AND MSR ARE NOT INCLUDED . THEY ARE DONE BY CERTAIN DATA TRANSFER OPERATIONS
+
+
 	// first we should check if the conditional is valid
 	// 
 	// 1010 0101 1010 0101 0101 0101 1010 1010
@@ -177,6 +265,18 @@ CPU::Operation CPU::decode()
 
 }
 
+void CPU::execute()
+{
+	int op_index = static_cast<int>(curOP);
+
+	if (op_functions[op_index] == nullptr)
+	{
+		printf("NO FUNCTION MAPPED TO INDEX %d\n", op_index);
+		return;
+	}
+
+	(this->*op_functions[op_index])();
+}
 
 uint8_t CPU::read8(uint16_t addr, bool bReadOnly = false)
 {
