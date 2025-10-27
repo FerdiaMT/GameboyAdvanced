@@ -9,12 +9,13 @@ public:
 
 	std::unique_ptr<uint8_t[]> biosRom;
 
-	uint8_t read8(uint16_t addr);
-	uint16_t read16(uint16_t addr);
-	uint32_t read32(uint16_t addr);
+	uint8_t read8(uint16_t addr, bool bReadOnly = false);
+	uint16_t read16(uint16_t addr,bool bReadOnly = false);
+	uint32_t read32(uint16_t addr, bool bReadOnly = false);
 
+	void write8(uint16_t addr, uint8_t data);
+	void write16(uint16_t addr, uint16_t data);
+	void write32(uint16_t addr, uint16_t data);
 
-	void read8(uint16_t addr, uint8_t data);
-	void read16(uint16_t addr, uint16_t data);
 };
 

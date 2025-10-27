@@ -12,7 +12,7 @@ Bus::Bus()
 // READ FUNCTIONS
 //====================
 
-uint32_t Bus::read32(uint16_t addr)
+uint32_t Bus::read32(uint16_t addr, bool bReadOnly = false)
 {
 	if (addr >= 0x3FFF)
 	{
@@ -20,7 +20,7 @@ uint32_t Bus::read32(uint16_t addr)
 	}
 }
 
-uint16_t Bus::read16(uint16_t addr)
+uint16_t Bus::read16(uint16_t addr, bool bReadOnly = false)
 {
 	if (addr >= 0x3FFF)
 	{
@@ -29,7 +29,7 @@ uint16_t Bus::read16(uint16_t addr)
 }
 
 
-uint8_t Bus::read8(uint16_t addr)
+uint8_t Bus::read8(uint16_t addr, bool bReadOnly = false)
 {
 	if (addr >= 0x3FFF)
 	{
@@ -41,7 +41,7 @@ uint8_t Bus::read8(uint16_t addr)
 // WRITE FUNCTIONS
 //====================
 
-void Bus::read8(uint16_t addr, uint8_t data)
+void Bus::write8(uint16_t addr, uint8_t data)
 {
 	if (addr >= 0x3FFF)
 	{
@@ -49,11 +49,22 @@ void Bus::read8(uint16_t addr, uint8_t data)
 	}
 }
 
-void Bus::read16(uint16_t addr, uint16_t data)
+void Bus::write16(uint16_t addr, uint16_t data)
 {
 	if (addr >= 0x3FFF)
 	{
 		biosRom[addr] = data & 0xFF;
 		biosRom[addr+1] = (data>>8) & 0xFF ;
+	}
+}
+
+void Bus::write32(uint16_t addr, uint16_t data)
+{
+	if (addr >= 0x3FFF)
+	{
+		biosRom[addr] = data & 0xFF;
+		biosRom[addr + 1] = (data >> 8) & 0xFF;
+		biosRom[addr + 2] = (data >> 16) & 0xFF;
+		biosRom[addr + 3] = (data >> 24) & 0xFF;
 	}
 }

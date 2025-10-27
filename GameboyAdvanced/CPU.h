@@ -3,16 +3,20 @@
 #include <cstdint>
 class CPU
 {
-	public:
+public:
 		Bus* bus;
 		CPU(Bus*);
 
 		uint32_t tick();
 
-		uint32_t reg[14];
+		uint32_t reg[16];
+
+		uint32_t& sp; // stack pointer
+		uint32_t& lr; // link register
+		uint32_t& pc;
 
 		//15 resevred for pc which i declare seperately
-		uint32_t pc;
+		
 
 		//current program status registers
 		union
@@ -40,5 +44,19 @@ class CPU
 		};
 
 		uint32_t spsr;
+public:
+		// instruction to take
+		uint32_t instruction;
+
+private:
+
+
+	uint32_t thumbConversion(uint16_t thumbOp);
+	void execute();
+	inline bool checkConditional(uint8_t cond) const;
+
+	uint8_t read8(uint16_t addr, bool bReadOnly = false);
+	uint16_t read16(uint16_t addr, bool bReadOnly = false);
+	uint32_t read32(uint16_t addr, bool bReadOnly = false);
 };
 
