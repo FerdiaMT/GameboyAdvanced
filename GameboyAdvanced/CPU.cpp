@@ -284,24 +284,26 @@ void CPU::execute()
 
 
 //HELPER FUNCTIONS FOR DATA PROCESSING
-const inline uint8_t DPgetRn(uint32_t ins) {return (ins >> 16) & 0xF;}
+const inline uint8_t CPU::DPgetRn() {return (instruction >> 16) & 0xF;}
 
-const inline uint8_t DPgetRd(uint32_t ins) {return (ins >> 12) & 0xF;}
+const inline uint8_t CPU::DPgetRd() {return (instruction >> 12) & 0xF;}
 
-const inline uint8_t DPgetRm(uint32_t ins) { return ins & 0xF;}
-const inline uint8_t DPgetShift(uint32_t ins) { return (ins >> 4) & 0xFF; }
+const inline uint8_t CPU::DPgetRm() { return instruction & 0xF;}
+const inline uint8_t CPU::DPgetShift() { return (instruction >> 4) & 0xFF; }
 
-const inline uint8_t DPgetImmed(uint32_t ins) { return ins & 0xFF; }
-const inline uint8_t DPgetRotate(uint32_t ins) { return (ins >> 8) & 0xF; }
+const inline uint8_t CPU::DPgetImmed() { return instruction & 0xFF; }
+const inline uint8_t CPU::DPgetRotate() { return (instruction >> 8) & 0xF; }
 
-const inline bool DPs(uint32_t ins) { return (ins >> 20) & 0b1; } // condition code
-const inline bool DPi(uint32_t ins) { return (ins >> 25) & 0b1; } // immediate code
+const inline bool CPU::DPs() { return (instruction >> 20) & 0b1; } // condition code
+const inline bool CPU::DPi() { return (instruction >> 25) & 0b1; } // immediate code
 
 
 
 inline void CPU::op_AND() 
 {
-	
+	uint8_t op2 = DPi()? (DPgetImmed() << DPgetRotate()) : (DPgetRm() << DPgetShift());
+
+
 }
 inline void CPU::op_EOR() 
 {

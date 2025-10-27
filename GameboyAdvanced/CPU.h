@@ -167,5 +167,20 @@ public:
 	void op_SINGLEDATATRANSFERUNDEFINED();
 	void op_DECODEFAIL();
 
+	private: // helper for data rpocessing
+		const inline uint8_t DPgetRn();
+
+		const inline uint8_t DPgetRd();
+
+		const inline uint8_t DPgetRm();
+		const inline uint8_t DPgetShift();
+
+		const inline uint8_t DPgetImmed();
+		const inline uint8_t DPgetRotate();
+
+		const inline bool DPs();
+		const inline bool DPi();
+
+
 };
 
