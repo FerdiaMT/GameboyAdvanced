@@ -1,9 +1,52 @@
 #pragma once
 #include "Bus.h"
 #include <cstdint>
+#include <map>
+#include <unordered_map>
 class CPU
 {
+
+
 public:
+	enum class Operation
+	{
+		// Data processing
+		AND, EOR, SUB, RSB, ADD, ADC, SBC, RSC,
+		TST, TEQ, CMP, CMN, ORR, MOV, BIC, MVN,
+
+		// Load/Store
+		LDRH , STRH, LDRSB, LDRSH, // halfword and signed data transfer
+		LDR , STR, // SINGLE DATA TRANSFER
+		LDM, STM,
+
+		// Branch
+		B, BL, BX,
+
+		// Multiply
+		MUL, MLA, UMULL, UMLAL, SMULL, SMLAL,
+
+		// Special
+		SWP, SWPB, SWI,
+
+		//coprocessor
+
+		CDP,LDC,STC,MRC,MCR,
+
+		//general break
+		UNKNOWN,
+		//more specific breaks
+		UNASSIGNED, // this is only given at the start
+		CONDITIONALSKIP, // this is only given on conditionalFail
+		SINGLEDATATRANSFERUNDEFINED, //theres a single instruction in decode thats the same as executeSingleDataTransfer, but tells is if bit 4 is set, it becomes undefined
+		DECODEFAIL , // if it reaches the end of the decoding list and never gets anything it returns this
+		//should be some realistically to tell me why it failed
+	};
+private:
+	using OpFunction = void (CPU::*)(void);
+	OpFunction data_processing_ops[16];
+public:
+		
+
 		Bus* bus;
 		CPU(Bus*);
 
@@ -47,16 +90,19 @@ public:
 public:
 		// instruction to take
 		uint32_t instruction;
+		//decoded operation
+		Operation curOP;
 
 private:
 
 
 	uint32_t thumbConversion(uint16_t thumbOp);
-	void execute();
+	Operation decode();
 	inline bool checkConditional(uint8_t cond) const;
 
 	uint8_t read8(uint16_t addr, bool bReadOnly = false);
 	uint16_t read16(uint16_t addr, bool bReadOnly = false);
 	uint32_t read32(uint16_t addr, bool bReadOnly = false);
+
 };
 
