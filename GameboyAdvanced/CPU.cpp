@@ -31,7 +31,6 @@ inline bool CPU::checkConditional(uint8_t cond) const
 {
 	if ((cond == 0xE, 1)) [[likely]] return true;
 
-
 	switch (cond)
 	{
 	case(0x0):return Z;					break;
@@ -51,7 +50,6 @@ inline bool CPU::checkConditional(uint8_t cond) const
 	case(0xE):return true;				break;
 	case(0xF):printf("0XF INVALID CND");break;
 	}
-
 }
 
 void CPU::execute()
@@ -64,7 +62,34 @@ void CPU::execute()
 	uint8_t conditional = (instruction>>28) & 0xF;
 	if (!checkConditional(conditional)) return;
 
-	
+	// so now we get bit 27,26 and 25 to tell us what instruction to execute
+	switch ((instruction >> 25) & 0x7)
+	{
+	case(0b001):executeDataProcessing();break;
+	case(0b000):
+	{
+		// a few odd cases here
+		if      ((instruction & 0x0FFFFFF0) == 0x12FFF10 ) executeBranchAndExchange();
+		else if ((instruction & 0x0FB00FF0) == 0x01000090) executeSwap();
+		else if ((instruction & 0x0F8000F0) == 0x00800090) executeMultiplyLong();
+		else if ((instruction & 0x0FC000F0) == 0x00000090) executeMultiply();
+		else if ((instruction & 0x0E000090) == 0x00000090) executeHalfwordTransfer();
+		else {                                             executeDataProcessing(); }
+	}break;
+
+	case(0b011): if (!((instruction >> 4) & 0b1)) executeSingleDataTransfer(); break;
+	case(0b010): executeSingleDataTransfer();break;
+	case(0b100): executeBlockDataTransfer();break;
+	case(0b110): executeCoprocessorBlockDataTransfer();break;
+
+	case(0b111): 
+	{
+		if ((instruction >> 24) & 0b1) executeSoftwareInterrupt();
+		else if (!((instruction >> 4) & 0b1)) executeCoprocessorDataOperation();
+		else executeCoprocessorRegisterTransfer();
+	}break;
+
+	}
 
 }
 
