@@ -104,7 +104,7 @@ void CPU::initializeOpFunctions()
 //////////////////////////////////////////////////////////////////////////
 
 
-CPU::mode CPU::CSPRbitToMode(uint8_t modeBits)
+CPU::mode CPU::CPSRbitToMode(uint8_t modeBits)
 {
 	return static_cast<mode>(modeBits & 0x1F);
 }
@@ -212,7 +212,7 @@ void CPU::returnFromException()
 	if (oldModeIndex > 0) // if not user / system
 	{
 		uint32_t savedCPSR = spsrBank[oldModeIndex - 1];
-		curMode = CSPRbitToMode(savedCPSR & 0x1F);
+		curMode = CPSRbitToMode(savedCPSR & 0x1F);
 
 		bankRegisters(oldMode);
 		CPSR = savedCPSR;
@@ -221,7 +221,6 @@ void CPU::returnFromException()
 }
 
 //SPSR helpers
-//these are actually kind of useless, mabye remove later 
 uint32_t CPU::getSPSR()
 {
 	uint8_t idx = getModeIndex(curMode);
@@ -236,7 +235,26 @@ void  CPU::setSPSR(uint32_t value)
 	int idx = getModeIndex(curMode);
 	if (idx > 0) spsrBank[idx - 1] = value;
 }
+//CPSR helper
+void CPU::writeCPSR(uint32_t value)
+{
+	if (curMode == mode::User && ((value & 0x1F) != static_cast<uint8_t>(mode::User))) // if were in usre, and were trying to leave it
+	{
+		CPSR = (CPSR & 0x000000FF) | (value & 0xFFFFFF00);  // update just flags, ignore rest
+		return;
+	}
 
+	mode newMode = CPSRbitToMode(value & 0x1F);
+
+	if (curMode != newMode) // if we should swap modes
+	{
+		switchMode(newMode); 
+	}
+	else
+	{
+		CPSR = value;  
+	}
+}
 
 
 
@@ -258,7 +276,7 @@ uint32_t CPU::tick()
 
 	curOpCycles = execute();
 
-	cycleTotal += curOpCycles;
+	cycleTotal += curOpCycles; // this could be returned and made so the ppu does this many frames too ... 
 }
 
 uint32_t CPU::thumbConversion(uint16_t thumbOp)
@@ -859,14 +877,45 @@ inline int CPU::op_BIC()
 //				      PSR TRANSFER (USED BY DATAOPS) 					//
 //////////////////////////////////////////////////////////////////////////
 
-// these rely on keeping our current state stored, so i may look at it later
-inline int CPU::op_MRS()
-{
 
+inline int CPU::op_MRS() // move psr to register
+{
+	if ((instruction >> 22) & 0b1) // if true , read the spsr
+	{
+		reg[(instruction >> 12) & 0xF] = getSPSR();
+	}
+	else // if false , read the cpsr
+	{
+		reg[(instruction >> 12) & 0xF] = CPSR;
+	}
+
+	return 1;
 }
-inline int CPU::op_MSR()
+inline int CPU::op_MSR() // move into psr
 {
 
+	uint32_t value = reg[instruction & 0xF];//default on reg mode
+	if ((instruction >> 25) & 0b1) // imediate mode
+	{
+		uint8_t imm = instruction & 0xFF;
+		uint8_t rotate = ((instruction >> 8) & 0xF) * 2;
+		value = (imm >> rotate) | (imm << (32 - rotate));
+	}
+
+	uint32_t mask = 0;
+	if ((instruction >> 19) & 0b1) mask |= 0xFF000000;    //  if we should include flag
+	if ((instruction >> 16) & 0b1) mask |= 0x000000FF;  // if we should include control
+
+	if ((instruction >> 22) & 0b1) // write to SPSR
+	{
+		setSPSR((getSPSR() & ~mask) | (value & mask));
+	}
+	else // write to CPSR
+	{
+		writeCPSR((CPSR & ~mask) | (value & mask));
+	}
+
+	return 1;
 }
 
 
@@ -1160,8 +1209,90 @@ inline int CPU::op_LDRSH() //load signed halfword
 
 	return 3;
 }
+
+//////////////////////////////////////////////////////////////////////////
+//				              OPERATIONS								//
+//////////////////////////////////////////////////////////////////////////
+//				          LOAD / STORE MULTIPLE      					//
+//////////////////////////////////////////////////////////////////////////
+
+inline int numOfRegisters(uint16_t registerList)
+{
+	int numRegs = 0;
+	for (int i = 0; i < 16; i++)
+	{
+		if (registerList & (1 << i)) numRegs++;
+	}
+
+	return numRegs;
+}
+
 inline int CPU::op_LDM()
 {
+	uint16_t registerList = instruction & 0xFFFF;
+	uint8_t rnI = (instruction>>16) & 0xF;
+	bool w = (instruction >> 21) & 0b1;
+	bool s = (instruction >> 22) & 0b1; // 1 ~ load PSR / force user mode, else dont
+	bool u = (instruction >> 23) & 0b1;
+	bool p = (instruction >> 24) & 0b1;
+
+	// so if a bit is set in registerList, it is transfered
+	int numRegs = numOfRegisters(registerList);
+	if (numRegs == 0) return; // nothing to transfer
+
+	uint32_t startAddr = reg[rnI];
+
+	if (!u) startAddr -= (numRegs * 4); //if down bit, subtract now
+
+	bool loadPC = (registerList << 15) & 0b1; // save if were gonna load into pc
+	bool useUserReg = s && !loadPC; // if s is set, we gotta use user reg EXCEPT FOR v
+	bool restoreCPSR = s && loadPC; // we must restore CPSR instead if pc is also target
+
+	uint32_t addr = startAddr; // use this for incrementing through list
+	for (uint8_t i = 0; i < 16; i++)
+	{
+		if ((registerList << i) & 0b0) continue; // skip if not set
+
+		if (p) addr += 4; // pre adress increment
+
+		uint32_t val = read32(addr & ~3);
+
+		if (!useUserReg) reg[i] = val;
+		else // if useUserReg true (s and not PC) we store into user modes r13 and r14 instead of our own
+		{
+			if (i == 13) r13RegBank[getModeIndex(mode::User)] = val;
+			if (i == 14) r14RegBank[getModeIndex(mode::User)] = val;
+		}
+
+		if (!p) addr += 4; // post adress increment
+	}
+
+	if (w) // if writeback is true
+	{
+		if (!((registerList << rnI) & 0b1) || rnI != 15) // cant write back if both are true
+		{
+			if (u) reg[rnI] = startAddr + (numRegs * 4);
+			else reg[rnI] = startAddr; // decrements already been done at this stage
+		}
+	}
+
+	if (loadPC) // if we loaded to pc
+	{
+		if (restoreCPSR) returnFromException();
+
+		if (reg[15] & 0x1) // thumb switching
+		{
+			T = true;
+			reg[15] &= ~0x1;  
+		}
+		else
+		{
+			T = false;
+			reg[15] &= ~0x3;
+		}
+	}
+
+	return 2 + numRegs;
 
 }
 inline int CPU::op_STM()

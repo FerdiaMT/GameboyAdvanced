@@ -57,6 +57,7 @@ public:
 		void initializeOpFunctions(); // this is for initing the list of enums to funcs
 
 		uint16_t curOpCycles; // this is defaulted to 0 every time
+		int cycleTotal; // this is how we find out how many cycles have passed
 
 		uint32_t tick();
 		Operation decode();
@@ -136,8 +137,7 @@ private:
 
 	mode curMode= mode::Supervisor; // curMode should default to Supervisor
 
-	mode CSPRbitToMode(uint8_t modeBits);
-
+	
 
 	bool isPrivilegedMode(); // used to quickly tell were not in user mode
 	uint8_t getModeIndex(CPU::mode mode); // used for register saving
@@ -156,6 +156,11 @@ private:
 	//SPSR helpers
 	uint32_t getSPSR();
 	void setSPSR(uint32_t value);
+
+	//cpsr helper
+
+	void writeCPSR(uint32_t value);
+	mode CPSRbitToMode(uint8_t modeBits);
 
 	// bank system so when we swap modes, we can store old modes inhere 
 	uint32_t r8FIQ[5];   // 8 9 10 11 12 registers stored for just fiq
