@@ -137,6 +137,9 @@
     <ClInclude Include="GBA.h" />
     <ClInclude Include="Bus.h" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="armwrestler.gba" />
+  </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>

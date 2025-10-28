@@ -1,20 +1,42 @@
 #include "CPU.h"
 #include <cstdint>
+#include <iostream>
+
+namespace Vector // use these for jumping
+{
+	constexpr uint32_t Reset = 0x00000000;
+	constexpr uint32_t Undefined = 0x00000004;
+	constexpr uint32_t SWI = 0x00000008;
+	constexpr uint32_t PrefetchAbort = 0x0000000C;
+	constexpr uint32_t DataAbort = 0x00000010;
+	constexpr uint32_t Reserved = 0x00000014;
+	constexpr uint32_t IRQ = 0x00000018;
+	constexpr uint32_t FIQ = 0x0000001C;
+}
+
 
 CPU::CPU(Bus* bus) : bus(bus) , sp(reg[13]) , lr(reg[14]) , pc(reg[15])
 {
-	for (int i = 0; i < 16; i++)
-	{
-		reg[i] = 0;
-	}
-	CPSR = 0;
-
-	instruction = 0;
-	curOP = Operation::UNKNOWN;
-	curMode = mode::Supervisor;
+	reset();
 
 	initializeOpFunctions();
 }
+
+void CPU::reset()
+{
+	instruction = 0;
+	curOP = Operation::UNKNOWN;
+	curMode = mode::Supervisor;
+	CPSR = static_cast<uint8_t>(mode::Supervisor) | 0xC0;
+	for (int i = 0; i < 16; i++) reg[i] = 0;
+	reg[13] = 0x03007F00;  // SP
+	pc = 0x08000000;  
+	T = false;  // DEFAULT TO ARM
+	N = Z = C = V = false;
+	unbankRegisters(curMode);
+}
+
+
 
 void CPU::initializeOpFunctions()
 {
@@ -97,6 +119,30 @@ void CPU::initializeOpFunctions()
 	op_functions[static_cast<int>(Operation::SINGLEDATATRANSFERUNDEFINED)] = &CPU::op_SINGLEDATATRANSFERUNDEFINED;
 	op_functions[static_cast<int>(Operation::DECODEFAIL)] = &CPU::op_DECODEFAIL;
 }
+
+uint32_t CPU::tick()
+{
+	if (!T) // if arm mode
+	{
+		instruction = read32(pc);
+		pc += 4;
+	}
+	else // if thumb mode
+	{
+		instruction = thumbConversion(read16(pc));
+		pc += 2;
+	}
+	curOP = decode();
+
+	std::cout << pc<<std::hex<<" "<< opcodeToString(curOP) << std::endl;
+
+	curOpCycles = execute();
+
+	cycleTotal += curOpCycles; // this could be returned and made so the ppu does this many frames too ... 
+
+	return cycleTotal;// doing this for now
+}
+
 
 
 //////////////////////////////////////////////////////////////////////////
@@ -259,29 +305,10 @@ void CPU::writeCPSR(uint32_t value)
 
 
 
-uint32_t CPU::tick()
-{
-	if (!T) // if arm mode
-	{
-		instruction = read32(pc);
-		pc += 4;
-	}
-	else // if thumb mode
-	{
-		instruction = thumbConversion(read16(pc));
-		pc += 2;
-	}
-
-	curOP = decode();
-
-	curOpCycles = execute();
-
-	cycleTotal += curOpCycles; // this could be returned and made so the ppu does this many frames too ... 
-}
 
 uint32_t CPU::thumbConversion(uint16_t thumbOp)
 {
-
+	return 0xF;
 }
 
 
@@ -433,10 +460,11 @@ int CPU::execute()
 	if (op_functions[op_index] == nullptr)
 	{
 		printf("NO FUNCTION MAPPED TO INDEX %d\n", op_index);
-		return;
+		return 1;
 	}
 
-	return (this->*op_functions[op_index])();
+	return(this->*op_functions[op_index])();
+
 }
 
 /////////////////////////////////////////////
@@ -451,6 +479,9 @@ const inline uint8_t CPU::pcOffset()
 }
 
 //HELPER FUNCTIONS FOR DATA PROCESSING
+
+
+
 const inline uint8_t CPU::DPgetRn() {return (instruction >> 16) & 0xF;}
 const inline uint8_t CPU::DPgetRd() {return (instruction >> 12) & 0xF;}
 const inline uint8_t CPU::DPgetRs() { return (instruction >> 8) & 0xF; }
@@ -609,6 +640,24 @@ inline void CPU::setNZ(uint32_t res) // TEST CHECK
 	N = (res & 0x80000000) != 0;
 	Z = (res == 0);
 }
+
+inline void CPU::writeALUResult(uint8_t rdI, uint32_t result, bool s)
+{
+	if (s && rdI == 15)
+	{
+		returnFromException();
+		reg[15] = result & ~3;
+	}
+	else if (rdI == 15)
+	{
+		reg[15] = result & ~3;
+	}
+	else
+	{
+		reg[rdI] = result;
+	}
+}
+
 //////////////////////////////////////////////////////////////////////////
 //				           CYCLE CALCULATORS							//
 //////////////////////////////////////////////////////////////////////////
@@ -681,6 +730,8 @@ inline int CPU::op_BL() //TODO, make sure this is using correct logic to decide 
 //				              DATA PROCESSING							//
 //////////////////////////////////////////////////////////////////////////
 
+
+
 // FIRST 8 BINARYS
 // AND, ORR, EOR, SUB, RSB, ADD, ADC, SBC, RSC, , BIC
 // BIT OPERATIONS // AND, ORR EOR
@@ -690,10 +741,10 @@ inline int CPU::op_AND()
 	bool isCarry = C;
 
 	uint32_t res = reg[DPgetRn()] & DPgetOp2(&isCarry);
-	reg[DPgetRd()] = res;
 
 	if (DPs()) { setFlagNZC(res, isCarry); }
 
+	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
 	return dataProcessingCycleCalculator();
 }
 
@@ -702,10 +753,11 @@ inline int CPU::op_ORR()
 	bool isCarry = C;
 
 	uint32_t res = reg[DPgetRn()] & DPgetOp2(&isCarry);
-	reg[DPgetRd()] = res;
+
 
 	if (DPs()) { setFlagNZC(res, isCarry); }
 
+	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
 	return dataProcessingCycleCalculator();
 }
 
@@ -714,10 +766,10 @@ inline int CPU::op_EOR()
 	bool isCarry = C;
 
 	uint32_t res = reg[DPgetRn()] ^ DPgetOp2(&isCarry);
-	reg[DPgetRd()] = res;
+
 
 	if (DPs()) { setFlagNZC(res, isCarry); }
-
+	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
 	return dataProcessingCycleCalculator();
 }
 
@@ -728,10 +780,10 @@ inline int CPU::op_ADD()
 	uint32_t op1 = reg[DPgetRn()];
 	uint32_t op2 = DPgetOp2(nullptr);
 	uint32_t res = op1 + op2;
-	reg[DPgetRd()] = res;
 
-	if (DPs()) { setFlagsAdd(res, op1, op2); }
 
+	if (DPs() && DPgetRd() != 15) { setFlagsAdd(res, op1, op2); }
+	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
 	return dataProcessingCycleCalculator();
 }
 inline int CPU::op_SUB()
@@ -739,10 +791,10 @@ inline int CPU::op_SUB()
 	uint32_t op1 = reg[DPgetRn()];
 	uint32_t op2 = DPgetOp2(nullptr);
 	uint32_t res = op1 - op2;
-	reg[DPgetRd()] = res;
 
-	if (DPs()) { setFlagsSub(res, op1, op2); }
 
+	if (DPs() && DPgetRd() != 15) { setFlagsSub(res, op1, op2); }
+	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
 	return dataProcessingCycleCalculator();
 }
 inline int CPU::op_ADC()
@@ -750,10 +802,10 @@ inline int CPU::op_ADC()
 	uint32_t op1 = reg[DPgetRn()];
 	uint32_t op2 = DPgetOp2(nullptr) + (uint32_t)C;
 	uint32_t res = op1 + op2;
-	reg[DPgetRd()] = res;
 
-	if (DPs()) { setFlagsAdd(res, op1, op2); }
 
+	if (DPs() && DPgetRd() != 15) { setFlagsAdd(res, op1, op2); }
+	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
 	return dataProcessingCycleCalculator();
 }
 inline int CPU::op_SBC()
@@ -761,10 +813,10 @@ inline int CPU::op_SBC()
 	uint32_t op1 = reg[DPgetRn()];
 	uint32_t op2 = DPgetOp2(nullptr) - (uint32_t)C;
 	uint32_t res = op1 - op2;
-	reg[DPgetRd()] = res;
 
-	if (DPs()) { setFlagsSub(res, op1, op2); }
 
+	if (DPs() && DPgetRd() != 15) { setFlagsSub(res, op1, op2); }
+	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
 	return dataProcessingCycleCalculator();
 }
 
@@ -775,10 +827,10 @@ inline int CPU::op_RSB()
 	uint32_t op1 = reg[DPgetRn()];
 	uint32_t op2 = DPgetOp2(nullptr);
 	uint32_t res = op2 - op1;
-	reg[DPgetRd()] = res;
 
-	if (DPs()) { setFlagsSub(res, op1, op2); }
 
+	if (DPs() && DPgetRd() != 15) { setFlagsSub(res, op1, op2); }
+	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
 	return dataProcessingCycleCalculator();
 }
 inline int CPU::op_RSC()
@@ -786,10 +838,10 @@ inline int CPU::op_RSC()
 	uint32_t op1 = reg[DPgetRn()];
 	uint32_t op2 = DPgetOp2(nullptr) - (uint32_t)(!C);
 	uint32_t res = op2 - op1;
-	reg[DPgetRd()] = res;
 
-	if (DPs()) { setFlagsSub(res, op1, op2); }
 
+	if (DPs() && DPgetRd() != 15) { setFlagsSub(res, op1, op2); }
+	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
 	return dataProcessingCycleCalculator();
 }
 
@@ -801,7 +853,7 @@ inline int CPU::op_TST() // AND , but we dont write the val in
 
 	uint32_t res = reg[DPgetRn()] & DPgetOp2(&isCarry);
 
-	if (DPs()) { setFlagNZC(res, isCarry); }
+	if (DPs() && DPgetRd() != 15) { setFlagNZC(res, isCarry); }
 
 	return dataProcessingCycleCalculator();
 }
@@ -811,7 +863,7 @@ inline int CPU::op_TEQ() // XOR , but we dont write the val in
 
 	uint32_t res = reg[DPgetRn()] ^ DPgetOp2(&isCarry);
 
-	if (DPs()) { setFlagNZC(res, isCarry); }
+	if (DPs() && DPgetRd() != 15) { setFlagNZC(res, isCarry); }
 
 	return dataProcessingCycleCalculator();
 }
@@ -820,10 +872,10 @@ inline int CPU::op_CMP() // SUB , but we dont write the val in
 	uint32_t op1 = reg[DPgetRn()];
 	uint32_t op2 = DPgetOp2(nullptr);
 	uint32_t res = op1 - op2;
-	reg[DPgetRd()] = res;
 
-	if (DPs()) { setFlagsSub(res, op1, op2); }
 
+	if (DPs() && DPgetRd() != 15) { setFlagsSub(res, op1, op2); }
+	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
 	return dataProcessingCycleCalculator();
 }
 inline int CPU::op_CMN() // ADD , but we dont write the val in
@@ -831,10 +883,10 @@ inline int CPU::op_CMN() // ADD , but we dont write the val in
 	uint32_t op1 = reg[DPgetRn()];
 	uint32_t op2 = DPgetOp2(nullptr);
 	uint32_t res = op1 + op2;
-	reg[DPgetRd()] = res;
 
-	if (DPs()) { setFlagsAdd(res, op1, op2); }
 
+	if (DPs() && DPgetRd() != 15) { setFlagsAdd(res, op1, op2); }
+	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
 	return dataProcessingCycleCalculator();
 }
 // ops for writing 
@@ -843,10 +895,10 @@ inline int CPU::op_MOV()
 	bool isCarry = C;
 
 	uint32_t res = DPgetOp2(&isCarry);
-	reg[DPgetRd()] = res;
 
-	if (DPs()) { setFlagNZC(res, isCarry); }
 
+	if (DPs() && DPgetRd() != 15) { setFlagNZC(res, isCarry); }
+	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
 	return dataProcessingCycleCalculator();
 }
 inline int CPU::op_MVN()
@@ -854,10 +906,10 @@ inline int CPU::op_MVN()
 	bool isCarry = C;
 
 	uint32_t res = ~(DPgetOp2(&isCarry));
-	reg[DPgetRd()] = res;
 
-	if (DPs()) { setFlagNZC(res, isCarry); }
 
+	if (DPs() && DPgetRd() != 15) { setFlagNZC(res, isCarry); }
+	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
 	return dataProcessingCycleCalculator();
 }
 
@@ -865,9 +917,9 @@ inline int CPU::op_BIC()
 {
 	bool isCarry = C;
 	uint32_t res = reg[DPgetRn()] & ~(DPgetOp2(&isCarry));
-	reg[DPgetRd()] = res;
-	if (DPs()) { setFlagNZC(res, isCarry); }
 
+	if (DPs() && DPgetRd() != 15) { setFlagNZC(res, isCarry); }
+	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
 	return dataProcessingCycleCalculator();
 }
 
@@ -983,19 +1035,19 @@ inline int CPU::op_MLA()
 
 inline int CPU::op_UMULL()
 {
-
+	return 1;
 }
 inline int CPU::op_UMLAL()
 {
-
+	return 1;
 }
 inline int CPU::op_SMULL()
 {
-
+	return 1;
 }
 inline int CPU::op_SMLAL()
 {
-
+	return 1;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -1238,20 +1290,20 @@ inline int CPU::op_LDM()
 
 	// so if a bit is set in registerList, it is transfered
 	int numRegs = numOfRegisters(registerList);
-	if (numRegs == 0) return; // nothing to transfer
+	if (numRegs == 0) return 1; // nothing to transfer
 
 	uint32_t startAddr = reg[rnI];
 
 	if (!u) startAddr -= (numRegs * 4); //if down bit, subtract now
 
-	bool loadPC = (registerList << 15) & 0b1; // save if were gonna load into pc
+	bool loadPC = (registerList >> 15) & 0b1; // save if were gonna load into pc
 	bool useUserReg = s && !loadPC; // if s is set, we gotta use user reg EXCEPT FOR v
 	bool restoreCPSR = s && loadPC; // we must restore CPSR instead if pc is also target
 
 	uint32_t addr = startAddr; // use this for incrementing through list
 	for (uint8_t i = 0; i < 16; i++)
 	{
-		if ((registerList << i) & 0b0) continue; // skip if not set
+		if ((registerList >> i) & 0b0) continue; // skip if not set
 
 		if (p) addr += 4; // pre adress increment
 
@@ -1261,7 +1313,8 @@ inline int CPU::op_LDM()
 		else // if useUserReg true (s and not PC) we store into user modes r13 and r14 instead of our own
 		{
 			if (i == 13) r13RegBank[getModeIndex(mode::User)] = val;
-			if (i == 14) r14RegBank[getModeIndex(mode::User)] = val;
+			else if (i == 14) r14RegBank[getModeIndex(mode::User)] = val;
+			else reg[i] = val; // if its not 13 or 14
 		}
 
 		if (!p) addr += 4; // post adress increment
@@ -1297,58 +1350,133 @@ inline int CPU::op_LDM()
 }
 inline int CPU::op_STM()
 {
+	uint16_t registerList = instruction & 0xFFFF;
+	uint8_t rnI = (instruction >> 16) & 0xF;
+	bool w = (instruction >> 21) & 0b1;
+	bool s = (instruction >> 22) & 0b1;  // 1 ~ load PSR / force user mode, else dont
+	bool u = (instruction >> 23) & 0b1;
+	bool p = (instruction >> 24) & 0b1;
 
+	int numRegs = numOfRegisters(registerList);
+	if (numRegs == 0) return 1; 
+
+	uint32_t startAddr = reg[rnI];
+	if (!u) startAddr -= (numRegs * 4);  // if down bit, subtract now
+
+	bool storePC = (registerList >> 15) & 0b1;  // check if storing PC
+
+	uint32_t addr = startAddr;
+	for (uint8_t i = 0; i < 16; i++)
+	{
+		if (!((registerList >> i) & 0b1)) continue;  
+
+		if (p) addr += 4;  // pre increment
+
+		uint32_t val;
+		if (!s || i < 8 || i == 15)
+		{
+			// standard use
+			val = reg[i];
+			if (i == 15) val += 4;  
+		}
+		else
+		{
+			// if s , user mode regs
+			if (i >= 13 && i <= 14)
+			{
+				val = (i == 13) ? r13RegBank[getModeIndex(mode::User)] : r14RegBank[getModeIndex(mode::User)];
+			}
+			else if (i >= 8 && i <= 12)
+			{
+				// otherwise only fiq has banking
+				if (curMode == mode::FIQ) val = r8FIQ[i - 8]; // this may cause bugs
+				else val = reg[i];
+			}
+			else
+			{
+				val = reg[i];
+			}
+		}
+
+		write32(addr & ~3, val);
+
+		if (!p) addr += 4;  // post addr increment
+	}
+
+	if (w)  // write back
+	{
+		if (!((registerList >> rnI) & 0b1))
+		{
+			if (u) reg[rnI] = startAddr + (numRegs * 4);
+			else reg[rnI] = startAddr;
+		}
+	}
+
+	return 2 + numRegs;
 }
 
 
+inline int CPU::op_SWI()
+{
+	printf("SWI #%d: r0=%08X r1=%08X r2=%08X\n", (instruction & 0xFFFFFF), reg[0], reg[1], reg[2]); // debugging logger
 
+	enterException(mode::Supervisor, Vector::SWI, pc - 4);
 
-void op_SWP();
-void op_SWPB();
-void op_SWI();
+	return 3;
+}
 
-void op_LDC();
-void op_STC();
-void op_CDP();
-void op_MRC();
-void op_MCR();
+inline int CPU::op_SWP() { return 1; }
 
-void op_UNKNOWN();
-void op_UNASSIGNED();
-void op_CONDITIONALSKIP();
-void op_SINGLEDATATRANSFERUNDEFINED();
-void op_DECODEFAIL();
+inline int CPU::op_SWPB() { return 1; }
+
+inline int CPU::op_LDC()  { return 1; }
+inline int CPU::op_STC() { return 1; }
+inline int CPU::op_CDP() { return 1; }
+inline int CPU::op_MRC() { return 1; }
+inline int CPU::op_MCR() { return 1; }
+
+inline int CPU::op_DECODEFAIL()
+{
+	printf("Undefined instruction: %08X at PC=%08X\n", instruction, pc - 4);
+	enterException(mode::Undefined, Vector::Undefined, pc - 4);
+	return 1;
+}
+inline int CPU::op_UNKNOWN() { return 1; }
+inline int CPU::op_UNASSIGNED() { return 1; }
+inline int CPU::op_CONDITIONALSKIP() { return 1; }
+inline int CPU::op_SINGLEDATATRANSFERUNDEFINED() { return 1; }
+
 
 /////////////////////////////////////////////
 ///             READ FUNCTIONS            ///
 /////////////////////////////////////////////
 
-uint8_t CPU::read8(uint16_t addr, bool bReadOnly = false)
+uint8_t CPU::read8(uint32_t addr , bool bReadOnly)
 {
-	return bus->read8(addr, bReadOnly);
+	return bus->read8(addr);
 }
-uint16_t CPU::read16(uint16_t addr, bool bReadOnly = false)
+uint16_t CPU::read16(uint32_t addr, bool bReadOnly)
 {
-	return bus->read16(addr, bReadOnly);
+	return bus->read16(addr);
 }
-uint32_t CPU::read32(uint16_t addr, bool bReadOnly = false)
+uint32_t CPU::read32(uint32_t addr, bool bReadOnly)
 {
-	return bus->read32(addr, bReadOnly);
+	return bus->read32(addr);
 }
 
 /////////////////////////////////////////////
 ///             WRITE FUNCTIONS           ///
 /////////////////////////////////////////////
 
-void CPU::write8(uint16_t addr, uint8_t data)
+void CPU::write8(uint32_t addr, uint8_t data)
 {
 	bus->write8(addr, data);
 }
-void CPU::write16(uint16_t addr, uint16_t data)
+void CPU::write16(uint32_t addr, uint16_t data)
 {
 	bus->write16(addr, data);
 }
-void CPU::write32(uint16_t addr, uint32_t data)
+void CPU::write32(uint32_t addr, uint32_t data)
 {
 	bus->write32(addr, data);
 }

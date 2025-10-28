@@ -45,6 +45,62 @@ public:
 
 		COUNT // this is just so i have a way of counting how much enums i have in case of future new enum declared
 	};
+
+	const char* opcodeToString(Operation op)
+	{
+		switch (op)
+		{
+			case Operation::AND:  return "AND";
+			case Operation::EOR:  return "EOR";
+			case Operation::SUB:  return "SUB";
+			case Operation::RSB:  return "RSB";
+			case Operation::ADD:  return "ADD";
+			case Operation::ADC:  return "ADC";
+			case Operation::SBC:  return "SBC";
+			case Operation::RSC:  return "RSC";
+			case Operation::TST:  return "TST";
+			case Operation::TEQ:  return "TEQ";
+			case Operation::CMP:  return "CMP";
+			case Operation::CMN:  return "CMN";
+			case Operation::ORR:  return "ORR";
+			case Operation::MOV:  return "MOV";
+			case Operation::BIC:  return "BIC";
+			case Operation::MVN:  return "MVN";
+			case Operation::MRS:  return "MRS";
+			case Operation::MSR:  return "MSR";
+			case Operation::LDR:  return "LDR";
+			case Operation::STR:  return "STR";
+			case Operation::LDRH: return "LDRH";
+			case Operation::STRH: return "STRH";
+			case Operation::LDRSB: return "LDRSB";
+			case Operation::LDRSH: return "LDRSH";
+			case Operation::LDM:  return "LDM";
+			case Operation::STM:  return "STM";
+			case Operation::B:    return "B";
+			case Operation::BL:   return "BL";
+			case Operation::BX:   return "BX";
+			case Operation::MUL:  return "MUL";
+			case Operation::MLA:  return "MLA";
+			case Operation::UMULL: return "UMULL";
+			case Operation::UMLAL: return "UMLAL";
+			case Operation::SMULL: return "SMULL";
+			case Operation::SMLAL: return "SMLAL";
+			case Operation::SWP:  return "SWP";
+			case Operation::SWPB: return "SWPB";
+			case Operation::SWI:  return "SWI";
+			case Operation::CDP:  return "CDP";
+			case Operation::LDC:  return "LDC";
+			case Operation::STC:  return "STC";
+			case Operation::MRC:  return "MRC";
+			case Operation::MCR:  return "MCR";
+			case Operation::UNKNOWN: return "UNKNOWN";
+			case Operation::UNASSIGNED: return "UNASSIGNED";
+			case Operation::CONDITIONALSKIP: return "CONDITIONALSKIP";
+			case Operation::SINGLEDATATRANSFERUNDEFINED: return "SINGLEDATATRANSFERUNDEFINED";
+			case Operation::DECODEFAIL: return "DECODEFAIL";
+			default: return "INVALID_OPCODE";
+		}
+	}
 private:
 
 	using OpFunction = int (CPU::*)(void);
@@ -54,7 +110,10 @@ public:
 		
 		Bus* bus;
 		CPU(Bus*);
+		void reset();
+
 		void initializeOpFunctions(); // this is for initing the list of enums to funcs
+		
 
 		uint16_t curOpCycles; // this is defaulted to 0 every time
 		int cycleTotal; // this is how we find out how many cycles have passed
@@ -111,13 +170,13 @@ private:
 	
 	const inline uint8_t pcOffset();
 
-	uint8_t read8(uint16_t addr, bool bReadOnly = false);
-	uint16_t read16(uint16_t addr, bool bReadOnly = false);
-	uint32_t read32(uint16_t addr, bool bReadOnly = false);
+	uint8_t read8(uint32_t addr, bool bReadOnly = false);
+	uint16_t read16(uint32_t addr, bool bReadOnly = false);
+	uint32_t read32(uint32_t addr, bool bReadOnly = false);
 
-	void write8(uint16_t addr, uint8_t data);
-	void write16(uint16_t addr, uint16_t data);
-	void write32(uint16_t addr, uint32_t data);
+	void write8(uint32_t addr, uint8_t data);
+	void write16(uint32_t addr, uint16_t data);
+	void write32(uint32_t addr, uint32_t data);
 
 public:
 	enum class mode : uint8_t
@@ -130,6 +189,7 @@ public:
 		Undefined = 0x1B,
 		System = 0x1F
 	};
+
 private:
 	//OPS FOR MODE SWITCHING / EXCEPTION HANDLING
 
@@ -193,10 +253,6 @@ public:
 
 	inline int op_LDR();
 	inline int op_STR();
-	inline int op_LDRH();
-	inline int op_STRH();
-	inline int op_LDRSB();
-	inline int op_LDRSH();
 	inline int op_LDM();
 	inline int op_STM();
 
@@ -233,6 +289,9 @@ public:
 	inline int op_DECODEFAIL();
 
 	private: // helper for data rpocessing
+
+		inline void writeALUResult(uint8_t rdI, uint32_t result, bool s);
+
 		const inline uint8_t DPgetRn();
 		const inline uint8_t DPgetRd();
 		const inline uint8_t DPgetRs();
