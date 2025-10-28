@@ -119,7 +119,7 @@ public:
 		int cycleTotal; // this is how we find out how many cycles have passed
 
 		uint32_t tick();
-		Operation decode();
+		Operation decode(uint32_t passedIns);
 		int execute();
 
 		uint32_t reg[16];

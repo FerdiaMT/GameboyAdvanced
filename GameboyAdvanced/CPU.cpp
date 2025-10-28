@@ -132,7 +132,7 @@ uint32_t CPU::tick()
 		instruction = thumbConversion(read16(pc));
 		pc += 2;
 	}
-	curOP = decode();
+	curOP = decode(instruction);
 
 
 
@@ -333,123 +333,121 @@ inline bool CPU::checkConditional(uint8_t cond) const
 	case(0xC):return (!Z && (N == V));	break;
 	case(0xD):return (Z || (N != V));	break;
 	case(0xE):return true;				break;
-	case(0xF):printf("0XF INVALID CND");break;
+	case(0xF):printf("0XF INVALID CONDITIONAL CHECK   ---    ");break;
 	}
 }
 
-CPU::Operation CPU::decode()
+CPU::Operation CPU::decode(uint32_t passedIns)
 {
-	//MRS AND MSR ARE NOT INCLUDED . THEY ARE DONE BY CERTAIN DATA TRANSFER OPERATIONS
 
+	uint8_t conditional = (passedIns >> 28) & 0xF;
+	if (!checkConditional(conditional)) return CPU::Operation::CONDITIONALSKIP;
 
-	// first we should check if the conditional is valid
-	// 
-	// 1010 0101 1010 0101 0101 0101 1010 1010
-	//  ^ this is conditional bits
-	
-	uint8_t conditional = (instruction>>28) & 0xF;
-	if (!checkConditional(conditional)) return Operation::CONDITIONALSKIP;
-
-	// so now we get bit 27,26 and 25 to tell us what instruction to execute
-	switch ((instruction >> 25) & 0x7)
+	// so now we get bit 27,26 and 25 to tell us what passedIns to execute
+	switch ((passedIns >> 25) & 0x7)
 	{
 	case(0b000):
 	{
 		// a few odd cases here
-		if ((instruction & 0x0FFFFFF0) == 0x12FFF10) return Operation::BX;
-		else if ((instruction & 0x0FB00FF0) == 0x01000090) return Operation::SWP;
-		else if ((instruction & 0x0F8000F0) == 0x00800090) // multiplyLong, can be long or accumalate
+		if ((passedIns & 0x0FFFFFF0) == 0x12FFF10) return CPU::Operation::BX;
+		else if ((passedIns & 0x0FB00FF0) == 0x01000090) return CPU::Operation::SWP;
+		else if ((passedIns & 0x0F8000F0) == 0x00800090) // multiplyLong, can be long or accumalate
 		{
 			// can also be signed or unsigned
-			switch ((instruction >> 21) & 0b11)
+			switch ((passedIns >> 21) & 0b11)
 			{
-			case(0b00): return Operation::UMULL;
-			case(0b01): return Operation::UMLAL;
-			case(0b10): return Operation::SMULL;
-			case(0b11): return Operation::SMLAL;
+			case(0b00): return CPU::Operation::UMULL;
+			case(0b01): return CPU::Operation::UMLAL;
+			case(0b10): return CPU::Operation::SMULL;
+			case(0b11): return CPU::Operation::SMLAL;
 			}
 		}
-		else if ((instruction & 0x0FC000F0) == 0x00000090) 
+		else if ((passedIns & 0x0FC000F0) == 0x00000090)
 		{
-			if ((instruction >> 21) & 0b1) return Operation::MLA;
-			return Operation::MUL;
+			if ((passedIns >> 21) & 0b1) return CPU::Operation::MLA;
+			return CPU::Operation::MUL;
 		}
-		else if ((instruction & 0x0E000090) == 0x00000090) // HalfwordTransfer
+		else if ((passedIns & 0x0E000090) == 0x00000090) // HalfwordTransfer
 		{
-			uint8_t SH = (instruction >> 4) & 0b11;
+			uint8_t SH = (passedIns >> 4) & 0b11;
 
-			if (SH == 0) return Operation::SWP;
+			if (SH == 0) return CPU::Operation::SWP;
 
-			SH = (((instruction >> 18) & 100) | SH)&0x7;
+			SH = (((passedIns >> 18) & 100) | SH) & 0x7;
 
 			switch (SH)
 			{
-			case(0b001): return Operation::STRH;
-			case(0b101): return Operation::LDRH;
-			case(0b110): return Operation::LDRSB;
-			case(0b111): return Operation::LDRSH;
+			case(0b001): return CPU::Operation::STRH;
+			case(0b101): return CPU::Operation::LDRH;
+			case(0b110): return CPU::Operation::LDRSB;
+			case(0b111): return CPU::Operation::LDRSH;
 			default:printf("ERROR IN HALFWORD TRANSFER DECODING, GOT SH %d", SH);
 			}
 
 		}
-		else if ((instruction & 0x0FBF0FFF) == 0x010F0000) return Operation::MRS;
-		else if ((instruction & 0x0FB0FFF0) == 0x0120F000 || (instruction & 0x0FBF0000) == 0x03200000)return Operation::MSR;
-		else {
+		else if ((passedIns & 0x0FBF0FFF) == 0x010F0000) return CPU::Operation::MRS;
+		else if ((passedIns & 0x0FB0FFF0) == 0x0120F000 || (passedIns & 0x0FBF0000) == 0x03200000)return CPU::Operation::MSR;
+		else
+		{
 			// DATA TRANSFER
-			uint8_t op = (instruction >> 21) & 0xF;
+			uint8_t op = (passedIns >> 21) & 0xF;
 
 			//before we return anything, we should 
 
 			switch (op)
 			{
-			case(0b0000): return Operation::AND;break;
-			case(0b0001): return Operation::EOR;break;
-			case(0b0010): return Operation::SUB;break;
-			case(0b0011): return Operation::RSB;break;
-			case(0b0100): return Operation::ADD;break;
-			case(0b0101): return Operation::ADC;break;
-			case(0b0110): return Operation::SBC;break;
-			case(0b0111): return Operation::RSC;break;
-			case(0b1001): return Operation::TEQ;break;
-			case(0b1010): return Operation::CMP;break;
-			case(0b1011): return Operation::CMN;break;
-			case(0b1100): return Operation::ORR;break;
-			case(0b1101): return Operation::MOV;break;
-			case(0b1110): return Operation::BIC;break;
-			case(0b1111): return Operation::MVN;break;
+			case(0b0000): return CPU::Operation::AND;break;
+			case(0b0001): return CPU::Operation::EOR;break;
+			case(0b0010): return CPU::Operation::SUB;break;
+			case(0b0011): return CPU::Operation::RSB;break;
+			case(0b0100): return CPU::Operation::ADD;break;
+			case(0b0101): return CPU::Operation::ADC;break;
+			case(0b0110): return CPU::Operation::SBC;break;
+			case(0b0111): return CPU::Operation::RSC;break;
+			case(0b1001): return CPU::Operation::TEQ;break;
+			case(0b1010): return CPU::Operation::CMP;break;
+			case(0b1011): return CPU::Operation::CMN;break;
+			case(0b1100): return CPU::Operation::ORR;break;
+			case(0b1101): return CPU::Operation::MOV;break;
+			case(0b1110): return CPU::Operation::BIC;break;
+			case(0b1111): return CPU::Operation::MVN;break;
 			}
 		}
 	}break;
 
 	case(0b011): {
-		if (!((instruction >> 4) & 0b1)) 
-		{ 
+		if (!((passedIns >> 4) & 0b1))
+		{
 			//SINGLE DATA TRANSFER
-			if ((instruction >> 20) & 0b1) return Operation::LDR;
-			return Operation::STR;
+			if ((passedIns >> 20) & 0b1) return CPU::Operation::LDR;
+			return CPU::Operation::STR;
 		}
-		else { return Operation::SINGLEDATATRANSFERUNDEFINED; }; break;
+		else { return CPU::Operation::SINGLEDATATRANSFERUNDEFINED; }; break;
 	}
-	case(0b010): if ((instruction >> 20) & 0b1) { return Operation::LDR; }else { return Operation::STR; }break; // SINGLE DATA TRANSFER (AGAIN)
-	case(0b100): if ((instruction >> 20) & 0b1) { return Operation::LDM; }else { return Operation::STM; }break; //BLOCK DATA TRANSFER
-	case(0b101): if ((instruction >> 24) & 0b1) { return Operation::BL; }else { return Operation::B; }break;
-	case(0b110): if ((instruction >> 24) & 0b1) { return Operation::LDC; }else { return Operation::STC; }break; // COPROCESSOR DATA TRANSFER
-	
+	case(0b010): if ((passedIns >> 20) & 0b1) { return CPU::Operation::LDR; }
+			   else { return CPU::Operation::STR; }break; // SINGLE DATA TRANSFER (AGAIN)
+	case(0b100): if ((passedIns >> 20) & 0b1) { return CPU::Operation::LDM; }
+			   else { return CPU::Operation::STM; }break; //BLOCK DATA TRANSFER
+	case(0b101): if ((passedIns >> 24) & 0b1) { return CPU::Operation::BL; }
+			   else { return CPU::Operation::B; }break;
+	case(0b110): if ((passedIns >> 24) & 0b1) { return CPU::Operation::LDC; }
+			   else { return CPU::Operation::STC; }break; // COPROCESSOR DATA TRANSFER
 
-	case(0b111): 
+
+	case(0b111):
 	{
-		if ((instruction >> 24) & 0b1) return Operation::SWI;
-		else if (!((instruction >> 4) & 0b1)) return Operation::CDP;
+		if ((passedIns >> 24) & 0b1) return CPU::Operation::SWI;
+		else if (!((passedIns >> 4) & 0b1)) return CPU::Operation::CDP;
 		else // coprocessor register transfer , MRC , MCR
 		{
-			if ((instruction >> 20) & 0b1) { return Operation::MRC; }
-			else { return Operation::MCR; }break;
+			if ((passedIns >> 20) & 0b1) { return CPU::Operation::MRC; }
+			else { return CPU::Operation::MCR; }break;
 		}
 	}break;
 
 	}
 
-	return Operation::DECODEFAIL;
+	return CPU::Operation::DECODEFAIL;
 
 }
 
