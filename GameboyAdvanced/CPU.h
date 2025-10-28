@@ -99,12 +99,11 @@ public:
 		};
 		//SPSR
 
-		uint32_t SPSR_fiq;
-		uint32_t SPSR_irq;
-		uint32_t SPSR_fiq;
-		uint32_t SPSR_svc;
-		uint32_t SPSR_abt;
-		uint32_t SPSR_und;
+		// bank system so when we swap modes, we can store old modes inhere 
+		uint32_t r8FIQ[5];   // 8 9 10 11 12 registers stored for just fiq
+		uint32_t r13RegBank[6];  // individual SP for everone except usr/sys which share
+		uint32_t r14RegBank[6]; // individual LR for everone except usr/sys which share
+		uint32_t spsrBank[5]; // individual LR for everone except usr/sys have 0
 
 private:
 
@@ -122,6 +121,42 @@ private:
 	void write8(uint16_t addr, uint8_t data);
 	void write16(uint16_t addr, uint16_t data);
 	void write32(uint16_t addr, uint32_t data);
+
+public:
+	enum class mode : uint8_t
+	{
+		User = 0x10,
+		FIQ = 0x11,
+		IRQ = 0x12,
+		Supervisor = 0x13,
+		Abort = 0x17,
+		Undefined = 0x1B,
+		System = 0x1F
+	};
+private:
+	//OPS FOR MODE SWITCHING / EXCEPTION HANDLING
+
+
+
+	mode curMode= mode::Supervisor; // curMode should default to Supervisor
+
+	bool isPrivilegedMode(); // used to quickly tell were not in user mode
+	uint8_t getModeIndex(CPU::mode mode); // used for register saving
+
+	//reg banking
+	void bankRegisters(CPU::mode mode); // save reg val to bank
+	void unbankRegisters(CPU::mode mode); // load reg vals from bank
+
+	void switchMode(CPU::mode newMode); // main function used for mode switching, calls bank and unbank register etc
+
+	// excpetion handling
+	void enterException(CPU::mode newMode, uint32_t vectorAddr, uint32_t returnAddr);
+	void returnFromException();
+
+	//SPSR helpers
+	uint32_t getSPSR();
+	void setSPSR(uint32_t value);
+
 
 
 public:

@@ -11,6 +11,7 @@ CPU::CPU(Bus* bus) : bus(bus) , sp(reg[13]) , lr(reg[14]) , pc(reg[15])
 
 	instruction = 0;
 	curOP = Operation::UNKNOWN;
+	curMode = mode::Supervisor;
 
 	initializeOpFunctions();
 }
@@ -97,10 +98,31 @@ void CPU::initializeOpFunctions()
 	op_functions[static_cast<int>(Operation::DECODEFAIL)] = &CPU::op_DECODEFAIL;
 }
 
-uint32_t CPU::thumbConversion(uint16_t thumbOp)
-{
 
-}
+//////////////////////////////////////////////////////////////////////////
+//				           MODE HELPER FUNCTIONS						//
+//////////////////////////////////////////////////////////////////////////
+
+
+
+bool isPrivilegedMode(); // used to quickly tell were not in user mode
+uint8_t getModeIndex(CPU::mode mode); // used for register saving
+
+//reg banking
+void bankRegisters(CPU::mode mode); // save reg val to bank
+void unbankRegisters(CPU::mode mode); // load reg vals from bank
+
+void switchMode(CPU::mode newMode); // main function used for mode switching, calls bank and unbank register etc
+
+// excpetion handling
+void enterException(CPU::mode newMode, uint32_t vectorAddr, uint32_t returnAddr);
+void returnFromException();
+
+//SPSR helpers
+uint32_t getSPSR();
+void setSPSR(uint32_t value);
+
+
 
 
 
@@ -122,6 +144,11 @@ uint32_t CPU::tick()
 	curOpCycles = execute();
 
 	cycleTotal += curOpCycles;
+}
+
+uint32_t CPU::thumbConversion(uint16_t thumbOp)
+{
+
 }
 
 
@@ -964,11 +991,59 @@ inline int CPU::op_STRH() // store unsigned halfword
 }
 inline int CPU::op_LDRSB() //load signed byte
 {
+	uint8_t rmI = (instruction) & 0xF;
+	uint8_t rdI = (instruction >> 12) & 0xF;
+	uint8_t rnI = (instruction >> 16) & 0xF;
 
+	bool w = ((instruction >> 21) & 0b1); // if true , write address into base
+	bool u = ((instruction >> 23) & 0b1); //if true, add ofset to base , otheriwse subtract
+	bool p = ((instruction >> 24) & 0b1); // if true , add prefix before transfer ,otherwise after
+
+	uint32_t offset = reg[rmI];
+	uint32_t newAddr = reg[rnI];
+
+	if (p) newAddr = SDOffset(u, newAddr, offset);
+
+	int8_t byteVal= read8(newAddr);
+	uint32_t readVal = static_cast<int32_t>(byteVal);
+
+	if (!p) newAddr = SDOffset(u, newAddr, offset);
+
+	if (!p || w)
+	{
+		reg[rnI] = newAddr;
+	}
+	reg[rdI] = readVal;
+
+	return 3;
 }
 inline int CPU::op_LDRSH() //load signed halfword
 {
+	uint8_t rmI = (instruction) & 0xF;
+	uint8_t rdI = (instruction >> 12) & 0xF;
+	uint8_t rnI = (instruction >> 16) & 0xF;
 
+	bool w = ((instruction >> 21) & 0b1); // if true , write address into base
+	bool u = ((instruction >> 23) & 0b1); //if true, add ofset to base , otheriwse subtract
+	bool p = ((instruction >> 24) & 0b1); // if true , add prefix before transfer ,otherwise after
+
+	uint32_t offset = reg[rmI];
+	uint32_t newAddr = reg[rnI];
+
+	if (p) newAddr = SDOffset(u, newAddr, offset);
+
+	int8_t HWVal = read16(newAddr);
+	uint32_t readVal = static_cast<int32_t>(HWVal);
+
+	if (!p) newAddr = SDOffset(u, newAddr, offset);
+
+	if (!p || w)
+	{
+		reg[rnI] = newAddr;
+	}
+	reg[rdI] = readVal;
+
+	return 3;
 }
 inline int CPU::op_LDM()
 {
