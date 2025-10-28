@@ -129,12 +129,14 @@ uint32_t CPU::tick()
 	}
 	else // if thumb mode
 	{
-		instruction = thumbConversion(read16(pc));
+		//instruction = thumbConversion(read16(pc));
+		std::cout << "THUMB MODE ALERT";
 		pc += 2;
 	}
 	curOP = decode(instruction);
 
-
+	printf("PC: 0x%08X, Instruction: 0x%08X, Opcode: %s\n",
+		pc-4, instruction, opcodeToString(curOP));
 
 	curOpCycles = execute();
 
@@ -739,7 +741,7 @@ inline int CPU::op_B()
 	// FFFFFF
 	if (offset & 0x800000) offset |= 0xFF000000;
 
-	pc = pc + (offset << 2) + 8;
+	pc = pc + (offset << 2) + 4;
 	return 3;
 }
 
