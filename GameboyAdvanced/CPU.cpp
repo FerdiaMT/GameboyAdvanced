@@ -205,6 +205,8 @@ CPU::Operation CPU::decode()
 			}
 
 		}
+		else if ((instruction & 0x0FBF0FFF) == 0x010F0000) return Operation::MRS;
+		else if ((instruction & 0x0FB0FFF0) == 0x0120F000 || (instruction & 0x0FBF0000) == 0x03200000)return Operation::MSR;
 		else {
 			// DATA TRANSFER
 			uint8_t op = (instruction >> 21) & 0xF;
@@ -221,7 +223,6 @@ CPU::Operation CPU::decode()
 			case(0b0101): return Operation::ADC;break;
 			case(0b0110): return Operation::SBC;break;
 			case(0b0111): return Operation::RSC;break;
-			case(0b1000): return Operation::TST;break;
 			case(0b1001): return Operation::TEQ;break;
 			case(0b1010): return Operation::CMP;break;
 			case(0b1011): return Operation::CMN;break;
@@ -710,6 +711,8 @@ inline int CPU::op_BIC()
 //////////////////////////////////////////////////////////////////////////
 //				      PSR TRANSFER (USED BY DATAOPS) 					//
 //////////////////////////////////////////////////////////////////////////
+
+// these rely on keeping our current state stored, so i may look at it later
 inline int CPU::op_MRS()
 {
 
@@ -728,11 +731,51 @@ inline int CPU::op_MSR()
 
 inline int CPU::op_MUL()
 {
+	uint8_t rm = reg[instruction & 0xF];
+	uint8_t rs = reg[(instruction >> 8) & 0xF];
+	uint8_t rdI = (instruction >> 16) & 0xF;
 
+	uint32_t res = (static_cast<uint64_t>(rm) * static_cast<uint64_t>(rs))&0xFFFFFFFF;
+	reg[rdI] = res;
+
+	if ((instruction >> 20) & 0b1) // set flags
+	{
+		N = (res >> 31) & 0b1;
+		Z = (res == 0);
+	}
+
+	//shortcutting the booths algo here
+	uint8_t m = 0;
+	if ((rs & 0xFFFFFF00) == 0 || (rs & 0xFFFFFF00) == 0xFFFFFF00) m= 1;
+	else if ((rs & 0xFFFF0000) == 0 || (rs & 0xFFFF0000) == 0xFFFF0000) m= 2;
+	else if ((rs & 0xFF000000) == 0 || (rs & 0xFF000000) == 0xFF000000) m= 3;
+	else m= 4;
+
+	return m + 2;
 }
 inline int CPU::op_MLA()
 {
+	uint8_t rm = reg[instruction & 0xF];
+	uint8_t rs = reg[(instruction >> 8) & 0xF];
+	uint8_t rn = reg[(instruction >> 12) & 0xF];
+	uint8_t rdI = (instruction >> 16 & 0xF) ;
 
+	uint32_t res = rm * rs + rn;
+	reg[rdI] = res;
+
+	if ((instruction >> 20) & 0b1) // set flags
+	{
+		N = (res >> 31) & 0b1;
+		Z = (res == 0);
+	}
+
+	uint8_t m = 0;
+	if ((rs & 0xFFFFFF00) == 0 || (rs & 0xFFFFFF00) == 0xFFFFFF00) m = 1;
+	else if ((rs & 0xFFFF0000) == 0 || (rs & 0xFFFF0000) == 0xFFFF0000) m = 2;
+	else if ((rs & 0xFF000000) == 0 || (rs & 0xFF000000) == 0xFF000000) m = 3;
+	else m = 4;
+
+	return m + 2;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -767,11 +810,46 @@ inline int CPU::op_SMLAL()
 
 inline int CPU::op_LDR()
 {
+	uint16_t offset = instruction & 0x0FFF;
+	uint8_t rdI = (instruction >> 12) & 0xF;
+	uint8_t rnI = (instruction >> 16) & 0xF;
+
+	bool w = ((instruction >> 21) & 0b1); // if true , write address into base
+	bool b = ((instruction >> 22) & 0b1); // if trye transfer byte, otherwise word
+	bool u = ((instruction >> 23) & 0b1); //if true, add ofset to base , otheriwse subtract
+	bool p = ((instruction >> 24) & 0b1); // if true , add prefix before transfer ,otherwise after
+	bool i = ((instruction >> 25) & 0b1); // if true, use reg rm shift, otherwise keep 12 bit unsigned block
+
+	uint32_t newAddr = reg[rnI];
+
+	if (!i) // use reg and rm shift
+	{
+	} 
+
+	if (p) // if pre offset 
+	{
+		if (u) newAddr += offset; else newAddr -= offset;
+
+	}
+
+	uint32_t readVal;
+	if (b) readVal = read8(newAddr);
+	else readVal = read32(newAddr);
+
+	if (!p) 
+	{
+		if (u) newAddr += offset; else newAddr -= offset;
+
+	}
+
+	if (w) reg[rnI] = newAddr;
+
+	return 3;
 
 }
 inline int CPU::op_STR()
 {
-
+	return 2;
 }
 inline int CPU::op_LDRH()
 {

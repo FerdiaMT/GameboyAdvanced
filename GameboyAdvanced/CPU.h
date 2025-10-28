@@ -97,8 +97,14 @@ public:
 			};
 			uint32_t CPSR;
 		};
+		//SPSR
 
-
+		uint32_t SPSR_fiq;
+		uint32_t SPSR_irq;
+		uint32_t SPSR_fiq;
+		uint32_t SPSR_svc;
+		uint32_t SPSR_abt;
+		uint32_t SPSR_und;
 
 private:
 
