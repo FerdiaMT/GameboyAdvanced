@@ -134,7 +134,7 @@ uint32_t CPU::tick()
 	}
 	curOP = decode();
 
-	std::cout << pc<<std::hex<<" "<< opcodeToString(curOP) << std::endl;
+
 
 	curOpCycles = execute();
 
@@ -708,17 +708,19 @@ inline int CPU::op_B()
 {
 	int32_t offset = (instruction & 0xFFFFFF);
 	// FFFFFF
-	if (800000) offset |= 0xFF000000;
-	pc = static_cast<int32_t>(pc) + static_cast<int32_t>(offset << 2);
+	if (offset & 0x800000) offset |= 0xFF000000;
+
+	pc = pc + (offset << 2) + 8;
 	return 3;
 }
+
 inline int CPU::op_BL() //TODO, make sure this is using correct logic to decide if B or BL
 {
 	lr = pc + pcOffset(); // this adds 2 in thumb, 4 in ARM
 
 	int32_t offset = (instruction & 0xFFFFFF);
 	// FFFFFF
-	if (800000) offset |= 0xFF000000;
+	if (offset & 0x800000) offset |= 0xFF000000;
 
 	pc = static_cast<int32_t>(pc) + static_cast<int32_t>(offset << 2);
 	return 3;

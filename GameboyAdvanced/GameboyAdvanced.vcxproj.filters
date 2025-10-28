@@ -27,6 +27,9 @@
     <ClCompile Include="GBA.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="DebuggerCPU.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CPU.h">
@@ -36,6 +39,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="GBA.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="DebuggerCPU.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

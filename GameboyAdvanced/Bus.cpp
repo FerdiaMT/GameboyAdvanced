@@ -106,6 +106,6 @@ bool Bus::loadROM(const char* filename, uint32_t loadAddr)
         return false;
     }
 
-    printf("rom loaded");
+    printf("rom loaded\n");
     return true;
 }

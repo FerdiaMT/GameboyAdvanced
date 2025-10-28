@@ -101,7 +101,7 @@ public:
 			default: return "INVALID_OPCODE";
 		}
 	}
-private:
+public:
 
 	using OpFunction = int (CPU::*)(void);
 	OpFunction op_functions[static_cast<int>(Operation::COUNT)];
@@ -161,7 +161,7 @@ public:
 
 
 
-private:
+public:
 
 
 	uint32_t thumbConversion(uint16_t thumbOp);
@@ -190,7 +190,7 @@ public:
 		System = 0x1F
 	};
 
-private:
+public:
 	//OPS FOR MODE SWITCHING / EXCEPTION HANDLING
 
 
@@ -288,7 +288,7 @@ public:
 	inline int op_SINGLEDATATRANSFERUNDEFINED();
 	inline int op_DECODEFAIL();
 
-	private: // helper for data rpocessing
+	public: // helper for data rpocessing
 
 		inline void writeALUResult(uint8_t rdI, uint32_t result, bool s);
 
