@@ -106,8 +106,6 @@ uint32_t CPU::thumbConversion(uint16_t thumbOp)
 
 uint32_t CPU::tick()
 {
-	
-
 	if (!T) // if arm mode
 	{
 		instruction = read32(pc);
@@ -287,23 +285,14 @@ int CPU::execute()
 
 //HELPER FUNCTIONS FOR DATA PROCESSING
 const inline uint8_t CPU::DPgetRn() {return (instruction >> 16) & 0xF;}
-
 const inline uint8_t CPU::DPgetRd() {return (instruction >> 12) & 0xF;}
-
 const inline uint8_t CPU::DPgetRs() { return (instruction >> 8) & 0xF; }
-
 const inline uint8_t CPU::DPgetRm() { return instruction & 0xF;}
-
-
-
 const inline uint8_t CPU::DPgetShift() { return (instruction >> 4) & 0xFF; }
-
 const inline uint8_t CPU::DPgetImmed() { return instruction & 0xFF; }
 const inline uint8_t CPU::DPgetRotate() { return (2 * ((instruction >> 8) & 0xF) ); }
-
 const inline bool CPU::DPs() { return (instruction >> 20) & 0b1; } // condition code
 const inline bool CPU::DPi() { return (instruction >> 25) & 0b1; } // immediate code
-
 const inline uint8_t CPU::DPgetShiftAmount(uint8_t shift)
 {
 	if (shift & 0b1) // shift amount depends on register if this is true
@@ -395,7 +384,6 @@ inline uint32_t CPU::DPshiftROR(uint32_t value, uint8_t shift_amount, bool* carr
 		return (value >> shift_amount) | (value << (32 - shift_amount));
 	}
 }
-
 inline uint32_t CPU::DPgetOp2(bool* carryFlag) {
 
 	if (DPi()) // if immediate mode bit is set
@@ -429,7 +417,6 @@ inline uint32_t CPU::DPgetOp2(bool* carryFlag) {
 
 	return 0;
 }
-
 inline void CPU::setFlagNZC(uint32_t res, bool isCarry) // LOGICAL CHECK
 {
 	N = (res & 0x80000000) != 0;
@@ -455,7 +442,6 @@ inline void CPU::setNZ(uint32_t res) // TEST CHECK
 	N = (res & 0x80000000) != 0;
 	Z = (res == 0);
 }
-
 //////////////////////////////////////////////////////////////////////////
 //				           CYCLE CALCULATORS							//
 //////////////////////////////////////////////////////////////////////////
@@ -471,27 +457,56 @@ inline int CPU::dataProcessingCycleCalculator()
 	return cycles;
 }
 
+
 //////////////////////////////////////////////////////////////////////////
 //				              OPERATIONS								//
+//////////////////////////////////////////////////////////////////////////
+//				             BRANCH EXCHANGE				            //
+//////////////////////////////////////////////////////////////////////////
+
+inline int CPU::op_BX()
+{
+
+}
+
+//////////////////////////////////////////////////////////////////////////
+//				              OPERATIONS								//
+//////////////////////////////////////////////////////////////////////////
+//				             BRANCH / BRANCH LINK			            //
+//////////////////////////////////////////////////////////////////////////
+
+inline int CPU::op_B()
+{
+
+}
+inline int CPU::op_BL()
+{
+
+}
+
+//////////////////////////////////////////////////////////////////////////
+//				              OPERATIONS								//
+//////////////////////////////////////////////////////////////////////////
+//				              DATA PROCESSING							//
 //////////////////////////////////////////////////////////////////////////
 
 // FIRST 8 BINARYS
 // AND, ORR, EOR, SUB, RSB, ADD, ADC, SBC, RSC, , BIC
 // BIT OPERATIONS // AND, ORR EOR
 
-inline int CPU::op_AND() 
+inline int CPU::op_AND()
 {
-  bool isCarry = C;
+	bool isCarry = C;
 
-  uint32_t res = reg[DPgetRn()] & DPgetOp2(&isCarry);
-  reg[DPgetRd()] = res;
+	uint32_t res = reg[DPgetRn()] & DPgetOp2(&isCarry);
+	reg[DPgetRd()] = res;
 
-  if (DPs()) { setFlagNZC(res, isCarry); }
+	if (DPs()) { setFlagNZC(res, isCarry); }
 
-  return dataProcessingCycleCalculator();
+	return dataProcessingCycleCalculator();
 }
 
-inline int CPU::op_ORR() 
+inline int CPU::op_ORR()
 {
 	bool isCarry = C;
 
@@ -517,7 +532,7 @@ inline int CPU::op_EOR()
 
 // ADD, SUB, ADDC, SUBC
 
-inline int CPU::op_ADD() 
+inline int CPU::op_ADD()
 {
 	uint32_t op1 = reg[DPgetRn()];
 	uint32_t op2 = DPgetOp2(nullptr);
@@ -528,7 +543,7 @@ inline int CPU::op_ADD()
 
 	return dataProcessingCycleCalculator();
 }
-inline int CPU::op_SUB() 
+inline int CPU::op_SUB()
 {
 	uint32_t op1 = reg[DPgetRn()];
 	uint32_t op2 = DPgetOp2(nullptr);
@@ -539,7 +554,7 @@ inline int CPU::op_SUB()
 
 	return dataProcessingCycleCalculator();
 }
-inline int CPU::op_ADC() 
+inline int CPU::op_ADC()
 {
 	uint32_t op1 = reg[DPgetRn()];
 	uint32_t op2 = DPgetOp2(nullptr) + (uint32_t)C;
@@ -550,7 +565,7 @@ inline int CPU::op_ADC()
 
 	return dataProcessingCycleCalculator();
 }
-inline int CPU::op_SBC() 
+inline int CPU::op_SBC()
 {
 	uint32_t op1 = reg[DPgetRn()];
 	uint32_t op2 = DPgetOp2(nullptr) - (uint32_t)C;
@@ -564,7 +579,7 @@ inline int CPU::op_SBC()
 
 // reverse subtract, reverse subtract with carry
 
-inline int CPU::op_RSB() 
+inline int CPU::op_RSB()
 {
 	uint32_t op1 = reg[DPgetRn()];
 	uint32_t op2 = DPgetOp2(nullptr);
@@ -575,7 +590,7 @@ inline int CPU::op_RSB()
 
 	return dataProcessingCycleCalculator();
 }
-inline int CPU::op_RSC() 
+inline int CPU::op_RSC()
 {
 	uint32_t op1 = reg[DPgetRn()];
 	uint32_t op2 = DPgetOp2(nullptr) - (uint32_t)(!C);
@@ -631,44 +646,135 @@ inline int CPU::op_CMN() // ADD , but we dont write the val in
 
 	return dataProcessingCycleCalculator();
 }
-
 // ops for writing 
+inline int CPU::op_MOV()
+{
+	bool isCarry = C;
 
-inline int CPU::op_MOV() {}
-inline int CPU::op_MVN() {}
+	uint32_t res = DPgetOp2(&isCarry);
+	reg[DPgetRd()] = res;
 
-inline int CPU::op_BIC() {}
+	if (DPs()) { setFlagNZC(res, isCarry); }
 
-// end of dataprocessing instructions
-// FOLLWOING FUNCTUIONS CALLED BY DATAPROCESSING
-inline int CPU::op_MRS();
-inline int CPU::op_MSR();
-//
+	return dataProcessingCycleCalculator();
+}
+inline int CPU::op_MVN()
+{
+	bool isCarry = C;
 
-inline int CPU::op_LDR();
-inline int CPU::op_STR();
-inline int CPU::op_LDRH();
-inline int CPU::op_STRH();
-inline int CPU::op_LDRSB();
-inline int CPU::op_LDRSH();
-inline int CPU::op_LDM();
-inline int CPU::op_STM();
+	uint32_t res = ~(DPgetOp2(&isCarry));
+	reg[DPgetRd()] = res;
 
-inline int CPU::op_B();
-inline int CPU::op_BL();
-inline int CPU::op_BX();
+	if (DPs()) { setFlagNZC(res, isCarry); }
 
-void op_MUL();
-void op_MLA();
-void op_UMULL();
-void op_UMLAL();
-void op_SMULL();
-void op_SMLAL();
+	return dataProcessingCycleCalculator();
+}
 
-void op_LDRH();
-void op_STRH();
-void op_LDRSB();
-void op_LDRSH();
+inline int CPU::op_BIC()
+{
+	bool isCarry = C;
+	uint32_t res = reg[DPgetRn()] & ~(DPgetOp2(&isCarry));
+	reg[DPgetRd()] = res;
+	if (DPs()) { setFlagNZC(res, isCarry); }
+
+	return dataProcessingCycleCalculator();
+}
+
+//////////////////////////////////////////////////////////////////////////
+//				              OPERATIONS								//
+//////////////////////////////////////////////////////////////////////////
+//				      PSR TRANSFER (USED BY DATAOPS) 					//
+//////////////////////////////////////////////////////////////////////////
+inline int CPU::op_MRS()
+{
+
+}
+inline int CPU::op_MSR()
+{
+
+}
+
+
+//////////////////////////////////////////////////////////////////////////
+//				              OPERATIONS								//
+//////////////////////////////////////////////////////////////////////////
+//				      MULTIPLY and MULT-ACC              				//
+//////////////////////////////////////////////////////////////////////////
+
+inline int CPU::op_MUL()
+{
+
+}
+inline int CPU::op_MLA()
+{
+
+}
+
+//////////////////////////////////////////////////////////////////////////
+//				              OPERATIONS								//
+//////////////////////////////////////////////////////////////////////////
+//				      MULTIPLY LONG and MULT-ACC  LONG s/u        		//
+//////////////////////////////////////////////////////////////////////////
+
+
+inline int CPU::op_UMULL()
+{
+
+}
+inline int CPU::op_UMLAL()
+{
+
+}
+inline int CPU::op_SMULL()
+{
+
+}
+inline int CPU::op_SMLAL()
+{
+
+}
+
+//////////////////////////////////////////////////////////////////////////
+//				              OPERATIONS								//
+//////////////////////////////////////////////////////////////////////////
+//				          SINGLE DATA TRANSFER      					//
+//////////////////////////////////////////////////////////////////////////
+
+inline int CPU::op_LDR()
+{
+
+}
+inline int CPU::op_STR()
+{
+
+}
+inline int CPU::op_LDRH()
+{
+
+}
+inline int CPU::op_STRH()
+{
+
+}
+inline int CPU::op_LDRSB()
+{
+
+}
+inline int CPU::op_LDRSH()
+{
+
+}
+inline int CPU::op_LDM()
+{
+
+}
+inline int CPU::op_STM()
+{
+
+}
+
+
+
 
 void op_SWP();
 void op_SWPB();
