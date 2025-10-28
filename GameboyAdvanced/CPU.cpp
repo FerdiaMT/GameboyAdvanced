@@ -466,7 +466,20 @@ inline int CPU::dataProcessingCycleCalculator()
 
 inline int CPU::op_BX()
 {
+	uint32_t newAddr = reg[instruction & 0xF];
 
+	if (newAddr & 0b1) // 1 = THUMB
+	{
+		T = 1;
+		pc = newAddr & 0xFFFFFFFE; //clears bit for valid 2 jumping
+	}
+	else // 0 = arm
+	{
+		T = 0;
+		pc = newAddr & 0xFFFFFFFC; // sets it to a valid num for +4 jumping 
+	}
+
+	return 3; // constant
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -477,11 +490,23 @@ inline int CPU::op_BX()
 
 inline int CPU::op_B()
 {
-
+	int32_t offset = (instruction & 0xFFFFFF);
+	// FFFFFF
+	if (800000) offset |= 0xFF000000;
+	pc = static_cast<int32_t>(pc) + static_cast<int32_t>(offset << 2);
+	return 3;
 }
-inline int CPU::op_BL()
+inline int CPU::op_BL() //TODO, make sure this is using correct logic to decide if B or BL
 {
+	if (T) lr = pc + 2;
+	else { lr = pc + 4; }
 
+	int32_t offset = (instruction & 0xFFFFFF);
+	// FFFFFF
+	if (800000) offset |= 0xFF000000;
+
+	pc = static_cast<int32_t>(pc) + static_cast<int32_t>(offset << 2);
+	return 3;
 }
 
 //////////////////////////////////////////////////////////////////////////
