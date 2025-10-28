@@ -14,6 +14,8 @@ public:
 		AND, EOR, SUB, RSB, ADD, ADC, SBC, RSC,
 		TST, TEQ, CMP, CMN, ORR, MOV, BIC, MVN,
 
+		MRS,MSR, // both used for PSR transfer
+
 		// Load/Store
 		LDR, STR, // SINGLE DATA TRANSFER
 		LDRH , STRH, LDRSB, LDRSH, // halfword and signed data transfer
@@ -45,7 +47,7 @@ public:
 	};
 private:
 
-	using OpFunction = void (CPU::*)(void);
+	using OpFunction = int (CPU::*)(void);
 	OpFunction op_functions[static_cast<int>(Operation::COUNT)];
 
 public:
@@ -54,7 +56,11 @@ public:
 		CPU(Bus*);
 		void initializeOpFunctions(); // this is for initing the list of enums to funcs
 
+		uint16_t curOpCycles; // this is defaulted to 0 every time
+
 		uint32_t tick();
+		Operation decode();
+		int execute();
 
 		uint32_t reg[16];
 
@@ -98,8 +104,6 @@ private:
 
 
 	uint32_t thumbConversion(uint16_t thumbOp);
-	Operation decode();
-	void execute();
 	inline bool checkConditional(uint8_t cond) const;
 
 	
@@ -109,78 +113,102 @@ private:
 	uint32_t read32(uint16_t addr, bool bReadOnly = false);
 
 public:
-	void op_AND();
-	void op_EOR();
-	void op_SUB();
-	void op_RSB();
-	void op_ADD();
-	void op_ADC();
-	void op_SBC();
-	void op_RSC();
-	void op_TST();
-	void op_TEQ();
-	void op_CMP();
-	void op_CMN();
-	void op_ORR();
-	void op_MOV();
-	void op_BIC();
-	void op_MVN();
+	inline int op_AND();
+	inline int op_EOR();
+	inline int op_SUB();
+	inline int op_RSB();
+	inline int op_ADD();
+	inline int op_ADC();
+	inline int op_SBC();
+	inline int op_RSC();
+	inline int op_TST();
+	inline int op_TEQ();
+	inline int op_CMP();
+	inline int op_CMN();
+	inline int op_ORR();
+	inline int op_MOV();
+	inline int op_BIC();
+	inline int op_MVN();
 
-	void op_LDR();
-	void op_STR();
-	void op_LDRH();
-	void op_STRH();
-	void op_LDRSB();
-	void op_LDRSH();
-	void op_LDM();
-	void op_STM();
+	inline int op_MRS();
+	inline int op_MSR();
 
-	void op_B();
-	void op_BL();
-	void op_BX();
+	inline int op_LDR();
+	inline int op_STR();
+	inline int op_LDRH();
+	inline int op_STRH();
+	inline int op_LDRSB();
+	inline int op_LDRSH();
+	inline int op_LDM();
+	inline int op_STM();
 
-	void op_MUL();
-	void op_MLA();
-	void op_UMULL();
-	void op_UMLAL();
-	void op_SMULL();
-	void op_SMLAL();
+	inline int op_B();
+	inline int op_BL();
+	inline int op_BX();
 
-	void op_LDRH();
-	void op_STRH();
-	void op_LDRSB();
-	void op_LDRSH();
+	inline int op_MUL();
+	inline int op_MLA();
+	inline int op_UMULL();
+	inline int op_UMLAL();
+	inline int op_SMULL();
+	inline int op_SMLAL();
 
-	void op_SWP();
-	void op_SWPB();
-	void op_SWI();
+	inline int op_LDRH();
+	inline int op_STRH();
+	inline int op_LDRSB();
+	inline int op_LDRSH();
 
-	void op_LDC();
-	void op_STC();
-	void op_CDP();
-	void op_MRC();
-	void op_MCR();
+	inline int op_SWP();
+	inline int op_SWPB();
+	inline int op_SWI();
 
-	void op_UNKNOWN();
-	void op_UNASSIGNED();
-	void op_CONDITIONALSKIP();
-	void op_SINGLEDATATRANSFERUNDEFINED();
-	void op_DECODEFAIL();
+	inline int op_LDC();
+	inline int op_STC();
+	inline int op_CDP();
+	inline int op_MRC();
+	inline int op_MCR();
+
+	inline int op_UNKNOWN();
+	inline int op_UNASSIGNED();
+	inline int op_CONDITIONALSKIP();
+	inline int op_SINGLEDATATRANSFERUNDEFINED();
+	inline int op_DECODEFAIL();
 
 	private: // helper for data rpocessing
 		const inline uint8_t DPgetRn();
-
 		const inline uint8_t DPgetRd();
-
+		const inline uint8_t DPgetRs();
 		const inline uint8_t DPgetRm();
+
 		const inline uint8_t DPgetShift();
 
 		const inline uint8_t DPgetImmed();
 		const inline uint8_t DPgetRotate();
 
+		const inline uint8_t DPgetShiftAmount(uint8_t shift);
+
 		const inline bool DPs();
 		const inline bool DPi();
 
+		inline uint32_t DPgetOp2(bool* carryFlag);
 
+		// cycle calculation helpers
+
+		inline int dataProcessingCycleCalculator();
+
+		// shift helpers
+
+		inline uint32_t DPshiftLSL(uint32_t value, uint8_t shift_amount, bool* carry_out);
+		inline uint32_t DPshiftLSR(uint32_t value, uint8_t shift_amount, bool* carry_out);
+		inline uint32_t DPshiftASR(uint32_t value, uint8_t shift_amount, bool* carry_out);
+		inline uint32_t DPshiftROR(uint32_t value, uint8_t shift_amount, bool* carry_out);
+
+
+		//flag related helper
+
+		inline void setFlagNZC(uint32_t res, bool isCarry); // no addition or subtraction
+		inline void setFlagsAdd(uint32_t res, uint32_t op1, uint32_t op2);// ADD CHECK
+		inline void setFlagsSub(uint32_t res, uint32_t op1, uint32_t op2); // SUB CHECK
+		inline void setNZ(uint32_t res); // TEST CHECK
 };
 
