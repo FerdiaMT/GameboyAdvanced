@@ -386,7 +386,7 @@ CPU::Operation CPU::decode(uint32_t passedIns)
 
 		}
 		else if ((passedIns & 0x0FBF0FFF) == 0x010F0000) return CPU::Operation::MRS;
-		else if ((passedIns & 0x0FB0FFF0) == 0x0120F000 || (passedIns & 0x0FBF0000) == 0x03200000)return CPU::Operation::MSR;
+		else if ((passedIns & 0x0FB0FFF0) == 0x0120F000 || (passedIns & 0x0FB0F000) == 0x0320F000)return CPU::Operation::MSR;
 		else
 		{
 			// DATA TRANSFER
@@ -404,6 +404,7 @@ CPU::Operation CPU::decode(uint32_t passedIns)
 			case(0b0101): return CPU::Operation::ADC;break;
 			case(0b0110): return CPU::Operation::SBC;break;
 			case(0b0111): return CPU::Operation::RSC;break;
+			case(0b1000): return CPU::Operation::TST;break;
 			case(0b1001): return CPU::Operation::TEQ;break;
 			case(0b1010): return CPU::Operation::CMP;break;
 			case(0b1011): return CPU::Operation::CMN;break;
@@ -414,6 +415,36 @@ CPU::Operation CPU::decode(uint32_t passedIns)
 			}
 		}
 	}break;
+
+	case(0b001): // this must be transfer with immediate mode on
+	{
+		if ((passedIns & 0x0FBF0FFF) == 0x010F0000) return CPU::Operation::MRS;
+		else if ((passedIns & 0x0FB0FFF0) == 0x0120F000 || (passedIns & 0x0FB0F000) == 0x0320F000)return CPU::Operation::MSR;
+		else
+		{
+			switch ((passedIns >> 21) & 0xF)
+			{
+			case(0b0000): return CPU::Operation::AND;break;
+			case(0b0001): return CPU::Operation::EOR;break;
+			case(0b0010): return CPU::Operation::SUB;break;
+			case(0b0011): return CPU::Operation::RSB;break;
+			case(0b0100): return CPU::Operation::ADD;break;
+			case(0b0101): return CPU::Operation::ADC;break;
+			case(0b0110): return CPU::Operation::SBC;break;
+			case(0b0111): return CPU::Operation::RSC;break;
+			case(0b1000): return CPU::Operation::TST;break;
+			case(0b1001): return CPU::Operation::TEQ;break;
+			case(0b1010): return CPU::Operation::CMP;break;
+			case(0b1011): return CPU::Operation::CMN;break;
+			case(0b1100): return CPU::Operation::ORR;break;
+			case(0b1101): return CPU::Operation::MOV;break;
+			case(0b1110): return CPU::Operation::BIC;break;
+			case(0b1111): return CPU::Operation::MVN;break;
+			}
+		}
+
+	}
+
 
 	case(0b011): {
 		if (!((passedIns >> 4) & 0b1))

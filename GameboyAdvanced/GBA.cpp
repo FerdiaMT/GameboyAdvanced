@@ -2,6 +2,13 @@
 #include "CPU.h"
 #include <cstdint>
 
+//BUGS TO FIX WITH DECODER
+
+// MSR NOT PROPERLY APPEARING FOR 3RD CASE
+
+//LOAD / STORE BITS NOT PROPERLY HANDLED
+
+
 GBA::GBA(): cpu(&bus) , debuggerCPU(&cpu)
 {
 	if (!bus.loadROM("ferdiaTest.bin", 0x00000000))
