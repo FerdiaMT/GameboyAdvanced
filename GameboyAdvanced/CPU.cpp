@@ -121,7 +121,7 @@ uint32_t CPU::tick()
 
 	curOpCycles = execute();
 
-	//cycle total += curOpCycles
+	cycleTotal += curOpCycles;
 }
 
 
@@ -283,6 +283,12 @@ int CPU::execute()
 ///             OPCODE INSTRS()           ///
 /////////////////////////////////////////////
 
+// THIS WILL ADD 2 FOR THUMB, ADD 4 OTHERWISE
+
+const inline uint8_t CPU::pcOffset()
+{
+	return (T)? 2 : 4;
+}
 
 //HELPER FUNCTIONS FOR DATA PROCESSING
 const inline uint8_t CPU::DPgetRn() {return (instruction >> 16) & 0xF;}
@@ -405,7 +411,7 @@ inline uint32_t CPU::DPgetOp2(bool* carryFlag) {
 		uint8_t rmVal = reg[DPgetRm()]; // this is the rms inside val we will shift
 		uint8_t shift = DPgetShift(); // this is a very general purpouse value we will have to extract from now
 
-		if (DPgetRm() == 15) rmVal += 4;  // special case if we are shifting the pc
+		if (DPgetRm() == 15) rmVal += pcOffset();  // special case if we are shifting the pc
 
 		switch ((shift >> 1) & 0x3)//use bits 1 and 2 of shift
 		{
@@ -499,8 +505,7 @@ inline int CPU::op_B()
 }
 inline int CPU::op_BL() //TODO, make sure this is using correct logic to decide if B or BL
 {
-	if (T) lr = pc + 2;
-	else { lr = pc + 4; }
+	lr = pc + pcOffset(); // this adds 2 in thumb, 4 in ARM
 
 	int32_t offset = (instruction & 0xFFFFFF);
 	// FFFFFF
@@ -808,9 +813,27 @@ inline int CPU::op_SMLAL()
 //				          SINGLE DATA TRANSFER      					//
 //////////////////////////////////////////////////////////////////////////
 
+inline uint32_t CPU::SDapplyShift(uint32_t rmVal, uint8_t type, uint8_t amount) // singledata apply shift
+{
+	switch ((type))//use bits 1 and 2 of shift
+	{
+	case 0b00: return DPshiftLSL(rmVal, amount, nullptr);break; // LSL
+	case 0b01: return DPshiftLSR(rmVal, amount, nullptr);break; // LSR
+	case 0b10: return DPshiftASR(rmVal, amount, nullptr);break;// ASR
+	case 0b11: return DPshiftROR(rmVal, amount, nullptr);break; // ROR
+	}
+
+}
+
+inline uint32_t SDOffset(bool u, uint32_t newAddr, uint32_t offset)
+{
+	if (u) newAddr += offset; else newAddr -= offset;
+	return newAddr;
+}
+
 inline int CPU::op_LDR()
 {
-	uint16_t offset = instruction & 0x0FFF;
+	
 	uint8_t rdI = (instruction >> 12) & 0xF;
 	uint8_t rnI = (instruction >> 16) & 0xF;
 
@@ -822,48 +845,128 @@ inline int CPU::op_LDR()
 
 	uint32_t newAddr = reg[rnI];
 
-	if (!i) // use reg and rm shift
+	uint32_t offset = instruction & 0x0FFF;
+	if (i) // use reg and rm shift
 	{
+		offset = SDapplyShift(reg[(instruction & 0xF )], ((instruction >> 5) & 0x3), ((instruction >> 7) & 0x1F));
 	} 
 
-	if (p) // if pre offset 
-	{
-		if (u) newAddr += offset; else newAddr -= offset;
 
-	}
+
+	if (p) newAddr = SDOffset(u, newAddr,offset);
 
 	uint32_t readVal;
 	if (b) readVal = read8(newAddr);
-	else readVal = read32(newAddr);
-
-	if (!p) 
+	else
 	{
-		if (u) newAddr += offset; else newAddr -= offset;
-
+		uint32_t data = read32(newAddr & ~3);
+		uint8_t rotation = (newAddr & 3) * 8;
+		readVal = (data >> rotation) | (data << (32 - rotation));
 	}
 
-	if (w) reg[rnI] = newAddr;
+	if (!p) newAddr = SDOffset(u, newAddr, offset);
+	//TODO , alingment masking for pc perhaps
+
+	if (!p || w) reg[rnI] = newAddr;
+
+	reg[rdI] = readVal;
 
 	return 3;
 
 }
+
 inline int CPU::op_STR()
 {
+	uint8_t rdI = (instruction >> 12) & 0xF;
+	uint8_t rnI = (instruction >> 16) & 0xF;
+
+	bool w = ((instruction >> 21) & 0b1); // if true , write address into base
+	bool b = ((instruction >> 22) & 0b1); // if trye transfer byte, otherwise word
+	bool u = ((instruction >> 23) & 0b1); //if true, add ofset to base , otheriwse subtract
+	bool p = ((instruction >> 24) & 0b1); // if true , add prefix before transfer ,otherwise after
+	bool i = ((instruction >> 25) & 0b1); // if true, use reg rm shift, otherwise keep 12 bit unsigned block
+
+	uint32_t newAddr = reg[rnI];
+	uint32_t offset = instruction & 0x0FFF;
+	if (i) // use reg and rm shift
+	{
+		offset = SDapplyShift(reg[(instruction & 0xF)], ((instruction >> 5) & 0x3), ((instruction >> 7) & 0x1F));
+	}
+
+	if (p) newAddr = SDOffset(u, newAddr, offset);
+
+	uint32_t valToStore = reg[rdI];
+	if (rdI == 15) valToStore += pcOffset();
+
+	if (b) write8(newAddr , valToStore &0xFF);
+	else write32(newAddr & ~3, valToStore);
+
+	if (!p) newAddr = SDOffset(u, newAddr, offset);
+	//TODO , alingment masking for pc perhaps
+	if (!p || w) reg[rnI] = newAddr;
 	return 2;
 }
-inline int CPU::op_LDRH()
+
+inline int CPU::op_LDRH() // unsigned halfword
+{
+	uint8_t rmI = (instruction) & 0xF;
+	uint8_t rdI = (instruction >> 12) & 0xF;
+	uint8_t rnI = (instruction >> 16) & 0xF;
+
+	bool w = ((instruction >> 21) & 0b1); // if true , write address into base
+	bool u = ((instruction >> 23) & 0b1); //if true, add ofset to base , otheriwse subtract
+	bool p = ((instruction >> 24) & 0b1); // if true , add prefix before transfer ,otherwise after
+
+	uint32_t offset = reg[rmI];
+	uint32_t newAddr = reg[rnI];
+
+	if (p) newAddr = SDOffset(u, newAddr, offset);
+
+	uint32_t readVal = read16(newAddr);
+
+	if (!p) newAddr = SDOffset(u, newAddr, offset);
+
+	if (!p || w)
+	{
+		reg[rnI] = newAddr;
+	}
+	reg[rdI] = readVal;
+
+	return 3;
+}
+inline int CPU::op_STRH() // store unsigned halfword
+{
+	uint8_t rmI = (instruction) & 0xF;
+	uint8_t rdI = (instruction >> 12) & 0xF;
+	uint8_t rnI = (instruction >> 16) & 0xF;
+
+	bool w = ((instruction >> 21) & 0b1); // if true , write address into base
+	bool u = ((instruction >> 23) & 0b1); //if true, add ofset to base , otheriwse subtract
+	bool p = ((instruction >> 24) & 0b1); // if true , add prefix before transfer ,otherwise after
+
+	uint32_t offset = reg[rmI];
+	uint32_t newAddr = reg[rnI];
+
+	if (p) newAddr = SDOffset(u, newAddr, offset);
+
+	uint32_t valToStore = reg[rdI];
+	if (rdI == 15) valToStore += pcOffset();
+	write16(newAddr, valToStore & 0xFFFF);
+
+	if (!p) newAddr = SDOffset(u, newAddr, offset);
+
+	if (!p || w)
+	{
+		reg[rnI] = newAddr;
+	}
+
+	return 2;
+}
+inline int CPU::op_LDRSB() //load signed byte
 {
 
 }
-inline int CPU::op_STRH()
-{
-
-}
-inline int CPU::op_LDRSB()
-{
-
-}
-inline int CPU::op_LDRSH()
+inline int CPU::op_LDRSH() //load signed halfword
 {
 
 }
@@ -910,4 +1013,21 @@ uint16_t CPU::read16(uint16_t addr, bool bReadOnly = false)
 uint32_t CPU::read32(uint16_t addr, bool bReadOnly = false)
 {
 	return bus->read32(addr, bReadOnly);
+}
+
+/////////////////////////////////////////////
+///             WRITE FUNCTIONS           ///
+/////////////////////////////////////////////
+
+void CPU::write8(uint16_t addr, uint8_t data)
+{
+	bus->write8(addr, data);
+}
+void CPU::write16(uint16_t addr, uint16_t data)
+{
+	bus->write16(addr, data);
+}
+void CPU::write32(uint16_t addr, uint32_t data)
+{
+	bus->write32(addr, data);
 }

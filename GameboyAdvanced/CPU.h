@@ -113,10 +113,16 @@ private:
 	inline bool checkConditional(uint8_t cond) const;
 
 	
+	const inline uint8_t pcOffset();
 
 	uint8_t read8(uint16_t addr, bool bReadOnly = false);
 	uint16_t read16(uint16_t addr, bool bReadOnly = false);
 	uint32_t read32(uint16_t addr, bool bReadOnly = false);
+
+	void write8(uint16_t addr, uint8_t data);
+	void write16(uint16_t addr, uint16_t data);
+	void write32(uint16_t addr, uint32_t data);
+
 
 public:
 	inline int op_AND();
@@ -209,6 +215,8 @@ public:
 		inline uint32_t DPshiftASR(uint32_t value, uint8_t shift_amount, bool* carry_out);
 		inline uint32_t DPshiftROR(uint32_t value, uint8_t shift_amount, bool* carry_out);
 
+		//shift for memory
+		inline uint32_t SDapplyShift(uint32_t rmVal, uint8_t type, uint8_t amount); // singledata apply shift
 
 		//flag related helper
 
