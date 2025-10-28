@@ -64,9 +64,9 @@ public:
 
 		uint32_t reg[16];
 
-		uint32_t& sp; // stack pointer
-		uint32_t& lr; // link register
-		uint32_t& pc;
+		uint32_t& sp; // stack pointer ~ points to 13
+		uint32_t& lr; // link register ~ points to 14
+		uint32_t& pc; //~points to 14
 
 		// instruction to take
 		uint32_t instruction;
@@ -99,11 +99,7 @@ public:
 		};
 		//SPSR
 
-		// bank system so when we swap modes, we can store old modes inhere 
-		uint32_t r8FIQ[5];   // 8 9 10 11 12 registers stored for just fiq
-		uint32_t r13RegBank[6];  // individual SP for everone except usr/sys which share
-		uint32_t r14RegBank[6]; // individual LR for everone except usr/sys which share
-		uint32_t spsrBank[5]; // individual LR for everone except usr/sys have 0
+
 
 private:
 
@@ -140,6 +136,9 @@ private:
 
 	mode curMode= mode::Supervisor; // curMode should default to Supervisor
 
+	mode CSPRbitToMode(uint8_t modeBits);
+
+
 	bool isPrivilegedMode(); // used to quickly tell were not in user mode
 	uint8_t getModeIndex(CPU::mode mode); // used for register saving
 
@@ -148,6 +147,7 @@ private:
 	void unbankRegisters(CPU::mode mode); // load reg vals from bank
 
 	void switchMode(CPU::mode newMode); // main function used for mode switching, calls bank and unbank register etc
+	void saveIntoSpsr(uint8_t index);
 
 	// excpetion handling
 	void enterException(CPU::mode newMode, uint32_t vectorAddr, uint32_t returnAddr);
@@ -156,6 +156,12 @@ private:
 	//SPSR helpers
 	uint32_t getSPSR();
 	void setSPSR(uint32_t value);
+
+	// bank system so when we swap modes, we can store old modes inhere 
+	uint32_t r8FIQ[5];   // 8 9 10 11 12 registers stored for just fiq
+	uint32_t r13RegBank[6];  // individual SP for everone except usr/sys which share
+	uint32_t r14RegBank[6]; // individual LR for everone except usr/sys which share
+	uint32_t spsrBank[5]; // individual LR for everone except usr/sys have 0
 
 
 

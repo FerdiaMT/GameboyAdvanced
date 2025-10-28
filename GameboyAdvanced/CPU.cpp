@@ -104,23 +104,138 @@ void CPU::initializeOpFunctions()
 //////////////////////////////////////////////////////////////////////////
 
 
+CPU::mode CPU::CSPRbitToMode(uint8_t modeBits)
+{
+	return static_cast<mode>(modeBits & 0x1F);
+}
 
-bool isPrivilegedMode(); // used to quickly tell were not in user mode
-uint8_t getModeIndex(CPU::mode mode); // used for register saving
+bool CPU::isPrivilegedMode() // used to quickly tell were not in user mode
+{
+	return (curMode != mode::User);
+}
+uint8_t CPU::getModeIndex(mode mode) // used for register saving
+{
+	switch (mode)
+	{
+	case mode::User:	   return 0;
+	case mode::System:     return 0;
+	case mode::FIQ:        return 1;
+	case mode::IRQ:        return 2;
+	case mode::Supervisor: return 3;
+	case mode::Abort:      return 4;
+	case mode::Undefined:  return 5;
+	default:               return 0;
+	}
+}
 
 //reg banking
-void bankRegisters(CPU::mode mode); // save reg val to bank
-void unbankRegisters(CPU::mode mode); // load reg vals from bank
+void CPU::bankRegisters(mode mode)// save reg val to bank
+{
+	uint8_t passedModeIndex = getModeIndex(mode);
 
-void switchMode(CPU::mode newMode); // main function used for mode switching, calls bank and unbank register etc
+	r13RegBank[passedModeIndex] = reg[13]; // save 13 and 14 into the reg bank
+	r14RegBank[passedModeIndex] = reg[14];
+
+	if (mode == mode::FIQ) // fiq saves its own registers
+	{
+		r8FIQ[0] = reg[8];
+		r8FIQ[1] = reg[9];
+		r8FIQ[2] = reg[10];
+		r8FIQ[3] = reg[11];
+		r8FIQ[4] = reg[12];
+	}
+
+}
+void CPU::unbankRegisters(mode mode)  // load reg vals from bank
+{
+	uint8_t passedModeIndex = getModeIndex(mode);
+
+	reg[13] = r13RegBank[passedModeIndex]; // grab 13 and 14 from the reg bank
+	reg[14] = r14RegBank[passedModeIndex];
+
+	if (mode == mode::FIQ) // fiq saves its own registers
+	{
+		reg[8] = r8FIQ[0];
+		reg[9] = r8FIQ[1];
+		reg[10] = r8FIQ[2];
+		reg[11] = r8FIQ[3];
+		reg[12] = r8FIQ[4];
+	}
+}
+
+void CPU::switchMode(mode newMode) // main function used for mode switching, calls bank and unbank register etc
+{
+	mode oldMode = curMode;
+	if (oldMode != newMode) // check this first so we dont do a pointless swap
+	{
+		curMode = newMode;
+
+		bankRegisters(oldMode);
+		CPSR = (CPSR & ~0x1F) | static_cast<uint8_t>(newMode); // set the new modes bits (may turn this to a function later)
+		unbankRegisters(newMode);
+	}
+
+	
+}
+
+void CPU::saveIntoSpsr(uint8_t index)
+{
+	if (index == 0) return; // if user or system
+	spsrBank[index - 1] = CPSR;
+}
 
 // excpetion handling
-void enterException(CPU::mode newMode, uint32_t vectorAddr, uint32_t returnAddr);
-void returnFromException();
+void CPU::enterException(CPU::mode newMode, uint32_t vectorAddr, uint32_t returnAddr)
+{
+	mode oldMode = curMode; // save our old mode
+
+	switchMode(newMode); // switch the reg bankings , swaps curMode
+
+	uint8_t newModeIndex = getModeIndex(curMode); // new modes index for switching
+
+	saveIntoSpsr(newModeIndex); // saves the current CPSR into the bank
+
+	//EXTRA FOR EXCEPTION HANDLING
+	CPSR |= 0x80;  // Disable IRQ
+	if (newMode == mode::FIQ) CPSR |= 0x40;// turn off FIQ if on FIQ
+
+	lr = returnAddr;
+	pc = vectorAddr;
+
+
+}
+void CPU::returnFromException()
+{
+	mode oldMode = curMode;
+	int oldModeIndex = getModeIndex(oldMode);
+
+	if (oldModeIndex > 0) // if not user / system
+	{
+		uint32_t savedCPSR = spsrBank[oldModeIndex - 1];
+		curMode = CSPRbitToMode(savedCPSR & 0x1F);
+
+		bankRegisters(oldMode);
+		CPSR = savedCPSR;
+		unbankRegisters(curMode);
+	}
+}
 
 //SPSR helpers
-uint32_t getSPSR();
-void setSPSR(uint32_t value);
+//these are actually kind of useless, mabye remove later 
+uint32_t CPU::getSPSR()
+{
+	uint8_t idx = getModeIndex(curMode);
+	if (idx > 0)
+	{
+		return spsrBank[idx - 1];
+	}
+	return CPSR; 
+}
+void  CPU::setSPSR(uint32_t value)
+{
+	int idx = getModeIndex(curMode);
+	if (idx > 0) spsrBank[idx - 1] = value;
+}
 
 
 
