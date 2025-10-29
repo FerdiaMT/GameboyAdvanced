@@ -1497,16 +1497,28 @@ inline int CPU::op_SINGLEDATATRANSFERUNDEFINED() { return 1; }
 /////////////////////////////////////////////
 ///                decode                 ///
 /////////////////////////////////////////////
+CPU::thumbInstr CPU::debugDecodedInstr()
+{
+	thumbInstr debugInstr = {};
+	debugInstr.cond = NULL;
+	debugInstr.rd = NULL;
+	debugInstr.rs = NULL;
+	debugInstr.imm = NULL;
+	debugInstr.h1 = NULL;
+	debugInstr.h2 = NULL;
 
+	return debugInstr;
+}
 
 CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr struct
 {
 	thumbInstr decodedInstr = {}; // creates empty struct for us to fill
 	decodedInstr.type = thumbOperation::THUMB_UNDEFINED;
 
-	uint8_t op = instr & 0xF;
 
-	switch (op)
+	decodedInstr = debugDecodedInstr();
+
+	switch ((instr >> 13) & 0b111)
 	{
 	case(0b000): // either move shift register , or add/subtract
 	{
@@ -1539,7 +1551,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 			case(0b11):decodedInstr.type = thumbOperation::THUMB_SUB_IMM; break;
 			}
 		}
-	}
+	}break;
 	case(0b001): // Move/compare/add/ subtract immediate
 	{
 		decodedInstr.imm = (instr) & 0xFF;
@@ -1552,7 +1564,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 		case(2):decodedInstr.type = thumbOperation::THUMB_ADD_IMM3; break;
 		case(3):decodedInstr.type = thumbOperation::THUMB_SUB_IMM3; break;
 		}
-	}
+	}break;
 	case(0b010): // (ALU) or (HI register op/bex) or (pc relative) or (load/store w/ reg-offs)  or (load/store se B/HW)
 	{
 		if (((instr >> 10) & 0b111) == 0b000) //ALU
@@ -1637,7 +1649,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 			case 0b11: decodedInstr.type = thumbOperation::THUMB_LDRSH_REG; break;
 			}
 		}
-	}
+	}break;
 	case(0b011): // Load/store with immediate offset
 	{
 		decodedInstr.rd = (instr) & 0b111;
@@ -1651,7 +1663,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 		case 0b10: decodedInstr.type = thumbOperation::THUMB_STRB_IMM; break;
 		case 0b11: decodedInstr.type = thumbOperation::THUMB_LDRB_IMM; break;
 		}
-	}
+	}break;
 	case(0b100): //(Load/store halfword) or (SP-relative load/store)
 	{
 		if (((instr >> 12) & 0b1) == 0b0) //Load / store halfword
@@ -1678,7 +1690,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 			}
 		}
 
-	}
+	}break;
 	case(0b101): // (load addr) or (add ofs to sp) or (push/pop reg)
 	{
 		if (((instr >> 12) & 0b1) == 0b0) // Load Adress
@@ -1696,7 +1708,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 		{
 			decodedInstr.imm = (instr & 0b1111111) << 2;
 
-			if ((instr >> 7) & 0b1)decodedInstr.imm = -decodedInstr.imm;
+			if ((instr >> 7) & 0b1) decodedInstr.imm = -(int32_t)decodedInstr.imm;
 			decodedInstr.type = thumbOperation::THUMB_ADD_SP_IMM;
 		}
 		else //  (push/pop reg)
@@ -1716,7 +1728,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 				decodedInstr.type = thumbOperation::THUMB_POP;
 			}
 		}
-	}
+	}break;
 	case(0b110): // (multi reg load/store) , (cond branch) , (SWI)
 	{
 		if (((instr >> 12) & 0b1) == 0b0) //(multi reg load/store)
@@ -1743,7 +1755,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 			decodedInstr.imm = instr & 0xFF;
 			decodedInstr.type = thumbOperation::THUMB_SWI;
 		}
-	}
+	}break;
 	case(0b111): // (uncond branch) or (long branch w/link)
 	{
 		if (((instr >> 12) & 0b1) == 0b0) // (uncond branch)
@@ -1771,7 +1783,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 			}
 		}
 
-	}
+	}break;
 	}
 
 	return decodedInstr;

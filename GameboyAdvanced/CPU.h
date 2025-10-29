@@ -318,6 +318,8 @@ public:
 
 	thumbInstr curThumbInstr;
 
+	CPU::thumbInstr debugDecodedInstr(); //used to create a struct full of nulls , usefull for printig debugs
+
 	thumbInstr decodeThumb(uint16_t instruction); // this returns a thumbInstr struct
 	int thumbExecute(struct thumbInstr);
 
