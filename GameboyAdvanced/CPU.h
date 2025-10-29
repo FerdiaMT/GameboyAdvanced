@@ -298,7 +298,7 @@ public:
 		THUMB_BL_PREFIX,    
 		THUMB_BL_SUFFIX,    
 		THUMB_SWI,          
-		THUMB_UNDEFINED
+		THUMB_UNDEFINED,
 	};
 
 	struct thumbInstr{

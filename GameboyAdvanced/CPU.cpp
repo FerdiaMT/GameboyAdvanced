@@ -1502,7 +1502,7 @@ inline int CPU::op_SINGLEDATATRANSFERUNDEFINED() { return 1; }
 CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr struct
 {
 	thumbInstr decodedInstr = {}; // creates empty struct for us to fill
-	decodedInstr.type = THUMB_UNDEFINED;
+	decodedInstr.type = thumbOperation::THUMB_UNDEFINED;
 
 	uint8_t op = instr & 0xF;
 
@@ -1513,8 +1513,8 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 		if (((instr >> 11) & 0b11) != 0b11) // MOVE SHIFTED REGISTER
 		{
 			decodedInstr.rd = (instr) & 0b111;
-			decodedInstr.rs = (instr>>3) & 0b111;
-			decodedInstr.imm = (instr>>6) & 0b11111;
+			decodedInstr.rs = (instr >> 3) & 0b111;
+			decodedInstr.imm = (instr >> 6) & 0b11111;
 
 			switch ((instr >> 11) & 0b11)
 			{
@@ -1583,7 +1583,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 		else if (((instr >> 10) & 0b111) == 0b001) //Hi register operations/branch exchange
 		{
 			decodedInstr.rd = (instr) & 0b111;
-			decodedInstr.rs = (instr>>3) & 0b111;
+			decodedInstr.rs = (instr >> 3) & 0b111;
 			decodedInstr.h1 = (instr >> 6) & 0b1;
 			decodedInstr.h2 = (instr >> 7) & 0b1;
 
@@ -1595,7 +1595,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 			{
 			case 0b00: decodedInstr.type = thumbOperation::THUMB_ADD_HI; break;
 			case 0b01: decodedInstr.type = thumbOperation::THUMB_CMP_HI; break;
-			case 0b10: decodedInstr.type = thumbOperation::THUMB_MOV_HI; break; 
+			case 0b10: decodedInstr.type = thumbOperation::THUMB_MOV_HI; break;
 			case 0b11:
 			if (decodedInstr.h1) decodedInstr.type = thumbOperation::THUMB_BLX_REG;
 			else decodedInstr.type = thumbOperation::THUMB_BX;
@@ -1642,7 +1642,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 	{
 		decodedInstr.rd = (instr) & 0b111;
 		decodedInstr.rs = (instr >> 3) & 0b111; // where rs is used instead or rb for rbase
-		decodedInstr.imm = (instr >> 6) & 0b11111; 
+		decodedInstr.imm = (instr >> 6) & 0b11111;
 
 		switch ((instr >> 11) & 0b11)
 		{
@@ -1658,7 +1658,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 		{
 			decodedInstr.rd = (instr) & 0b111;
 			decodedInstr.rs = (instr >> 3) & 0b111; // where rs is used instead or rb for rbase
-			decodedInstr.imm = ((instr >> 6) & 0b11111)<1;
+			decodedInstr.imm = ((instr >> 6) & 0b11111) < 1;
 
 			switch ((instr >> 11) & 0b1)
 			{
@@ -1668,67 +1668,113 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 		}
 		else // (SP-relative load/store)
 		{
+			decodedInstr.imm = (instr & 0xFF) << 2;
+			decodedInstr.rd = (instr >> 8) & 0b111;
 
+			switch ((instr >> 11) & 0b1)
+			{
+			case 0b0: decodedInstr.type = thumbOperation::THUMB_STR_SP; break;
+			case 0b1: decodedInstr.type = thumbOperation::THUMB_LDR_SP; break;
+			}
 		}
+
 	}
 	case(0b101): // (load addr) or (add ofs to sp) or (push/pop reg)
 	{
 		if (((instr >> 12) & 0b1) == 0b0) // Load Adress
 		{
+			decodedInstr.imm = (instr & 0xFF) << 2;
+			decodedInstr.rd = (instr >> 8) & 0b111;
 
+			switch ((instr >> 11) & 0b1)
+			{
+			case 0b0: decodedInstr.type = thumbOperation::THUMB_ADD_PC; break;
+			case 0b1: decodedInstr.type = thumbOperation::THUMB_ADD_SP; break;
+			}
 		}
-		else if( ((instr >> 8) & 0b11111) == 0b10000) //  (add ofs to sp)
+		else if (((instr >> 8) & 0b11111) == 0b10000) //  (add ofs to sp)
 		{
+			decodedInstr.imm = (instr & 0b1111111) << 2;
 
+			if ((instr >> 7) & 0b1)decodedInstr.imm = -decodedInstr.imm;
+			decodedInstr.type = thumbOperation::THUMB_ADD_SP_IMM;
 		}
 		else //  (push/pop reg)
 		{
+			decodedInstr.imm = (instr & 0xFF);
+			bool rBit = ((instr >> 8) & 0b1);
+			bool lBit = ((instr >> 11) & 0b1);
 
+			if (!lBit) // push
+			{
+				if (rBit) decodedInstr.imm |= (1 << 14);  // include lr
+				decodedInstr.type = thumbOperation::THUMB_PUSH;
+			}
+			else // pop
+			{
+				if (rBit) decodedInstr.imm |= (1 << 15);  // include pc
+				decodedInstr.type = thumbOperation::THUMB_POP;
+			}
 		}
 	}
 	case(0b110): // (multi reg load/store) , (cond branch) , (SWI)
 	{
 		if (((instr >> 12) & 0b1) == 0b0) //(multi reg load/store)
 		{
-
+			decodedInstr.imm = (instr & 0xFF);
+			decodedInstr.rs = ((instr >> 8) & 0b111);//rs is always a sub for rb
+			switch (((instr >> 11) & 0b1))
+			{
+			case(0b0):decodedInstr.type = thumbOperation::THUMB_STMIA;break;
+			case(0b1):decodedInstr.type = thumbOperation::THUMB_LDMIA;break;
+			}
 		}
 		else if (((instr >> 8) & 0b11111) != 0b11111) //  conditional branch (done by making sure it isnt SWI first)
 		{
+			decodedInstr.imm = (instr & 0b1111111) << 2;
+			decodedInstr.cond = (instr >> 8) & 0b1111;
 
+			if ((instr >> 7) & 0b1) decodedInstr.imm = -(int32_t)decodedInstr.imm;
+
+			decodedInstr.type = thumbOperation::THUMB_B_COND;
 		}
 		else // SWI
 		{
-
+			decodedInstr.imm = instr & 0xFF;
+			decodedInstr.type = thumbOperation::THUMB_SWI;
 		}
 	}
 	case(0b111): // (uncond branch) or (long branch w/link)
 	{
 		if (((instr >> 12) & 0b1) == 0b0) // (uncond branch)
 		{
+			decodedInstr.imm = (instr & 0x7FF);
+			if (decodedInstr.imm & 0x400) decodedInstr.imm |= 0xF800; 
+			decodedInstr.imm = (int32_t)decodedInstr.imm << 1; 
 
+			decodedInstr.type = thumbOperation::THUMB_B;
 		}
 		else // (long branch w/link)
 		{
+			decodedInstr.imm = (instr & 0x7FF);
+			if (! ((instr >> 11) & 0b1))
+			{
+				if (decodedInstr.imm & 0x400) decodedInstr.imm |= 0xF800;
+				decodedInstr.imm = (int32_t)decodedInstr.imm << 12;
 
+				decodedInstr.type = thumbOperation::THUMB_BL_PREFIX;
+			}
+			else
+			{ 
+				decodedInstr.imm = decodedInstr.imm << 1;
+				decodedInstr.type = thumbOperation::THUMB_BL_SUFFIX;
+			}
 		}
 
 	}
 	}
 
-	
-
-	
-	return instr;
-
-
-
-
-
-
-
-
-
-	return instr;
+	return decodedInstr;
 }
 
 
