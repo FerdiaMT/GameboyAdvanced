@@ -118,6 +118,75 @@ void CPU::initializeOpFunctions()
 	op_functions[static_cast<int>(Operation::CONDITIONALSKIP)] = &CPU::op_CONDITIONALSKIP;
 	op_functions[static_cast<int>(Operation::SINGLEDATATRANSFERUNDEFINED)] = &CPU::op_SINGLEDATATRANSFERUNDEFINED;
 	op_functions[static_cast<int>(Operation::DECODEFAIL)] = &CPU::op_DECODEFAIL;
+
+
+	///////////////////////////////////////////////////////////////////////
+	//								THUMB OPS                            //
+	///////////////////////////////////////////////////////////////////////
+
+
+	opT_functions[static_cast<int>(thumbOperation::THUMB_MOV_IMM)] = &CPU::opT_MOV_IMM;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_ADD_REG)] = &CPU::opT_ADD_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_ADD_IMM)] = &CPU::opT_ADD_IMM;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_ADD_IMM3)] = &CPU::opT_ADD_IMM3;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_SUB_REG)] = &CPU::opT_SUB_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_SUB_IMM)] = &CPU::opT_SUB_IMM;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_SUB_IMM3)] = &CPU::opT_SUB_IMM3;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_CMP_IMM)] = &CPU::opT_CMP_IMM;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_LSL_IMM)] = &CPU::opT_LSL_IMM;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_LSR_IMM)] = &CPU::opT_LSR_IMM;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_ASR_IMM)] = &CPU::opT_ASR_IMM;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_AND_REG)] = &CPU::opT_AND_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_EOR_REG)] = &CPU::opT_EOR_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_LSL_REG)] = &CPU::opT_LSL_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_LSR_REG)] = &CPU::opT_LSR_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_ASR_REG)] = &CPU::opT_ASR_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_ADC_REG)] = &CPU::opT_ADC_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_SBC_REG)] = &CPU::opT_SBC_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_ROR_REG)] = &CPU::opT_ROR_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_TST_REG)] = &CPU::opT_TST_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_NEG_REG)] = &CPU::opT_NEG_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_CMP_REG)] = &CPU::opT_CMP_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_CMN_REG)] = &CPU::opT_CMN_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_ORR_REG)] = &CPU::opT_ORR_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_MUL_REG)] = &CPU::opT_MUL_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_BIC_REG)] = &CPU::opT_BIC_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_MVN_REG)] = &CPU::opT_MVN_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_ADD_HI)] = &CPU::opT_ADD_HI;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_CMP_HI)] = &CPU::opT_CMP_HI;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_MOV_HI)] = &CPU::opT_MOV_HI;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_BX)] = &CPU::opT_BX;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_BLX_REG)] = &CPU::opT_BLX_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_LDR_PC)] = &CPU::opT_LDR_PC;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_LDR_REG)] = &CPU::opT_LDR_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_STR_REG)] = &CPU::opT_STR_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_LDRB_REG)] = &CPU::opT_LDRB_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_STRB_REG)] = &CPU::opT_STRB_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_LDRH_REG)] = &CPU::opT_LDRH_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_STRH_REG)] = &CPU::opT_STRH_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_LDRSB_REG)] = &CPU::opT_LDRSB_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_LDRSH_REG)] = &CPU::opT_LDRSH_REG;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_LDR_IMM)] = &CPU::opT_LDR_IMM;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_STR_IMM)] = &CPU::opT_STR_IMM;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_LDRB_IMM)] = &CPU::opT_LDRB_IMM;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_STRB_IMM)] = &CPU::opT_STRB_IMM;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_LDRH_IMM)] = &CPU::opT_LDRH_IMM;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_STRH_IMM)] = &CPU::opT_STRH_IMM;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_LDR_SP)] = &CPU::opT_LDR_SP;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_STR_SP)] = &CPU::opT_STR_SP;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_ADD_PC)] = &CPU::opT_ADD_PC;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_ADD_SP)] = &CPU::opT_ADD_SP;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_ADD_SP_IMM)] = &CPU::opT_ADD_SP_IMM;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_PUSH)] = &CPU::opT_PUSH;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_POP)] = &CPU::opT_PopT;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_STMIA)] = &CPU::opT_STMIA;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_LDMIA)] = &CPU::opT_LDMIA;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_B_COND)] = &CPU::opT_B_COND;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_B)] = &CPU::opT_B;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_BL_PREFIX)] = &CPU::opT_BL_PREFIX;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_BL_SUFFIX)] = &CPU::opT_BL_SUFFIX;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_SWI)] = &CPU::opT_SWI;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_UNDEFINED)] = &CPU::opT_UNDEFINED;
 }
 
 uint32_t CPU::tick()
@@ -146,12 +215,168 @@ uint32_t CPU::tick()
 	}
 	
 
-
-	
-
 	cycleTotal += curOpCycles; // this could be returned and made so the ppu does this many frames too ... 
 
 	return cycleTotal;// doing this for now
+}
+
+CPU::Operation CPU::decode(uint32_t passedIns)
+{
+
+	uint8_t conditional = (passedIns >> 28) & 0xF;
+	if (!checkConditional(conditional)) return CPU::Operation::CONDITIONALSKIP;
+
+	// so now we get bit 27,26 and 25 to tell us what passedIns to execute
+	switch ((passedIns >> 25) & 0x7)
+	{
+	case(0b000):
+	{
+		// a few odd cases here
+		if ((passedIns & 0x0FFFFFF0) == 0x12FFF10) return CPU::Operation::BX;
+		else if ((passedIns & 0x0FB00FF0) == 0x01000090) return CPU::Operation::SWP;
+		else if ((passedIns & 0x0F8000F0) == 0x00800090) // multiplyLong, can be long or accumalate
+		{
+			// can also be signed or unsigned
+			switch ((passedIns >> 21) & 0b11)
+			{
+			case(0b00): return CPU::Operation::UMULL;
+			case(0b01): return CPU::Operation::UMLAL;
+			case(0b10): return CPU::Operation::SMULL;
+			case(0b11): return CPU::Operation::SMLAL;
+			}
+		}
+		else if ((passedIns & 0x0FC000F0) == 0x00000090)
+		{
+			if ((passedIns >> 21) & 0b1) return CPU::Operation::MLA;
+			return CPU::Operation::MUL;
+		}
+		else if ((passedIns & 0x0E000090) == 0x00000090) // HalfwordTransfer
+		{
+			uint8_t SH = (passedIns >> 4) & 0b11;
+
+			if (SH == 0) return CPU::Operation::SWP;
+
+			SH = (((passedIns >> 18) & 100) | SH) & 0x7;
+
+			switch (SH)
+			{
+			case(0b001): return CPU::Operation::STRH;
+			case(0b101): return CPU::Operation::LDRH;
+			case(0b110): return CPU::Operation::LDRSB;
+			case(0b111): return CPU::Operation::LDRSH;
+			default:printf("ERROR IN HALFWORD TRANSFER DECODING, GOT SH %d", SH);
+			}
+
+		}
+		else if ((passedIns & 0x0FBF0FFF) == 0x010F0000) return CPU::Operation::MRS;
+		else if ((passedIns & 0x0FB0FFF0) == 0x0120F000 || (passedIns & 0x0FB0F000) == 0x0320F000)return CPU::Operation::MSR;
+		else
+		{
+			// DATA TRANSFER
+			uint8_t op = (passedIns >> 21) & 0xF;
+
+			//before we return anything, we should 
+
+			switch (op)
+			{
+			case(0b0000): return CPU::Operation::AND;break;
+			case(0b0001): return CPU::Operation::EOR;break;
+			case(0b0010): return CPU::Operation::SUB;break;
+			case(0b0011): return CPU::Operation::RSB;break;
+			case(0b0100): return CPU::Operation::ADD;break;
+			case(0b0101): return CPU::Operation::ADC;break;
+			case(0b0110): return CPU::Operation::SBC;break;
+			case(0b0111): return CPU::Operation::RSC;break;
+			case(0b1000): return CPU::Operation::TST;break;
+			case(0b1001): return CPU::Operation::TEQ;break;
+			case(0b1010): return CPU::Operation::CMP;break;
+			case(0b1011): return CPU::Operation::CMN;break;
+			case(0b1100): return CPU::Operation::ORR;break;
+			case(0b1101): return CPU::Operation::MOV;break;
+			case(0b1110): return CPU::Operation::BIC;break;
+			case(0b1111): return CPU::Operation::MVN;break;
+			}
+		}
+	}break;
+
+	case(0b001): // this must be transfer with immediate mode on
+	{
+		if ((passedIns & 0x0FBF0FFF) == 0x010F0000) return CPU::Operation::MRS;
+		else if ((passedIns & 0x0FB0FFF0) == 0x0120F000 || (passedIns & 0x0FB0F000) == 0x0320F000)return CPU::Operation::MSR;
+		else
+		{
+			switch ((passedIns >> 21) & 0xF)
+			{
+			case(0b0000): return CPU::Operation::AND;break;
+			case(0b0001): return CPU::Operation::EOR;break;
+			case(0b0010): return CPU::Operation::SUB;break;
+			case(0b0011): return CPU::Operation::RSB;break;
+			case(0b0100): return CPU::Operation::ADD;break;
+			case(0b0101): return CPU::Operation::ADC;break;
+			case(0b0110): return CPU::Operation::SBC;break;
+			case(0b0111): return CPU::Operation::RSC;break;
+			case(0b1000): return CPU::Operation::TST;break;
+			case(0b1001): return CPU::Operation::TEQ;break;
+			case(0b1010): return CPU::Operation::CMP;break;
+			case(0b1011): return CPU::Operation::CMN;break;
+			case(0b1100): return CPU::Operation::ORR;break;
+			case(0b1101): return CPU::Operation::MOV;break;
+			case(0b1110): return CPU::Operation::BIC;break;
+			case(0b1111): return CPU::Operation::MVN;break;
+			}
+		}
+
+	}
+
+
+	case(0b011): {
+		if (!((passedIns >> 4) & 0b1))
+		{
+			//SINGLE DATA TRANSFER
+			if ((passedIns >> 20) & 0b1) return CPU::Operation::LDR;
+			return CPU::Operation::STR;
+		}
+		else { return CPU::Operation::SINGLEDATATRANSFERUNDEFINED; }; break;
+	}
+	case(0b010): if ((passedIns >> 20) & 0b1) { return CPU::Operation::LDR; }
+			   else { return CPU::Operation::STR; }break; // SINGLE DATA TRANSFER (AGAIN)
+	case(0b100): if ((passedIns >> 20) & 0b1) { return CPU::Operation::LDM; }
+			   else { return CPU::Operation::STM; }break; //BLOCK DATA TRANSFER
+	case(0b101): if ((passedIns >> 24) & 0b1) { return CPU::Operation::BL; }
+			   else { return CPU::Operation::B; }break;
+	case(0b110): if ((passedIns >> 24) & 0b1) { return CPU::Operation::LDC; }
+			   else { return CPU::Operation::STC; }break; // COPROCESSOR DATA TRANSFER
+
+
+	case(0b111):
+	{
+		if ((passedIns >> 24) & 0b1) return CPU::Operation::SWI;
+		else if (!((passedIns >> 4) & 0b1)) return CPU::Operation::CDP;
+		else // coprocessor register transfer , MRC , MCR
+		{
+			if ((passedIns >> 20) & 0b1) { return CPU::Operation::MRC; }
+			else { return CPU::Operation::MCR; }break;
+		}
+	}break;
+
+	}
+
+	return CPU::Operation::DECODEFAIL;
+
+}
+
+int CPU::execute()
+{
+	int op_index = static_cast<int>(curOP);
+
+	if (op_functions[op_index] == nullptr)
+	{
+		printf("NO FUNCTION MAPPED TO INDEX %d\n", op_index);
+		return 1;
+	}
+
+	return(this->*op_functions[op_index])();
+
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -350,164 +575,7 @@ inline bool CPU::checkConditional(uint8_t cond) const
 	}
 }
 
-CPU::Operation CPU::decode(uint32_t passedIns)
-{
 
-	uint8_t conditional = (passedIns >> 28) & 0xF;
-	if (!checkConditional(conditional)) return CPU::Operation::CONDITIONALSKIP;
-
-	// so now we get bit 27,26 and 25 to tell us what passedIns to execute
-	switch ((passedIns >> 25) & 0x7)
-	{
-	case(0b000):
-	{
-		// a few odd cases here
-		if ((passedIns & 0x0FFFFFF0) == 0x12FFF10) return CPU::Operation::BX;
-		else if ((passedIns & 0x0FB00FF0) == 0x01000090) return CPU::Operation::SWP;
-		else if ((passedIns & 0x0F8000F0) == 0x00800090) // multiplyLong, can be long or accumalate
-		{
-			// can also be signed or unsigned
-			switch ((passedIns >> 21) & 0b11)
-			{
-			case(0b00): return CPU::Operation::UMULL;
-			case(0b01): return CPU::Operation::UMLAL;
-			case(0b10): return CPU::Operation::SMULL;
-			case(0b11): return CPU::Operation::SMLAL;
-			}
-		}
-		else if ((passedIns & 0x0FC000F0) == 0x00000090)
-		{
-			if ((passedIns >> 21) & 0b1) return CPU::Operation::MLA;
-			return CPU::Operation::MUL;
-		}
-		else if ((passedIns & 0x0E000090) == 0x00000090) // HalfwordTransfer
-		{
-			uint8_t SH = (passedIns >> 4) & 0b11;
-
-			if (SH == 0) return CPU::Operation::SWP;
-
-			SH = (((passedIns >> 18) & 100) | SH) & 0x7;
-
-			switch (SH)
-			{
-			case(0b001): return CPU::Operation::STRH;
-			case(0b101): return CPU::Operation::LDRH;
-			case(0b110): return CPU::Operation::LDRSB;
-			case(0b111): return CPU::Operation::LDRSH;
-			default:printf("ERROR IN HALFWORD TRANSFER DECODING, GOT SH %d", SH);
-			}
-
-		}
-		else if ((passedIns & 0x0FBF0FFF) == 0x010F0000) return CPU::Operation::MRS;
-		else if ((passedIns & 0x0FB0FFF0) == 0x0120F000 || (passedIns & 0x0FB0F000) == 0x0320F000)return CPU::Operation::MSR;
-		else
-		{
-			// DATA TRANSFER
-			uint8_t op = (passedIns >> 21) & 0xF;
-
-			//before we return anything, we should 
-
-			switch (op)
-			{
-			case(0b0000): return CPU::Operation::AND;break;
-			case(0b0001): return CPU::Operation::EOR;break;
-			case(0b0010): return CPU::Operation::SUB;break;
-			case(0b0011): return CPU::Operation::RSB;break;
-			case(0b0100): return CPU::Operation::ADD;break;
-			case(0b0101): return CPU::Operation::ADC;break;
-			case(0b0110): return CPU::Operation::SBC;break;
-			case(0b0111): return CPU::Operation::RSC;break;
-			case(0b1000): return CPU::Operation::TST;break;
-			case(0b1001): return CPU::Operation::TEQ;break;
-			case(0b1010): return CPU::Operation::CMP;break;
-			case(0b1011): return CPU::Operation::CMN;break;
-			case(0b1100): return CPU::Operation::ORR;break;
-			case(0b1101): return CPU::Operation::MOV;break;
-			case(0b1110): return CPU::Operation::BIC;break;
-			case(0b1111): return CPU::Operation::MVN;break;
-			}
-		}
-	}break;
-
-	case(0b001): // this must be transfer with immediate mode on
-	{
-		if ((passedIns & 0x0FBF0FFF) == 0x010F0000) return CPU::Operation::MRS;
-		else if ((passedIns & 0x0FB0FFF0) == 0x0120F000 || (passedIns & 0x0FB0F000) == 0x0320F000)return CPU::Operation::MSR;
-		else
-		{
-			switch ((passedIns >> 21) & 0xF)
-			{
-			case(0b0000): return CPU::Operation::AND;break;
-			case(0b0001): return CPU::Operation::EOR;break;
-			case(0b0010): return CPU::Operation::SUB;break;
-			case(0b0011): return CPU::Operation::RSB;break;
-			case(0b0100): return CPU::Operation::ADD;break;
-			case(0b0101): return CPU::Operation::ADC;break;
-			case(0b0110): return CPU::Operation::SBC;break;
-			case(0b0111): return CPU::Operation::RSC;break;
-			case(0b1000): return CPU::Operation::TST;break;
-			case(0b1001): return CPU::Operation::TEQ;break;
-			case(0b1010): return CPU::Operation::CMP;break;
-			case(0b1011): return CPU::Operation::CMN;break;
-			case(0b1100): return CPU::Operation::ORR;break;
-			case(0b1101): return CPU::Operation::MOV;break;
-			case(0b1110): return CPU::Operation::BIC;break;
-			case(0b1111): return CPU::Operation::MVN;break;
-			}
-		}
-
-	}
-
-
-	case(0b011): {
-		if (!((passedIns >> 4) & 0b1))
-		{
-			//SINGLE DATA TRANSFER
-			if ((passedIns >> 20) & 0b1) return CPU::Operation::LDR;
-			return CPU::Operation::STR;
-		}
-		else { return CPU::Operation::SINGLEDATATRANSFERUNDEFINED; }; break;
-	}
-	case(0b010): if ((passedIns >> 20) & 0b1) { return CPU::Operation::LDR; }
-			   else { return CPU::Operation::STR; }break; // SINGLE DATA TRANSFER (AGAIN)
-	case(0b100): if ((passedIns >> 20) & 0b1) { return CPU::Operation::LDM; }
-			   else { return CPU::Operation::STM; }break; //BLOCK DATA TRANSFER
-	case(0b101): if ((passedIns >> 24) & 0b1) { return CPU::Operation::BL; }
-			   else { return CPU::Operation::B; }break;
-	case(0b110): if ((passedIns >> 24) & 0b1) { return CPU::Operation::LDC; }
-			   else { return CPU::Operation::STC; }break; // COPROCESSOR DATA TRANSFER
-
-
-	case(0b111):
-	{
-		if ((passedIns >> 24) & 0b1) return CPU::Operation::SWI;
-		else if (!((passedIns >> 4) & 0b1)) return CPU::Operation::CDP;
-		else // coprocessor register transfer , MRC , MCR
-		{
-			if ((passedIns >> 20) & 0b1) { return CPU::Operation::MRC; }
-			else { return CPU::Operation::MCR; }break;
-		}
-	}break;
-
-	}
-
-	return CPU::Operation::DECODEFAIL;
-
-}
-
-int CPU::execute()
-{
-	int op_index = static_cast<int>(curOP);
-
-	if (op_functions[op_index] == nullptr)
-	{
-		printf("NO FUNCTION MAPPED TO INDEX %d\n", op_index);
-		return 1;
-	}
-
-	return(this->*op_functions[op_index])();
-
-}
 
 /////////////////////////////////////////////
 ///             OPCODE INSTRS()           ///
@@ -1786,6 +1854,10 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 
 	return decodedInstr;
 }
+
+//////////////////////////////////////////////////////////////////////////////////////////
+///								     ALL THUMB FUNCTION								   ///
+//////////////////////////////////////////////////////////////////////////////////////////
 
 
 int CPU::thumbExecute(thumbInstr instr)

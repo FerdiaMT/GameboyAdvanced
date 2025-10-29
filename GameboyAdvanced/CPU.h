@@ -46,65 +46,98 @@ public:
 		COUNT // this is just so i have a way of counting how much enums i have in case of future new enum declared
 	};
 
-	const char* opcodeToString(Operation op)
+	enum class thumbOperation
 	{
-		switch (op)
-		{
-			case Operation::AND:  return  "AND  ";
-			case Operation::EOR:  return  "EOR  ";
-			case Operation::SUB:  return  "SUB  ";
-			case Operation::RSB:  return  "RSB  ";
-			case Operation::ADD:  return  "ADD  ";
-			case Operation::ADC:  return  "ADC  ";
-			case Operation::SBC:  return  "SBC  ";
-			case Operation::RSC:  return  "RSC  ";
-			case Operation::TST:  return  "TST  ";
-			case Operation::TEQ:  return  "TEQ  ";
-			case Operation::CMP:  return  "CMP  ";
-			case Operation::CMN:  return  "CMN  ";
-			case Operation::ORR:  return  "ORR  ";
-			case Operation::MOV:  return  "MOV  ";
-			case Operation::BIC:  return  "BIC  ";
-			case Operation::MVN:  return  "MVN  ";
-			case Operation::MRS:  return  "MRS  ";
-			case Operation::MSR:  return  "MSR  ";
-			case Operation::LDR:  return  "LDR  ";
-			case Operation::STR:  return  "STR  ";
-			case Operation::LDRH: return  "LDRH ";
-			case Operation::STRH: return  "STRH ";
-			case Operation::LDRSB: return "LDRSB";
-			case Operation::LDRSH: return "LDRSH";
-			case Operation::LDM:  return  "LDM  ";
-			case Operation::STM:  return  "STM  ";
-			case Operation::B:    return  "B    ";
-			case Operation::BL:   return  "BL   ";
-			case Operation::BX:   return  "BX   ";
-			case Operation::MUL:  return  "MUL  ";
-			case Operation::MLA:  return  "MLA  ";
-			case Operation::UMULL: return "UMULL";
-			case Operation::UMLAL: return "UMLAL";
-			case Operation::SMULL: return "SMULL";
-			case Operation::SMLAL: return "SMLAL";
-			case Operation::SWP:  return  "SWP  ";
-			case Operation::SWPB: return  "SWPB ";
-			case Operation::SWI:  return  "SWI  ";
-			case Operation::CDP:  return  "CDP  ";
-			case Operation::LDC:  return  "LDC  ";
-			case Operation::STC:  return  "STC  ";
-			case Operation::MRC:  return  "MRC  ";
-			case Operation::MCR:  return  "MCR  ";
-			case Operation::UNKNOWN:return"UNKWN";
-			case Operation::UNASSIGNED: return "UNSND";
-			case Operation::CONDITIONALSKIP: return "CNDSP";
-			case Operation::SINGLEDATATRANSFERUNDEFINED: return "SDTUND";
-			case Operation::DECODEFAIL: return "DCDFL";
-			default: return "OPINVL";
-		}
-	}
+		THUMB_MOV_IMM,
+		THUMB_ADD_REG,
+		THUMB_ADD_IMM,
+		THUMB_ADD_IMM3,
+		THUMB_SUB_REG,
+		THUMB_SUB_IMM,
+		THUMB_SUB_IMM3,
+		THUMB_CMP_IMM,
+		THUMB_LSL_IMM,
+		THUMB_LSR_IMM,
+		THUMB_ASR_IMM,
+		THUMB_AND_REG,
+		THUMB_EOR_REG,
+		THUMB_LSL_REG,
+		THUMB_LSR_REG,
+		THUMB_ASR_REG,
+		THUMB_ADC_REG,
+		THUMB_SBC_REG,
+		THUMB_ROR_REG,
+		THUMB_TST_REG,
+		THUMB_NEG_REG,
+		THUMB_CMP_REG,
+		THUMB_CMN_REG,
+		THUMB_ORR_REG,
+		THUMB_MUL_REG,
+		THUMB_BIC_REG,
+		THUMB_MVN_REG,
+		THUMB_ADD_HI,
+		THUMB_CMP_HI,
+		THUMB_MOV_HI,
+		THUMB_BX,
+		THUMB_BLX_REG,
+		THUMB_LDR_PC,
+		THUMB_LDR_REG,
+		THUMB_STR_REG,
+		THUMB_LDRB_REG,
+		THUMB_STRB_REG,
+		THUMB_LDRH_REG,
+		THUMB_STRH_REG,
+		THUMB_LDRSB_REG,
+		THUMB_LDRSH_REG,
+
+		THUMB_LDR_IMM,
+		THUMB_STR_IMM,
+		THUMB_LDRB_IMM,
+		THUMB_STRB_IMM,
+		THUMB_LDRH_IMM,
+		THUMB_STRH_IMM,
+		THUMB_LDR_SP,
+		THUMB_STR_SP,
+		THUMB_ADD_PC,
+		THUMB_ADD_SP,
+		THUMB_ADD_SP_IMM,
+		THUMB_PUSH,
+		THUMB_POP,
+		THUMB_STMIA,
+		THUMB_LDMIA,
+		THUMB_B_COND,
+		THUMB_B,
+		THUMB_BL_PREFIX,
+		THUMB_BL_SUFFIX,
+		THUMB_SWI,
+		THUMB_UNDEFINED,
+
+		COUNT,
+	};
+	
+	struct thumbInstr
+	{
+		thumbOperation type;
+
+		uint8_t rd;
+		uint8_t rs;
+		uint8_t rn;
+
+		uint32_t imm;
+
+		uint8_t cond;
+
+		bool h1;         // hi register f1
+		bool h2;         // hi register f2
+	};
+
 public:
 
-	using OpFunction = int (CPU::*)(void);
+	using OpFunction = int (CPU::*)(void); // arm function array
 	OpFunction op_functions[static_cast<int>(Operation::COUNT)];
+
+	using OpTFunction = int (CPU::*)(thumbInstr);
+	OpTFunction opT_functions[static_cast<int>(thumbOperation::COUNT)];
 
 public:
 		
@@ -230,91 +263,12 @@ public:
 
 public:
 
-	//////////////////////
-	//     THUMB STUFF  //
-	//////////////////////
+	//////////////////////////////////////////////////////////////////
+	//							THUMB STUFF							//
+	//////////////////////////////////////////////////////////////////
 
-	enum class thumbOperation
-	{
-		THUMB_MOV_IMM,      
-		THUMB_ADD_REG,      
-		THUMB_ADD_IMM,   
-		THUMB_ADD_IMM3,
-		THUMB_SUB_REG,      
-		THUMB_SUB_IMM,    
-		THUMB_SUB_IMM3,
-		THUMB_CMP_IMM,      
-		THUMB_LSL_IMM,      
-		THUMB_LSR_IMM,      
-		THUMB_ASR_IMM,      
-		THUMB_AND_REG,      
-		THUMB_EOR_REG,      
-		THUMB_LSL_REG,      
-		THUMB_LSR_REG,      
-		THUMB_ASR_REG,      
-		THUMB_ADC_REG,      
-		THUMB_SBC_REG,      
-		THUMB_ROR_REG,      
-		THUMB_TST_REG,      
-		THUMB_NEG_REG,      
-		THUMB_CMP_REG,      
-		THUMB_CMN_REG,      
-		THUMB_ORR_REG,      
-		THUMB_MUL_REG,      
-		THUMB_BIC_REG,      
-		THUMB_MVN_REG,      
-		THUMB_ADD_HI,       
-		THUMB_CMP_HI,       
-		THUMB_MOV_HI,       
-		THUMB_BX,           
-		THUMB_BLX_REG,      
-		THUMB_LDR_PC,       
-		THUMB_LDR_REG,      
-		THUMB_STR_REG,      
-		THUMB_LDRB_REG,     
-		THUMB_STRB_REG,     
-		THUMB_LDRH_REG,     
-		THUMB_STRH_REG,     
-		THUMB_LDRSB_REG,    
-		THUMB_LDRSH_REG,    
 
-		THUMB_LDR_IMM,      
-		THUMB_STR_IMM,      
-		THUMB_LDRB_IMM,     
-		THUMB_STRB_IMM,     
-		THUMB_LDRH_IMM,     
-		THUMB_STRH_IMM,     
-		THUMB_LDR_SP,       
-		THUMB_STR_SP,       
-		THUMB_ADD_PC,       
-		THUMB_ADD_SP,       
-		THUMB_ADD_SP_IMM,   
-		THUMB_PUSH,         
-		THUMB_POP,          
-		THUMB_STMIA,        
-		THUMB_LDMIA,        
-		THUMB_B_COND,       
-		THUMB_B,            
-		THUMB_BL_PREFIX,    
-		THUMB_BL_SUFFIX,    
-		THUMB_SWI,          
-		THUMB_UNDEFINED,
-	};
 
-	struct thumbInstr{
-		thumbOperation type;
-
-		uint8_t rd;      
-		uint8_t rs;      
-		uint8_t rn;      
-
-		uint32_t imm;    
-
-		uint8_t cond;    
-
-		bool h1;         // hi register f1
-		bool h2;         // hi register f2
-	};
 
 	thumbInstr curThumbInstr;
 
@@ -324,6 +278,81 @@ public:
 	int thumbExecute(struct thumbInstr);
 
 public:
+
+	//////////////////////////////////////////////////////////////////
+	//							EVERY THUMB FUNC				    //
+	//////////////////////////////////////////////////////////////////
+
+
+	inline int opT_MOV_IMM(thumbInstr instr);
+	inline int opT_ADD_REG(thumbInstr instr);
+	inline int opT_ADD_IMM(thumbInstr instr);
+	inline int opT_ADD_IMM3(thumbInstr instr);
+	inline int opT_SUB_REG(thumbInstr instr);
+	inline int opT_SUB_IMM(thumbInstr instr);
+	inline int opT_SUB_IMM3(thumbInstr instr);
+	inline int opT_CMP_IMM(thumbInstr instr);
+	inline int opT_LSL_IMM(thumbInstr instr);
+	inline int opT_LSR_IMM(thumbInstr instr);
+	inline int opT_ASR_IMM(thumbInstr instr);
+	inline int opT_AND_REG(thumbInstr instr);
+	inline int opT_EOR_REG(thumbInstr instr);
+	inline int opT_LSL_REG(thumbInstr instr);
+	inline int opT_LSR_REG(thumbInstr instr);
+	inline int opT_ASR_REG(thumbInstr instr);
+	inline int opT_ADC_REG(thumbInstr instr);
+	inline int opT_SBC_REG(thumbInstr instr);
+	inline int opT_ROR_REG(thumbInstr instr);
+	inline int opT_TST_REG(thumbInstr instr);
+	inline int opT_NEG_REG(thumbInstr instr);
+	inline int opT_CMP_REG(thumbInstr instr);
+	inline int opT_CMN_REG(thumbInstr instr);
+	inline int opT_ORR_REG(thumbInstr instr);
+	inline int opT_MUL_REG(thumbInstr instr);
+	inline int opT_BIC_REG(thumbInstr instr);
+	inline int opT_MVN_REG(thumbInstr instr);
+	inline int opT_ADD_HI(thumbInstr instr);
+	inline int opT_CMP_HI(thumbInstr instr);
+	inline int opT_MOV_HI(thumbInstr instr);
+	inline int opT_BX(thumbInstr instr);
+	inline int opT_BLX_REG(thumbInstr instr);
+	inline int opT_LDR_PC(thumbInstr instr);
+	inline int opT_LDR_REG(thumbInstr instr);
+	inline int opT_STR_REG(thumbInstr instr);
+	inline int opT_LDRB_REG(thumbInstr instr);
+	inline int opT_STRB_REG(thumbInstr instr);
+	inline int opT_LDRH_REG(thumbInstr instr);
+	inline int opT_STRH_REG(thumbInstr instr);
+	inline int opT_LDRSB_REG(thumbInstr instr);
+	inline int opT_LDRSH_REG(thumbInstr instr);
+
+	inline int opT_LDR_IMM(thumbInstr instr);
+	inline int opT_STR_IMM(thumbInstr instr);
+	inline int opT_LDRB_IMM(thumbInstr instr);
+	inline int opT_STRB_IMM(thumbInstr instr);
+	inline int opT_LDRH_IMM(thumbInstr instr);
+	inline int opT_STRH_IMM(thumbInstr instr);
+	inline int opT_LDR_SP(thumbInstr instr);
+	inline int opT_STR_SP(thumbInstr instr);
+	inline int opT_ADD_PC(thumbInstr instr);
+	inline int opT_ADD_SP(thumbInstr instr);
+	inline int opT_ADD_SP_IMM(thumbInstr instr);
+	inline int opT_PUSH(thumbInstr instr);
+	inline int opT_PopT(thumbInstr instr);
+	inline int opT_STMIA(thumbInstr instr);
+	inline int opT_LDMIA(thumbInstr instr);
+	inline int opT_B_COND(thumbInstr instr);
+	inline int opT_B(thumbInstr instr);
+	inline int opT_BL_PREFIX(thumbInstr instr);
+	inline int opT_BL_SUFFIX(thumbInstr instr);
+	inline int opT_SWI(thumbInstr instr);
+	inline int opT_UNDEFINED(thumbInstr instr);
+public:
+
+	//////////////////////////////////////////////////////////////////
+	//							EVERY ARM FUNC					    //
+	//////////////////////////////////////////////////////////////////
+
 	inline int op_AND();
 	inline int op_EOR();
 	inline int op_SUB();
@@ -422,5 +451,62 @@ public:
 		inline void setFlagsAdd(uint32_t res, uint32_t op1, uint32_t op2);// ADD CHECK
 		inline void setFlagsSub(uint32_t res, uint32_t op1, uint32_t op2); // SUB CHECK
 		inline void setNZ(uint32_t res); // TEST CHECK
+
+		//debugger help
+		const char* opcodeToString(Operation op)
+		{
+			switch (op)
+			{
+			case Operation::AND:  return  "AND  ";
+			case Operation::EOR:  return  "EOR  ";
+			case Operation::SUB:  return  "SUB  ";
+			case Operation::RSB:  return  "RSB  ";
+			case Operation::ADD:  return  "ADD  ";
+			case Operation::ADC:  return  "ADC  ";
+			case Operation::SBC:  return  "SBC  ";
+			case Operation::RSC:  return  "RSC  ";
+			case Operation::TST:  return  "TST  ";
+			case Operation::TEQ:  return  "TEQ  ";
+			case Operation::CMP:  return  "CMP  ";
+			case Operation::CMN:  return  "CMN  ";
+			case Operation::ORR:  return  "ORR  ";
+			case Operation::MOV:  return  "MOV  ";
+			case Operation::BIC:  return  "BIC  ";
+			case Operation::MVN:  return  "MVN  ";
+			case Operation::MRS:  return  "MRS  ";
+			case Operation::MSR:  return  "MSR  ";
+			case Operation::LDR:  return  "LDR  ";
+			case Operation::STR:  return  "STR  ";
+			case Operation::LDRH: return  "LDRH ";
+			case Operation::STRH: return  "STRH ";
+			case Operation::LDRSB: return "LDRSB";
+			case Operation::LDRSH: return "LDRSH";
+			case Operation::LDM:  return  "LDM  ";
+			case Operation::STM:  return  "STM  ";
+			case Operation::B:    return  "B    ";
+			case Operation::BL:   return  "BL   ";
+			case Operation::BX:   return  "BX   ";
+			case Operation::MUL:  return  "MUL  ";
+			case Operation::MLA:  return  "MLA  ";
+			case Operation::UMULL: return "UMULL";
+			case Operation::UMLAL: return "UMLAL";
+			case Operation::SMULL: return "SMULL";
+			case Operation::SMLAL: return "SMLAL";
+			case Operation::SWP:  return  "SWP  ";
+			case Operation::SWPB: return  "SWPB ";
+			case Operation::SWI:  return  "SWI  ";
+			case Operation::CDP:  return  "CDP  ";
+			case Operation::LDC:  return  "LDC  ";
+			case Operation::STC:  return  "STC  ";
+			case Operation::MRC:  return  "MRC  ";
+			case Operation::MCR:  return  "MCR  ";
+			case Operation::UNKNOWN:return"UNKWN";
+			case Operation::UNASSIGNED: return "UNSND";
+			case Operation::CONDITIONALSKIP: return "CNDSP";
+			case Operation::SINGLEDATATRANSFERUNDEFINED: return "SDTUND";
+			case Operation::DECODEFAIL: return "DCDFL";
+			default: return "OPINVL";
+			}
+		}
 };
 
