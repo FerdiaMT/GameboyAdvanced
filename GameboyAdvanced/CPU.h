@@ -234,13 +234,15 @@ public:
 	//     THUMB STUFF  //
 	//////////////////////
 
-	enum ThumbOperation
+	enum class thumbOperation
 	{
 		THUMB_MOV_IMM,      
 		THUMB_ADD_REG,      
 		THUMB_ADD_IMM,   
+		THUMB_ADD_IMM3,
 		THUMB_SUB_REG,      
-		THUMB_SUB_IMM,     
+		THUMB_SUB_IMM,    
+		THUMB_SUB_IMM3,
 		THUMB_CMP_IMM,      
 		THUMB_LSL_IMM,      
 		THUMB_LSR_IMM,      
@@ -275,6 +277,7 @@ public:
 		THUMB_STRH_REG,     
 		THUMB_LDRSB_REG,    
 		THUMB_LDRSH_REG,    
+
 		THUMB_LDR_IMM,      
 		THUMB_STR_IMM,      
 		THUMB_LDRB_IMM,     
@@ -299,7 +302,7 @@ public:
 	};
 
 	struct thumbInstr{
-		enum ThumbOperation type;
+		thumbOperation type;
 
 		uint8_t rd;      
 		uint8_t rs;      
@@ -313,10 +316,10 @@ public:
 		bool h2;         // hi register f2
 	};
 
-	thumbInstr thumbInstr;
+	thumbInstr curThumbInstr;
 
-	struct ThumbInstr decodeThumb(uint16_t instruction); // this returns a thumbInstr struct
-	int thumbExecute(struct ThumbInstr);
+	thumbInstr decodeThumb(uint16_t instruction); // this returns a thumbInstr struct
+	int thumbExecute(struct thumbInstr);
 
 public:
 	inline int op_AND();

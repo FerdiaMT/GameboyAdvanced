@@ -137,13 +137,12 @@ uint32_t CPU::tick()
 	}
 	else // if thumb mode
 	{
-		uint16_t thumbInstr = read16(pc);
+		uint16_t thumbCode = read16(pc);
 		pc += 2;
 
-		thumbInstr = thumbDecode(instruction);
-		curOpCycles = thumbExecute();
+		curThumbInstr = decodeThumb(thumbCode);
+		curOpCycles = thumbExecute(curThumbInstr);
 
-		instruction = thumbInstr; // do this for now
 	}
 	
 
@@ -1500,13 +1499,240 @@ inline int CPU::op_SINGLEDATATRANSFERUNDEFINED() { return 1; }
 /////////////////////////////////////////////
 
 
-struct ThumbInstr CPU::decodeThumb(uint16_t instruction) // this returns a thumbInstr struct
+CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr struct
 {
+	thumbInstr decodedInstr = {}; // creates empty struct for us to fill
+	decodedInstr.type = THUMB_UNDEFINED;
 
+	uint8_t op = instr & 0xF;
+
+	switch (op)
+	{
+	case(0b000): // either move shift register , or add/subtract
+	{
+		if (((instr >> 11) & 0b11) != 0b11) // MOVE SHIFTED REGISTER
+		{
+			decodedInstr.rd = (instr) & 0b111;
+			decodedInstr.rs = (instr>>3) & 0b111;
+			decodedInstr.imm = (instr>>6) & 0b11111;
+
+			switch ((instr >> 11) & 0b11)
+			{
+			case(0):decodedInstr.type = thumbOperation::THUMB_LSL_IMM; break;
+			case(1):decodedInstr.type = thumbOperation::THUMB_LSR_IMM; break;
+			case(2):decodedInstr.type = thumbOperation::THUMB_ASR_IMM; break;
+			}
+		}
+		else // Add/Subtract
+		{
+			decodedInstr.rd = (instr) & 0b111;
+			decodedInstr.rs = (instr >> 3) & 0b111;
+
+			decodedInstr.imm = (instr >> 6) & 0b111;
+			decodedInstr.rn = decodedInstr.imm;
+
+			switch ((instr >> 9) & 0b11)
+			{// 00 reg and, 01, reg sub, 10 immed and, 11 immed sub
+			case(0b00):decodedInstr.type = thumbOperation::THUMB_ADD_REG; break;
+			case(0b01):decodedInstr.type = thumbOperation::THUMB_SUB_REG; break;
+			case(0b10):decodedInstr.type = thumbOperation::THUMB_ADD_IMM; break;
+			case(0b11):decodedInstr.type = thumbOperation::THUMB_SUB_IMM; break;
+			}
+		}
+	}
+	case(0b001): // Move/compare/add/ subtract immediate
+	{
+		decodedInstr.imm = (instr) & 0xFF;
+		decodedInstr.rd = (instr >> 8) & 0b111;
+
+		switch ((instr >> 11) & 0b11)
+		{
+		case(0):decodedInstr.type = thumbOperation::THUMB_MOV_IMM; break;
+		case(1):decodedInstr.type = thumbOperation::THUMB_CMP_IMM; break;
+		case(2):decodedInstr.type = thumbOperation::THUMB_ADD_IMM3; break;
+		case(3):decodedInstr.type = thumbOperation::THUMB_SUB_IMM3; break;
+		}
+	}
+	case(0b010): // (ALU) or (HI register op/bex) or (pc relative) or (load/store w/ reg-offs)  or (load/store se B/HW)
+	{
+		if (((instr >> 10) & 0b111) == 0b000) //ALU
+		{
+			decodedInstr.rd = (instr) & 0b111;
+			decodedInstr.rs = (instr >> 3) & 0b111;
+
+			switch ((instr >> 6) & 0b1111)
+			{
+			case(0b0000):decodedInstr.type = thumbOperation::THUMB_AND_REG; break;
+			case(0b0001):decodedInstr.type = thumbOperation::THUMB_EOR_REG; break;
+			case(0b0010):decodedInstr.type = thumbOperation::THUMB_LSL_REG; break;
+			case(0b0011):decodedInstr.type = thumbOperation::THUMB_LSR_REG; break;
+			case(0b0100):decodedInstr.type = thumbOperation::THUMB_ASR_REG; break;
+			case(0b0101):decodedInstr.type = thumbOperation::THUMB_ADC_REG; break;
+			case(0b0110):decodedInstr.type = thumbOperation::THUMB_SBC_REG; break;
+			case(0b0111):decodedInstr.type = thumbOperation::THUMB_ROR_REG; break;
+			case(0b1000):decodedInstr.type = thumbOperation::THUMB_TST_REG; break;
+			case(0b1001):decodedInstr.type = thumbOperation::THUMB_NEG_REG; break;
+			case(0b1010):decodedInstr.type = thumbOperation::THUMB_CMP_REG; break;
+			case(0b1011):decodedInstr.type = thumbOperation::THUMB_CMN_REG; break;
+			case(0b1100):decodedInstr.type = thumbOperation::THUMB_ORR_REG; break;
+			case(0b1101):decodedInstr.type = thumbOperation::THUMB_MUL_REG; break;
+			case(0b1110):decodedInstr.type = thumbOperation::THUMB_BIC_REG; break;
+			case(0b1111):decodedInstr.type = thumbOperation::THUMB_MVN_REG; break;
+			}
+		}
+		else if (((instr >> 10) & 0b111) == 0b001) //Hi register operations/branch exchange
+		{
+			decodedInstr.rd = (instr) & 0b111;
+			decodedInstr.rs = (instr>>3) & 0b111;
+			decodedInstr.h1 = (instr >> 6) & 0b1;
+			decodedInstr.h2 = (instr >> 7) & 0b1;
+
+			if (decodedInstr.h1) decodedInstr.rd += 8;
+			if (decodedInstr.h2) decodedInstr.rs += 8;
+
+
+			switch ((instr >> 8) & 0b11)
+			{
+			case 0b00: decodedInstr.type = thumbOperation::THUMB_ADD_HI; break;
+			case 0b01: decodedInstr.type = thumbOperation::THUMB_CMP_HI; break;
+			case 0b10: decodedInstr.type = thumbOperation::THUMB_MOV_HI; break; 
+			case 0b11:
+			if (decodedInstr.h1) decodedInstr.type = thumbOperation::THUMB_BLX_REG;
+			else decodedInstr.type = thumbOperation::THUMB_BX;
+			break;
+			}
+		}
+		else if (((instr >> 11) & 0b11) == 0b01) // pc relative load
+		{
+			decodedInstr.imm = (instr) & 0xFF;
+			decodedInstr.rd = (instr >> 8) & 0b111;
+
+			decodedInstr.type = thumbOperation::THUMB_LDR_PC;
+		}
+		else if (((instr >> 12) & 0b1) == 1 && ((instr >> 9) & 0b1) == 0) // load store w reg offset
+		{
+			decodedInstr.rd = (instr) & 0b111;
+			decodedInstr.rs = (instr >> 3) & 0b111; // where rs is used instead or rb for rbase
+			decodedInstr.rn = (instr >> 6) & 0b111; // where rn is used instad or r0
+
+			switch ((instr >> 10) & 0b11)
+			{
+			case 0b00: decodedInstr.type = thumbOperation::THUMB_STR_REG; break;
+			case 0b01: decodedInstr.type = thumbOperation::THUMB_STRB_REG; break;
+			case 0b10: decodedInstr.type = thumbOperation::THUMB_LDR_REG; break;
+			case 0b11: decodedInstr.type = thumbOperation::THUMB_LDRB_REG; break;
+			}
+		}
+		else if (((instr >> 12) & 0b1) == 1 && ((instr >> 9) & 0b1) == 1) // load store w sign-extended byte / halfwor
+		{
+			decodedInstr.rd = (instr) & 0b111;
+			decodedInstr.rs = (instr >> 3) & 0b111; // where rs is used instead or rb for rbase
+			decodedInstr.rn = (instr >> 6) & 0b111; // where rn is used instad or r0
+
+			switch ((instr >> 10) & 0b11)
+			{
+			case 0b00: decodedInstr.type = thumbOperation::THUMB_STRH_REG; break;
+			case 0b10: decodedInstr.type = thumbOperation::THUMB_LDRH_REG; break;
+			case 0b01: decodedInstr.type = thumbOperation::THUMB_LDRSB_REG; break;
+			case 0b11: decodedInstr.type = thumbOperation::THUMB_LDRSH_REG; break;
+			}
+		}
+	}
+	case(0b011): // Load/store with immediate offset
+	{
+		decodedInstr.rd = (instr) & 0b111;
+		decodedInstr.rs = (instr >> 3) & 0b111; // where rs is used instead or rb for rbase
+		decodedInstr.imm = (instr >> 6) & 0b11111; 
+
+		switch ((instr >> 11) & 0b11)
+		{
+		case 0b00: decodedInstr.type = thumbOperation::THUMB_STR_IMM; decodedInstr.imm = decodedInstr.imm << 2; break;
+		case 0b01: decodedInstr.type = thumbOperation::THUMB_LDR_IMM; decodedInstr.imm = decodedInstr.imm << 2; break;
+		case 0b10: decodedInstr.type = thumbOperation::THUMB_STRB_IMM; break;
+		case 0b11: decodedInstr.type = thumbOperation::THUMB_LDRB_IMM; break;
+		}
+	}
+	case(0b100): //(Load/store halfword) or (SP-relative load/store)
+	{
+		if (((instr >> 12) & 0b1) == 0b0) //Load / store halfword
+		{
+			decodedInstr.rd = (instr) & 0b111;
+			decodedInstr.rs = (instr >> 3) & 0b111; // where rs is used instead or rb for rbase
+			decodedInstr.imm = ((instr >> 6) & 0b11111)<1;
+
+			switch ((instr >> 11) & 0b1)
+			{
+			case 0b0: decodedInstr.type = thumbOperation::THUMB_STRH_IMM; break;
+			case 0b1: decodedInstr.type = thumbOperation::THUMB_LDRH_IMM; break;
+			}
+		}
+		else // (SP-relative load/store)
+		{
+
+		}
+	}
+	case(0b101): // (load addr) or (add ofs to sp) or (push/pop reg)
+	{
+		if (((instr >> 12) & 0b1) == 0b0) // Load Adress
+		{
+
+		}
+		else if( ((instr >> 8) & 0b11111) == 0b10000) //  (add ofs to sp)
+		{
+
+		}
+		else //  (push/pop reg)
+		{
+
+		}
+	}
+	case(0b110): // (multi reg load/store) , (cond branch) , (SWI)
+	{
+		if (((instr >> 12) & 0b1) == 0b0) //(multi reg load/store)
+		{
+
+		}
+		else if (((instr >> 8) & 0b11111) != 0b11111) //  conditional branch (done by making sure it isnt SWI first)
+		{
+
+		}
+		else // SWI
+		{
+
+		}
+	}
+	case(0b111): // (uncond branch) or (long branch w/link)
+	{
+		if (((instr >> 12) & 0b1) == 0b0) // (uncond branch)
+		{
+
+		}
+		else // (long branch w/link)
+		{
+
+		}
+
+	}
+	}
+
+	
+
+	
+	return instr;
+
+
+
+
+
+
+
+
+
+	return instr;
 }
 
 
-int CPU::thumbExecute(struct ThumbInstr)
+int CPU::thumbExecute(thumbInstr instr)
 {
 	return 1;
 }
