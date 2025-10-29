@@ -126,28 +126,29 @@ uint32_t CPU::tick()
 	{
 		instruction = read32(pc);
 		pc += 4;
+
+		curOP = decode(instruction);
+
+		printf("PC: 0x%08X, Instruction: 0x%08X, Opcode: %s, Flags: %s\n",
+			pc - pcOffset(), instruction, opcodeToString(curOP), CPSRtoString());
+
+		curOpCycles = execute();
+
 	}
 	else // if thumb mode
 	{
 		uint16_t thumbInstr = read16(pc);
-		uint16_t nextThumb = 0;
-
-		if ((thumbInstr & 0xF800) == 0xF000) nextThumb = bus->read16(pc + 2); // if bx / other double
-
-		instruction = ThumbToARM(thumbInstr, pc, nextThumb);
-
-		if ((thumbInstr & 0xF800) == 0xF000 &&(nextThumb & 0xE800) == 0xE800) pc += 4;
-		else pc += 2; 
-
-		instruction = ThumbToARM(read16(pc) , pc , read16(pc+2));
 		pc += 2;
+
+		thumbInstr = thumbDecode(instruction);
+		curOpCycles = thumbExecute();
+
+		instruction = thumbInstr; // do this for now
 	}
-	curOP = decode(instruction);
+	
 
-	printf("PC: 0x%08X, Instruction: 0x%08X, Opcode: %s, Flags: %s\n",
-		pc - pcOffset(), instruction, opcodeToString(curOP) , CPSRtoString());
 
-	curOpCycles = execute();
+	
 
 	cycleTotal += curOpCycles; // this could be returned and made so the ppu does this many frames too ... 
 
@@ -1489,6 +1490,28 @@ inline int CPU::op_UNKNOWN() { return 1; }
 inline int CPU::op_UNASSIGNED() { return 1; }
 inline int CPU::op_CONDITIONALSKIP() { return 1; }
 inline int CPU::op_SINGLEDATATRANSFERUNDEFINED() { return 1; }
+
+
+
+/////////////////////////////////////////////
+///           THUMB INSTRUCTIONS          ///
+/////////////////////////////////////////////
+///                decode                 ///
+/////////////////////////////////////////////
+
+
+struct ThumbInstr CPU::decodeThumb(uint16_t instruction) // this returns a thumbInstr struct
+{
+
+}
+
+
+int CPU::thumbExecute(struct ThumbInstr)
+{
+	return 1;
+}
+
+
 
 
 /////////////////////////////////////////////
