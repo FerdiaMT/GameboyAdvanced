@@ -50,55 +50,55 @@ public:
 	{
 		switch (op)
 		{
-			case Operation::AND:  return "AND";
-			case Operation::EOR:  return "EOR";
-			case Operation::SUB:  return "SUB";
-			case Operation::RSB:  return "RSB";
-			case Operation::ADD:  return "ADD";
-			case Operation::ADC:  return "ADC";
-			case Operation::SBC:  return "SBC";
-			case Operation::RSC:  return "RSC";
-			case Operation::TST:  return "TST";
-			case Operation::TEQ:  return "TEQ";
-			case Operation::CMP:  return "CMP";
-			case Operation::CMN:  return "CMN";
-			case Operation::ORR:  return "ORR";
-			case Operation::MOV:  return "MOV";
-			case Operation::BIC:  return "BIC";
-			case Operation::MVN:  return "MVN";
-			case Operation::MRS:  return "MRS";
-			case Operation::MSR:  return "MSR";
-			case Operation::LDR:  return "LDR";
-			case Operation::STR:  return "STR";
-			case Operation::LDRH: return "LDRH";
-			case Operation::STRH: return "STRH";
+			case Operation::AND:  return  "AND  ";
+			case Operation::EOR:  return  "EOR  ";
+			case Operation::SUB:  return  "SUB  ";
+			case Operation::RSB:  return  "RSB  ";
+			case Operation::ADD:  return  "ADD  ";
+			case Operation::ADC:  return  "ADC  ";
+			case Operation::SBC:  return  "SBC  ";
+			case Operation::RSC:  return  "RSC  ";
+			case Operation::TST:  return  "TST  ";
+			case Operation::TEQ:  return  "TEQ  ";
+			case Operation::CMP:  return  "CMP  ";
+			case Operation::CMN:  return  "CMN  ";
+			case Operation::ORR:  return  "ORR  ";
+			case Operation::MOV:  return  "MOV  ";
+			case Operation::BIC:  return  "BIC  ";
+			case Operation::MVN:  return  "MVN  ";
+			case Operation::MRS:  return  "MRS  ";
+			case Operation::MSR:  return  "MSR  ";
+			case Operation::LDR:  return  "LDR  ";
+			case Operation::STR:  return  "STR  ";
+			case Operation::LDRH: return  "LDRH ";
+			case Operation::STRH: return  "STRH ";
 			case Operation::LDRSB: return "LDRSB";
 			case Operation::LDRSH: return "LDRSH";
-			case Operation::LDM:  return "LDM";
-			case Operation::STM:  return "STM";
-			case Operation::B:    return "B";
-			case Operation::BL:   return "BL";
-			case Operation::BX:   return "BX";
-			case Operation::MUL:  return "MUL";
-			case Operation::MLA:  return "MLA";
+			case Operation::LDM:  return  "LDM  ";
+			case Operation::STM:  return  "STM  ";
+			case Operation::B:    return  "B    ";
+			case Operation::BL:   return  "BL   ";
+			case Operation::BX:   return  "BX   ";
+			case Operation::MUL:  return  "MUL  ";
+			case Operation::MLA:  return  "MLA  ";
 			case Operation::UMULL: return "UMULL";
 			case Operation::UMLAL: return "UMLAL";
 			case Operation::SMULL: return "SMULL";
 			case Operation::SMLAL: return "SMLAL";
-			case Operation::SWP:  return "SWP";
-			case Operation::SWPB: return "SWPB";
-			case Operation::SWI:  return "SWI";
-			case Operation::CDP:  return "CDP";
-			case Operation::LDC:  return "LDC";
-			case Operation::STC:  return "STC";
-			case Operation::MRC:  return "MRC";
-			case Operation::MCR:  return "MCR";
-			case Operation::UNKNOWN: return "UNKNOWN";
-			case Operation::UNASSIGNED: return "UNASSIGNED";
-			case Operation::CONDITIONALSKIP: return "CONDITIONALSKIP";
-			case Operation::SINGLEDATATRANSFERUNDEFINED: return "SINGLEDATATRANSFERUNDEFINED";
-			case Operation::DECODEFAIL: return "DECODEFAIL";
-			default: return "INVALID_OPCODE";
+			case Operation::SWP:  return  "SWP  ";
+			case Operation::SWPB: return  "SWPB ";
+			case Operation::SWI:  return  "SWI  ";
+			case Operation::CDP:  return  "CDP  ";
+			case Operation::LDC:  return  "LDC  ";
+			case Operation::STC:  return  "STC  ";
+			case Operation::MRC:  return  "MRC  ";
+			case Operation::MCR:  return  "MCR  ";
+			case Operation::UNKNOWN:return"UNKWN";
+			case Operation::UNASSIGNED: return "UNSND";
+			case Operation::CONDITIONALSKIP: return "CNDSP";
+			case Operation::SINGLEDATATRANSFERUNDEFINED: return "SDTUND";
+			case Operation::DECODEFAIL: return "DCDFL";
+			default: return "OPINVL";
 		}
 	}
 public:
@@ -163,8 +163,8 @@ public:
 
 public:
 
-
-	uint32_t thumbConversion(uint16_t thumbOp);
+	const char* CPSRtoString();
+	uint32_t ThumbToARM(uint16_t thumbInstr, uint32_t pc, uint16_t nextThumbInstr);
 	inline bool checkConditional(uint8_t cond) const;
 
 	

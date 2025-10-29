@@ -129,14 +129,23 @@ uint32_t CPU::tick()
 	}
 	else // if thumb mode
 	{
-		//instruction = thumbConversion(read16(pc));
-		std::cout << "THUMB MODE ALERT";
+		uint16_t thumbInstr = read16(pc);
+		uint16_t nextThumb = 0;
+
+		if ((thumbInstr & 0xF800) == 0xF000) nextThumb = bus->read16(pc + 2); // if bx / other double
+
+		instruction = ThumbToARM(thumbInstr, pc, nextThumb);
+
+		if ((thumbInstr & 0xF800) == 0xF000 &&(nextThumb & 0xE800) == 0xE800) pc += 4;
+		else pc += 2; 
+
+		instruction = ThumbToARM(read16(pc) , pc , read16(pc+2));
 		pc += 2;
 	}
 	curOP = decode(instruction);
 
-	printf("PC: 0x%08X, Instruction: 0x%08X, Opcode: %s\n",
-		pc-4, instruction, opcodeToString(curOP));
+	printf("PC: 0x%08X, Instruction: 0x%08X, Opcode: %s, Flags: %s\n",
+		pc - pcOffset(), instruction, opcodeToString(curOP) , CPSRtoString());
 
 	curOpCycles = execute();
 
@@ -145,12 +154,22 @@ uint32_t CPU::tick()
 	return cycleTotal;// doing this for now
 }
 
-
-
 //////////////////////////////////////////////////////////////////////////
 //				           MODE HELPER FUNCTIONS						//
 //////////////////////////////////////////////////////////////////////////
 
+const char* CPU::CPSRtoString()
+{
+	static char str[5];
+
+	str[0] = N ? 'N' : '-';
+	str[1] = Z ? 'Z' : '-';
+	str[2] = C ? 'C' : '-';
+	str[3] = V ? 'V' : '-';
+	str[4] = '\0';
+	
+	return str;
+}
 
 CPU::mode CPU::CPSRbitToMode(uint8_t modeBits)
 {
@@ -304,14 +323,6 @@ void CPU::writeCPSR(uint32_t value)
 	}
 }
 
-
-
-
-
-uint32_t CPU::thumbConversion(uint16_t thumbOp)
-{
-	return 0xF;
-}
 
 
 inline bool CPU::checkConditional(uint8_t cond) const
@@ -718,12 +729,12 @@ inline int CPU::op_BX()
 	if (newAddr & 0b1) // 1 = THUMB
 	{
 		T = 1;
-		pc = newAddr & 0xFFFFFFFE; //clears bit for valid 2 jumping
+		pc = (newAddr+4) & 0xFFFFFFFE; //clears bit for valid 2 jumping
 	}
 	else // 0 = arm
 	{
 		T = 0;
-		pc = newAddr & 0xFFFFFFFC; // sets it to a valid num for +4 jumping 
+		pc = (newAddr+4) & 0xFFFFFFFC; // sets it to a valid num for +4 jumping 
 	}
 
 	return 3; // constant
