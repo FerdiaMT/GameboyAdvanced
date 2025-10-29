@@ -16,7 +16,8 @@ public:
 	CPU::Operation decode(uint32_t instruction);
 	inline const char* checkConditional(uint8_t cond);
 
-	std::string thumbToStr(const CPU::thumbInstr& instr);
+	std::string thumbToStr(CPU::thumbInstr& instr);
+
 
 
 };

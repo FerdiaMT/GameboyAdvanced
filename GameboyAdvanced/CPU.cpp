@@ -1,6 +1,8 @@
 #include "CPU.h"
 #include <cstdint>
 #include <iostream>
+#include <string>
+#include <sstream>
 
 namespace Vector // use these for jumping
 {
@@ -178,7 +180,7 @@ void CPU::initializeOpFunctions()
 	opT_functions[static_cast<int>(thumbOperation::THUMB_ADD_SP)] = &CPU::opT_ADD_SP;
 	opT_functions[static_cast<int>(thumbOperation::THUMB_ADD_SP_IMM)] = &CPU::opT_ADD_SP_IMM;
 	opT_functions[static_cast<int>(thumbOperation::THUMB_PUSH)] = &CPU::opT_PUSH;
-	opT_functions[static_cast<int>(thumbOperation::THUMB_POP)] = &CPU::opT_PopT;
+	opT_functions[static_cast<int>(thumbOperation::THUMB_POP)] = &CPU::opT_POP;
 	opT_functions[static_cast<int>(thumbOperation::THUMB_STMIA)] = &CPU::opT_STMIA;
 	opT_functions[static_cast<int>(thumbOperation::THUMB_LDMIA)] = &CPU::opT_LDMIA;
 	opT_functions[static_cast<int>(thumbOperation::THUMB_B_COND)] = &CPU::opT_B_COND;
@@ -198,8 +200,8 @@ uint32_t CPU::tick()
 
 		curOP = decode(instruction);
 
-		printf("PC: 0x%08X, Instruction: 0x%08X, Opcode: %s, Flags: %s\n",
-			pc - pcOffset(), instruction, opcodeToString(curOP), CPSRtoString());
+		printf( "MODE:%s ,PC: 0x%08X, Instruction: 0x%08X, Flags: %s , Opcode: %s, \n",
+			"A", pc - pcOffset(), instruction, CPSRtoString(),opcodeToString(curOP)   );
 
 		curOpCycles = execute();
 
@@ -208,10 +210,12 @@ uint32_t CPU::tick()
 	{
 		uint16_t thumbCode = read16(pc);
 		pc += 2;
-
 		curThumbInstr = decodeThumb(thumbCode);
-		curOpCycles = thumbExecute(curThumbInstr);
 
+		printf("MODE:%s ,PC: 0x%08X, Instruction: 0x%04X    , Flags: %s ,Opcode: %s \n",
+			"T", pc - pcOffset(), thumbCode, CPSRtoString(),thumbToStr(curThumbInstr).c_str() );
+
+		curOpCycles = thumbExecute(curThumbInstr);
 	}
 	
 
@@ -1860,12 +1864,649 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 //////////////////////////////////////////////////////////////////////////////////////////
 
 
-int CPU::thumbExecute(thumbInstr instr)
+
+inline void CPU::updateFlagsNZCV_Add(uint32_t result, uint32_t op1, uint32_t op2)
 {
-	return 1;
+	N = result & 0x80000000;
+	Z = result == 0;
+	C = result < op1;
+
+	V = ((op1 & 0x80000000) == (op2 & 0x80000000)) && ((op1 & 0x80000000) != (result & 0x80000000));
+}
+
+inline void CPU::updateFlagsNZCV_Sub(uint32_t result, uint32_t op1, uint32_t op2)
+{
+	N = result & 0x80000000;
+	Z = result == 0;
+	C = op1 >= op2;
+	V = ((op1 & 0x80000000) != (op2 & 0x80000000)) && ((op1 & 0x80000000) != (result & 0x80000000));
+}
+
+inline int countSetBits(uint32_t value)
+{
+	int count = 0;
+	while (value)
+	{
+		count += value & 1;
+		value >>= 1;
+	}
+	return count;
 }
 
 
+//////////////////////////////////////////////////////////////////////////////////////////
+///								    OPS                    							   ///
+//////////////////////////////////////////////////////////////////////////////////////////
+
+
+int CPU::thumbExecute(thumbInstr instr)
+{
+	return (this->*opT_functions[static_cast<int>(instr.type)])(instr);
+}
+
+inline int CPU::opT_MOV_IMM(thumbInstr instr)
+{
+	reg[instr.rd] = instr.imm;
+	N = instr.imm & 0x80000000;
+	Z = instr.imm == 0;
+	return 1;
+}
+
+inline int CPU::opT_ADD_REG(thumbInstr instr)
+{
+	uint32_t op1 = reg[instr.rs];
+	uint32_t op2 = reg[instr.rn];
+	uint32_t result = op1 + op2;
+	reg[instr.rd] = result;
+	updateFlagsNZCV_Add(result, op1, op2);
+	return 1;
+}
+
+inline int CPU::opT_ADD_IMM(thumbInstr instr)
+{
+	uint32_t op1 = reg[instr.rs];
+	uint32_t op2 = instr.imm;
+	uint32_t result = op1 + op2;
+	reg[instr.rd] = result;
+	updateFlagsNZCV_Add(result, op1, op2);
+	return 1;
+}
+
+inline int CPU::opT_ADD_IMM3(thumbInstr instr)
+{
+	uint32_t op1 = reg[instr.rd];
+	uint32_t op2 = instr.imm;
+	uint32_t result = op1 + op2;
+	reg[instr.rd] = result;
+	updateFlagsNZCV_Add(result, op1, op2);
+	return 1;
+}
+
+inline int CPU::opT_SUB_REG(thumbInstr instr)
+{
+	uint32_t op1 = reg[instr.rs];
+	uint32_t op2 = reg[instr.rn];
+	uint32_t result = op1 - op2;
+	reg[instr.rd] = result;
+	updateFlagsNZCV_Sub(result, op1, op2);
+	return 1;
+}
+
+inline int CPU::opT_SUB_IMM(thumbInstr instr)
+{
+	uint32_t op1 = reg[instr.rs];
+	uint32_t op2 = instr.imm;
+	uint32_t result = op1 - op2;
+	reg[instr.rd] = result;
+	updateFlagsNZCV_Sub(result, op1, op2);
+	return 1;
+}
+
+inline int CPU::opT_SUB_IMM3(thumbInstr instr)
+{
+	uint32_t op1 = reg[instr.rd];
+	uint32_t op2 = instr.imm;
+	uint32_t result = op1 - op2;
+	reg[instr.rd] = result;
+	updateFlagsNZCV_Sub(result, op1, op2);
+	return 1;
+}
+
+inline int CPU::opT_CMP_IMM(thumbInstr instr)
+{
+	uint32_t op1 = reg[instr.rd];
+	uint32_t op2 = instr.imm;
+	uint32_t result = op1 - op2;
+	updateFlagsNZCV_Sub(result, op1, op2);
+	return 1;
+}
+
+inline int CPU::opT_LSL_IMM(thumbInstr instr)
+{
+	uint32_t value = reg[instr.rs];
+	uint32_t shift = instr.imm;
+	if (shift == 0)
+	{
+		reg[instr.rd] = value;
+	}
+	else
+	{
+		C = (value >> (32 - shift)) & 1;
+		reg[instr.rd] = value << shift;
+	}
+	N = reg[instr.rd] & 0x80000000;
+	Z = reg[instr.rd] == 0;
+	return 1;
+}
+
+inline int CPU::opT_LSR_IMM(thumbInstr instr)
+{
+	uint32_t value = reg[instr.rs];
+	uint32_t shift = instr.imm;
+	if (shift == 0) shift = 32;
+	C = (value >> (shift - 1)) & 1;
+	reg[instr.rd] = (shift == 32) ? 0 : (value >> shift);
+	N = reg[instr.rd] & 0x80000000;
+	Z = reg[instr.rd] == 0;
+	return 1;
+}
+
+inline int CPU::opT_ASR_IMM(thumbInstr instr)
+{
+	int32_t value = (int32_t)reg[instr.rs];
+	uint32_t shift = instr.imm;
+	if (shift == 0) shift = 32;
+	C = (value >> (shift - 1)) & 1;
+	reg[instr.rd] = (shift == 32) ? (value >> 31) : (value >> shift);
+	N = reg[instr.rd] & 0x80000000;
+	Z = reg[instr.rd] == 0;
+	return 1;
+}
+
+inline int CPU::opT_AND_REG(thumbInstr instr)
+{
+	reg[instr.rd] = reg[instr.rd] & reg[instr.rs];
+	N = reg[instr.rd] & 0x80000000;
+	Z = reg[instr.rd] == 0;
+	return 1;
+}
+
+inline int CPU::opT_EOR_REG(thumbInstr instr)
+{
+	reg[instr.rd] = reg[instr.rd] ^ reg[instr.rs];
+	N = reg[instr.rd] & 0x80000000;
+	Z = reg[instr.rd] == 0;
+	return 1;
+}
+
+inline int CPU::opT_LSL_REG(thumbInstr instr)
+{
+	uint32_t shift = reg[instr.rs] & 0xFF;
+	if (shift == 0){}
+	else if (shift < 32)
+	{
+		C = (reg[instr.rd] >> (32 - shift)) & 1;
+		reg[instr.rd] = reg[instr.rd] << shift;
+	}
+	else if (shift == 32)
+	{
+		C = reg[instr.rd] & 1;
+		reg[instr.rd] = 0;
+	}
+	else
+	{
+		C = 0;
+		reg[instr.rd] = 0;
+	}
+	N = reg[instr.rd] & 0x80000000;
+	Z = reg[instr.rd] == 0;
+	return 1;
+}
+
+inline int CPU::opT_LSR_REG(thumbInstr instr)
+{
+	uint32_t shift = reg[instr.rs] & 0xFF;
+	if (shift == 0){}
+	else if (shift < 32)
+	{
+		C = (reg[instr.rd] >> (shift - 1)) & 1;
+		reg[instr.rd] = reg[instr.rd] >> shift;
+	}
+	else if (shift == 32)
+	{
+		C = (reg[instr.rd] >> 31) & 1;
+		reg[instr.rd] = 0;
+	}
+	else
+	{
+		C = 0;
+		reg[instr.rd] = 0;
+	}
+	N = reg[instr.rd] & 0x80000000;
+	Z = reg[instr.rd] == 0;
+	return 1;
+}
+
+inline int CPU::opT_ASR_REG(thumbInstr instr)
+{
+	uint32_t shift = reg[instr.rs] & 0xFF;
+	int32_t value = (int32_t)reg[instr.rd];
+	if (shift == 0){}
+	else if (shift < 32)
+	{
+		C = (value >> (shift - 1)) & 1;
+		reg[instr.rd] = value >> shift;
+	}
+	else
+	{
+		C = (value >> 31) & 1;
+		reg[instr.rd] = value >> 31;
+	}
+	N = reg[instr.rd] & 0x80000000;
+	Z = reg[instr.rd] == 0;
+	return 1;
+}
+
+inline int CPU::opT_ADC_REG(thumbInstr instr)
+{
+	uint32_t op1 = reg[instr.rd];
+	uint32_t op2 = reg[instr.rs];
+	uint32_t carry = C ? 1 : 0;
+	uint32_t result = op1 + op2 + carry;
+	reg[instr.rd] = result;
+	updateFlagsNZCV_Add(result, op1, op2 + carry);
+	return 1;
+}
+
+inline int CPU::opT_SBC_REG(thumbInstr instr)
+{
+	uint32_t op1 = reg[instr.rd];
+	uint32_t op2 = reg[instr.rs];
+	uint32_t carry = C ? 0 : 1;
+	uint32_t result = op1 - op2 - carry;
+	reg[instr.rd] = result;
+	updateFlagsNZCV_Sub(result, op1, op2 + carry);
+	return 1;
+}
+
+inline int CPU::opT_ROR_REG(thumbInstr instr)
+{
+	uint32_t shift = reg[instr.rs] & 0xFF;
+	if (shift == 0){}
+	else
+	{
+		shift = shift & 0x1F;
+		if (shift == 0)
+		{
+			C = (reg[instr.rd] >> 31) & 1;
+		}
+		else
+		{
+			C = (reg[instr.rd] >> (shift - 1)) & 1;
+			reg[instr.rd] = (reg[instr.rd] >> shift) | (reg[instr.rd] << (32 - shift));
+		}
+	}
+	N = reg[instr.rd] & 0x80000000;
+	Z = reg[instr.rd] == 0;
+	return 1;
+}
+
+inline int CPU::opT_TST_REG(thumbInstr instr)
+{
+	uint32_t result = reg[instr.rd] & reg[instr.rs];
+	N = result & 0x80000000;
+	Z = result == 0;
+	return 1;
+}
+
+inline int CPU::opT_NEG_REG(thumbInstr instr)
+{
+	uint32_t op2 = reg[instr.rs];
+	uint32_t result = 0 - op2;
+	reg[instr.rd] = result;
+	updateFlagsNZCV_Sub(result, 0, op2);
+	return 1;
+}
+
+inline int CPU::opT_CMP_REG(thumbInstr instr)
+{
+	uint32_t op1 = reg[instr.rd];
+	uint32_t op2 = reg[instr.rs];
+	uint32_t result = op1 - op2;
+	updateFlagsNZCV_Sub(result, op1, op2);
+	return 1;
+}
+
+inline int CPU::opT_CMN_REG(thumbInstr instr)
+{
+	uint32_t op1 = reg[instr.rd];
+	uint32_t op2 = reg[instr.rs];
+	uint32_t result = op1 + op2;
+	updateFlagsNZCV_Add(result, op1, op2);
+	return 1;
+}
+
+inline int CPU::opT_ORR_REG(thumbInstr instr)
+{
+	reg[instr.rd] = reg[instr.rd] | reg[instr.rs];
+	N = reg[instr.rd] & 0x80000000;
+	Z = reg[instr.rd] == 0;
+	return 1;
+}
+
+inline int CPU::opT_MUL_REG(thumbInstr instr)
+{
+	reg[instr.rd] = reg[instr.rd] * reg[instr.rs];
+	N = reg[instr.rd] & 0x80000000;
+	Z = reg[instr.rd] == 0;
+	return 1;
+}
+
+inline int CPU::opT_BIC_REG(thumbInstr instr)
+{
+	reg[instr.rd] = reg[instr.rd] & ~reg[instr.rs];
+	N = reg[instr.rd] & 0x80000000;
+	Z = reg[instr.rd] == 0;
+	return 1;
+}
+
+inline int CPU::opT_MVN_REG(thumbInstr instr)
+{
+	reg[instr.rd] = ~reg[instr.rs];
+	N = reg[instr.rd] & 0x80000000;
+	Z = reg[instr.rd] == 0;
+	return 1;
+}
+
+inline int CPU::opT_ADD_HI(thumbInstr instr)
+{
+	reg[instr.rd] = reg[instr.rd] + reg[instr.rs];
+	return 1;
+}
+
+inline int CPU::opT_CMP_HI(thumbInstr instr)
+{
+	uint32_t op1 = reg[instr.rd];
+	uint32_t op2 = reg[instr.rs];
+	uint32_t result = op1 - op2;
+	updateFlagsNZCV_Sub(result, op1, op2);
+	return 1;
+}
+
+inline int CPU::opT_MOV_HI(thumbInstr instr)
+{
+	reg[instr.rd] = reg[instr.rs];
+	return 1;
+}
+
+inline int CPU::opT_BX(thumbInstr instr)
+{
+	uint32_t target = reg[instr.rs];
+	if (target & 1)
+	{
+		pc = target & ~1; // keep thumb
+	}
+	else
+	{
+		T = 0;  //swap arm
+		pc = target & ~3;
+	}
+	return 3;
+}
+
+inline int CPU::opT_BLX_REG(thumbInstr instr)
+{
+	uint32_t target = reg[instr.rs];
+	lr = (pc - 2) | 1; 
+	if (target & 1)
+	{
+		pc = target & ~1; 
+	}
+	else
+	{
+		T = 0;           
+		pc = target & ~3;
+	}
+	return 3;
+}
+
+inline int CPU::opT_LDR_PC(thumbInstr instr)
+{
+	uint32_t address = (pc & ~2) + instr.imm;
+	reg[instr.rd] = read32(address);
+	return 3;
+}
+
+inline int CPU::opT_LDR_REG(thumbInstr instr)
+{
+	uint32_t address = reg[instr.rs] + reg[instr.rn];
+	reg[instr.rd] = read32(address);
+	return 3;
+}
+
+inline int CPU::opT_STR_REG(thumbInstr instr)
+{
+	uint32_t address = reg[instr.rs] + reg[instr.rn];
+	write32(address, reg[instr.rd]);
+	return 2;
+}
+
+inline int CPU::opT_LDRB_REG(thumbInstr instr)
+{
+	uint32_t address = reg[instr.rs] + reg[instr.rn];
+	reg[instr.rd] = read8(address);
+	return 3;
+}
+
+inline int CPU::opT_STRB_REG(thumbInstr instr)
+{
+	uint32_t address = reg[instr.rs] + reg[instr.rn];
+	write8(address, reg[instr.rd] & 0xFF);
+	return 2;
+}
+
+inline int CPU::opT_LDRH_REG(thumbInstr instr)
+{
+	uint32_t address = reg[instr.rs] + reg[instr.rn];
+	reg[instr.rd] = read16(address);
+	return 3;
+}
+
+inline int CPU::opT_STRH_REG(thumbInstr instr)
+{
+	uint32_t address = reg[instr.rs] + reg[instr.rn];
+	write16(address, reg[instr.rd] & 0xFFFF);
+	return 2;
+}
+
+inline int CPU::opT_LDRSB_REG(thumbInstr instr)
+{
+	uint32_t address = reg[instr.rs] + reg[instr.rn];
+	int8_t value = (int8_t)read8(address);
+	reg[instr.rd] = (int32_t)value;
+	return 3;
+}
+
+inline int CPU::opT_LDRSH_REG(thumbInstr instr)
+{
+	uint32_t address = reg[instr.rs] + reg[instr.rn];
+	int16_t value = (int16_t)read16(address);
+	reg[instr.rd] = (int32_t)value;
+	return 3;
+}
+
+inline int CPU::opT_LDR_IMM(thumbInstr instr)
+{
+	uint32_t address = reg[instr.rs] + instr.imm;
+	reg[instr.rd] = read32(address);
+	return 3;
+}
+
+inline int CPU::opT_STR_IMM(thumbInstr instr)
+{
+	uint32_t address = reg[instr.rs] + instr.imm;
+	write32(address, reg[instr.rd]);
+	return 2;
+}
+
+inline int CPU::opT_LDRB_IMM(thumbInstr instr)
+{
+	uint32_t address = reg[instr.rs] + instr.imm;
+	reg[instr.rd] = read8(address);
+	return 3;
+}
+
+inline int CPU::opT_STRB_IMM(thumbInstr instr)
+{
+	uint32_t address = reg[instr.rs] + instr.imm;
+	write8(address, reg[instr.rd] & 0xFF);
+	return 2;
+}
+
+inline int CPU::opT_LDRH_IMM(thumbInstr instr)
+{
+	uint32_t address = reg[instr.rs] + instr.imm;
+	reg[instr.rd] = read16(address);
+	return 3;
+}
+
+inline int CPU::opT_STRH_IMM(thumbInstr instr)
+{
+	uint32_t address = reg[instr.rs] + instr.imm;
+	write16(address, reg[instr.rd] & 0xFFFF);
+	return 2;
+}
+
+inline int CPU::opT_LDR_SP(thumbInstr instr)
+{
+	uint32_t address = sp + instr.imm;
+	reg[instr.rd] = read32(address);
+	return 3;
+}
+
+inline int CPU::opT_STR_SP(thumbInstr instr)
+{
+	uint32_t address = sp + instr.imm;
+	write32(address, reg[instr.rd]);
+	return 2;
+}
+
+inline int CPU::opT_ADD_PC(thumbInstr instr)
+{
+	reg[instr.rd] = (pc & ~2) + instr.imm;
+	return 1;
+}
+
+inline int CPU::opT_ADD_SP(thumbInstr instr)
+{
+	reg[instr.rd] = sp + instr.imm;
+	return 1;
+}
+
+inline int CPU::opT_ADD_SP_IMM(thumbInstr instr)
+{
+	sp = sp + (int32_t)instr.imm;  
+	return 1;
+}
+
+inline int CPU::opT_PUSH(thumbInstr instr)
+{
+	for (int i = 0; i < 16; i++)
+	{
+		if (instr.imm & (1 << i))
+		{
+			sp -= 4;
+			write32(sp, reg[i]);
+		}
+	}
+	return 1 + countSetBits(instr.imm);
+}
+
+inline int CPU::opT_POP(thumbInstr instr)
+{
+	for (int i = 0; i < 16; i++)
+	{
+		if (instr.imm & (1 << i))
+		{
+			reg[i] = read32(sp);
+			sp += 4;
+		}
+	}
+	return 1 + countSetBits(instr.imm);
+}
+
+inline int CPU::opT_STMIA(thumbInstr instr)
+{
+	uint32_t address = reg[instr.rs];
+	for (int i = 0; i < 8; i++)
+	{
+		if (instr.imm & (1 << i))
+		{
+			write32(address, reg[i]);
+			address += 4;
+		}
+	}
+	reg[instr.rs] = address;
+	return 1 + countSetBits(instr.imm & 0xFF);
+}
+
+inline int CPU::opT_LDMIA(thumbInstr instr)
+{
+	uint32_t address = reg[instr.rs];
+	for (int i = 0; i < 8; i++)
+	{
+		if (instr.imm & (1 << i))
+		{
+			reg[i] = read32(address);
+			address += 4;
+		}
+	}
+	reg[instr.rs] = address; 
+	return 1 + countSetBits(instr.imm & 0xFF);
+}
+
+inline int CPU::opT_B_COND(thumbInstr instr)
+{
+	if (checkConditional(instr.cond)) // this is using the main cpus function, should be fine
+	{
+		pc = pc + (int32_t)instr.imm;
+	}
+	return 3;
+}
+
+inline int CPU::opT_B(thumbInstr instr)
+{
+	pc = pc + (int32_t)instr.imm;
+	return 3;
+}
+
+inline int CPU::opT_BL_PREFIX(thumbInstr instr)
+{
+	lr = pc + (int32_t)instr.imm;
+	return 1;
+}
+
+inline int CPU::opT_BL_SUFFIX(thumbInstr instr)
+{
+	uint32_t temp = pc - 2;
+	pc = lr + instr.imm;
+	lr = temp | 1;
+	return 3;
+}
+
+inline int CPU::opT_SWI(thumbInstr instr)
+{
+
+	printf("SWI #%d: r0=%08X r1=%08X r2=%08X\n", instr.imm, reg[0], reg[1], reg[2]); // debugging logger
+	enterException(mode::Supervisor, Vector::SWI, pc - 4);
+	return 3;
+}
+
+inline int CPU::opT_UNDEFINED(thumbInstr instr)
+{
+	printf("UNDEFINED TRIGGERED, REPLACE LATER WITH PROPER VECTOR HANDLER");
+	return 1;
+}
 
 
 /////////////////////////////////////////////
@@ -1901,3 +2542,49 @@ void CPU::write32(uint32_t addr, uint32_t data)
 {
 	bus->write32(addr, data);
 }
+
+std::string CPU::thumbToStr(CPU::thumbInstr& instr)
+{
+	std::stringstream ss;
+
+	const char* opNames[] = {
+		"MOV_IMM", "ADD_REG", "ADD_IMM", "ADD_IMM3", "SUB_REG", "SUB_IMM", "SUB_IMM3", "CMP_IMM",
+		"LSL_IMM", "LSR_IMM", "ASR_IMM", "AND_REG", "EOR_REG", "LSL_REG",
+		"LSR_REG", "ASR_REG", "ADC_REG", "SBC_REG", "ROR_REG", "TST_REG",
+		"NEG_REG", "CMP_REG", "CMN_REG", "ORR_REG", "MUL_REG", "BIC_REG",
+		"MVN_REG", "ADD_HI", "CMP_HI", "MOV_HI", "BX", "BLX_REG",
+		"LDR_PC", "LDR_REG", "STR_REG", "LDRB_REG", "STRB_REG", "LDRH_REG",
+		"STRH_REG", "LDRSB_REG", "LDRSH_REG", "LDR_IMM", "STR_IMM", "LDRB_IMM",
+		"STRB_IMM", "LDRH_IMM", "STRH_IMM", "LDR_SP", "STR_SP", "ADD_PC",
+		"ADD_SP", "ADD_SP_IMM", "PUSH", "POP", "STMIA", "LDMIA",
+		"B_COND", "B", "BL_PREFIX", "BL_SUFFIX", "SWI", "UNDEFINED"
+	};
+
+	ss << std::dec << opNames[(int)instr.type];
+
+	if ((instr.rd != NULL)) ss << " Rd=R" << (int)instr.rd;
+	if ((instr.rs != NULL)) ss << " Rs=R" << (int)instr.rs;
+	if ((instr.rn != NULL)) ss << " Rn=R" << (int)instr.rn;
+
+
+	if (instr.imm != 0)
+	{
+		ss << " imm=0x" << std::dec << instr.imm;
+	}
+
+
+	if (instr.type == CPU::thumbOperation::THUMB_B_COND)
+	{
+		const char* condNames[] = {
+			"EQ", "NE", "CS", "CC", "MI", "PL", "VS", "VC",
+			"HI", "LS", "GE", "LT", "GT", "LE", "AL", "NV"
+		};
+		ss << " cond=" << condNames[instr.cond];
+	}
+
+	if (instr.h1) ss << " H1";
+	if (instr.h2) ss << " H2";
+
+	return ss.str();
+}
+

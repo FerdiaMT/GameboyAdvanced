@@ -3,6 +3,9 @@
 #include <cstdint>
 #include <map>
 #include <unordered_map>
+#include <string>
+#include <sstream>
+
 class CPU
 {
 
@@ -277,6 +280,12 @@ public:
 	thumbInstr decodeThumb(uint16_t instruction); // this returns a thumbInstr struct
 	int thumbExecute(struct thumbInstr);
 
+	//THUMB HELPERS
+	inline void updateFlagsNZCV_Add(uint32_t result, uint32_t op1, uint32_t op2);
+
+	inline void updateFlagsNZCV_Sub(uint32_t result, uint32_t op1, uint32_t op2);
+
+
 public:
 
 	//////////////////////////////////////////////////////////////////
@@ -338,7 +347,7 @@ public:
 	inline int opT_ADD_SP(thumbInstr instr);
 	inline int opT_ADD_SP_IMM(thumbInstr instr);
 	inline int opT_PUSH(thumbInstr instr);
-	inline int opT_PopT(thumbInstr instr);
+	inline int opT_POP(thumbInstr instr);
 	inline int opT_STMIA(thumbInstr instr);
 	inline int opT_LDMIA(thumbInstr instr);
 	inline int opT_B_COND(thumbInstr instr);
@@ -453,6 +462,9 @@ public:
 		inline void setNZ(uint32_t res); // TEST CHECK
 
 		//debugger help
+
+		std::string thumbToStr(CPU::thumbInstr& instr);
+
 		const char* opcodeToString(Operation op)
 		{
 			switch (op)
@@ -508,5 +520,7 @@ public:
 			default: return "OPINVL";
 			}
 		}
+
+		
 };
 

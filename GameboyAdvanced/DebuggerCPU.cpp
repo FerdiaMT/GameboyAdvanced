@@ -28,7 +28,7 @@ void DebuggerCPU::ThumbLineDecode(uint32_t curAddr)
     CPU::thumbInstr curOperation = cpu->decodeThumb(curInstruction); // this turns the instruction into the decoded operation
 
     printf("PC: 0x%08X, Instruction: 0x%04X, ThumbCode: %s  \n",
-        curAddr, curInstruction, thumbToStr(curOperation).c_str());
+        curAddr, curInstruction, thumbToStr(curOperation).c_str()  );
 
     curAddr += 2;
 }
@@ -125,48 +125,48 @@ inline const char* DebuggerCPU::checkConditional(uint8_t cond)
 	}
 }
 
-std::string DebuggerCPU::thumbToStr(const CPU::thumbInstr& instr)
+std::string DebuggerCPU::thumbToStr(CPU::thumbInstr& instr)
 {
-    std::stringstream ss;
+	std::stringstream ss;
 
-    const char* opNames[] = {
-        "MOV_IMM", "ADD_REG", "ADD_IMM", "ADD_IMM3", "SUB_REG", "SUB_IMM", "SUB_IMM3", "CMP_IMM",
-        "LSL_IMM", "LSR_IMM", "ASR_IMM", "AND_REG", "EOR_REG", "LSL_REG",
-        "LSR_REG", "ASR_REG", "ADC_REG", "SBC_REG", "ROR_REG", "TST_REG",
-        "NEG_REG", "CMP_REG", "CMN_REG", "ORR_REG", "MUL_REG", "BIC_REG",
-        "MVN_REG", "ADD_HI", "CMP_HI", "MOV_HI", "BX", "BLX_REG",
-        "LDR_PC", "LDR_REG", "STR_REG", "LDRB_REG", "STRB_REG", "LDRH_REG",
-        "STRH_REG", "LDRSB_REG", "LDRSH_REG", "LDR_IMM", "STR_IMM", "LDRB_IMM",
-        "STRB_IMM", "LDRH_IMM", "STRH_IMM", "LDR_SP", "STR_SP", "ADD_PC",
-        "ADD_SP", "ADD_SP_IMM", "PUSH", "POP", "STMIA", "LDMIA",
-        "B_COND", "B", "BL_PREFIX", "BL_SUFFIX", "SWI", "UNDEFINED"
-    };
+	const char* opNames[] = {
+		"MOV_IMM", "ADD_REG", "ADD_IMM", "ADD_IMM3", "SUB_REG", "SUB_IMM", "SUB_IMM3", "CMP_IMM",
+		"LSL_IMM", "LSR_IMM", "ASR_IMM", "AND_REG", "EOR_REG", "LSL_REG",
+		"LSR_REG", "ASR_REG", "ADC_REG", "SBC_REG", "ROR_REG", "TST_REG",
+		"NEG_REG", "CMP_REG", "CMN_REG", "ORR_REG", "MUL_REG", "BIC_REG",
+		"MVN_REG", "ADD_HI", "CMP_HI", "MOV_HI", "BX", "BLX_REG",
+		"LDR_PC", "LDR_REG", "STR_REG", "LDRB_REG", "STRB_REG", "LDRH_REG",
+		"STRH_REG", "LDRSB_REG", "LDRSH_REG", "LDR_IMM", "STR_IMM", "LDRB_IMM",
+		"STRB_IMM", "LDRH_IMM", "STRH_IMM", "LDR_SP", "STR_SP", "ADD_PC",
+		"ADD_SP", "ADD_SP_IMM", "PUSH", "POP", "STMIA", "LDMIA",
+		"B_COND", "B", "BL_PREFIX", "BL_SUFFIX", "SWI", "UNDEFINED"
+	};
 
-    ss <<std::dec<< opNames[(int)instr.type];
+	ss << std::dec << opNames[(int)instr.type];
 
-    if ((instr.rd != NULL)) ss << " Rd=R" << (int)instr.rd;
-    if ((instr.rs != NULL)) ss << " Rs=R" << (int)instr.rs;
-    if ((instr.rn != NULL)) ss << " Rn=R" << (int)instr.rn;
-
-
-    if (instr.imm != 0)
-    {
-        ss << " imm=0x" << std::dec << instr.imm;
-    }
+	if ((instr.rd != NULL)) ss << " Rd=R" << (int)instr.rd;
+	if ((instr.rs != NULL)) ss << " Rs=R" << (int)instr.rs;
+	if ((instr.rn != NULL)) ss << " Rn=R" << (int)instr.rn;
 
 
-    if (instr.type == CPU::thumbOperation::THUMB_B_COND)
-    {
-        const char* condNames[] = {
-            "EQ", "NE", "CS", "CC", "MI", "PL", "VS", "VC",
-            "HI", "LS", "GE", "LT", "GT", "LE", "AL", "NV"
-        };
-        ss << " cond=" << condNames[instr.cond];
-    }
+	if (instr.imm != 0)
+	{
+		ss << " imm=0x" << std::dec << instr.imm;
+	}
 
-    if (instr.h1) ss << " H1";
-    if (instr.h2) ss << " H2";
 
-    return ss.str();
+	if (instr.type == CPU::thumbOperation::THUMB_B_COND)
+	{
+		const char* condNames[] = {
+			"EQ", "NE", "CS", "CC", "MI", "PL", "VS", "VC",
+			"HI", "LS", "GE", "LT", "GT", "LE", "AL", "NV"
+		};
+		ss << " cond=" << condNames[instr.cond];
+	}
+
+	if (instr.h1) ss << " H1";
+	if (instr.h2) ss << " H2";
+
+	return ss.str();
 }
 
