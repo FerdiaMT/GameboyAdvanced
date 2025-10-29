@@ -556,7 +556,7 @@ void CPU::writeCPSR(uint32_t value)
 
 inline bool CPU::checkConditional(uint8_t cond) const
 {
-	if ((cond == 0xE, 1)) [[likely]] return true;
+	if ((cond == 0xE)) [[likely]] return true;
 
 	switch (cond)
 	{
@@ -2467,30 +2467,31 @@ inline int CPU::opT_LDMIA(thumbInstr instr)
 
 inline int CPU::opT_B_COND(thumbInstr instr)
 {
-	if (checkConditional(instr.cond)) // this is using the main cpus function, should be fine
+	if (checkConditional((uint8_t)instr.cond&0xFF)) // this is using the main cpus function, should be fine
 	{
-		pc = pc + (int32_t)instr.imm;
+		pc = pc + (int32_t)instr.imm+2;
 	}
 	return 3;
 }
 
 inline int CPU::opT_B(thumbInstr instr)
 {
-	pc = pc + (int32_t)instr.imm;
+	pc = pc + (int32_t)instr.imm+2;
 	return 3;
 }
 
 inline int CPU::opT_BL_PREFIX(thumbInstr instr)
 {
-	lr = pc + (int32_t)instr.imm;
+	lr = pc + (int32_t)instr.imm+2;
 	return 1;
 }
 
 inline int CPU::opT_BL_SUFFIX(thumbInstr instr)
 {
-	uint32_t temp = pc - 2;
-	pc = lr + instr.imm;
-	lr = temp | 1;
+	uint32_t target = lr + instr.imm;
+
+	lr = (pc - 2) | 1; 
+	pc = target;
 	return 3;
 }
 
