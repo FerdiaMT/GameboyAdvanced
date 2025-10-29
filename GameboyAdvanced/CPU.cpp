@@ -1540,15 +1540,12 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 			decodedInstr.rd = (instr) & 0b111;
 			decodedInstr.rs = (instr >> 3) & 0b111;
 
-			decodedInstr.imm = (instr >> 6) & 0b111;
-			decodedInstr.rn = decodedInstr.imm;
-
 			switch ((instr >> 9) & 0b11)
 			{// 00 reg and, 01, reg sub, 10 immed and, 11 immed sub
-			case(0b00):decodedInstr.type = thumbOperation::THUMB_ADD_REG; break;
-			case(0b01):decodedInstr.type = thumbOperation::THUMB_SUB_REG; break;
-			case(0b10):decodedInstr.type = thumbOperation::THUMB_ADD_IMM; break;
-			case(0b11):decodedInstr.type = thumbOperation::THUMB_SUB_IMM; break;
+			case(0b00): decodedInstr.rn = (instr >> 6) & 0b111; decodedInstr.type =  thumbOperation::THUMB_ADD_REG; break;
+			case(0b01): decodedInstr.rn = (instr >> 6) & 0b111; decodedInstr.type =  thumbOperation::THUMB_SUB_REG; break;
+			case(0b10): decodedInstr.imm = (instr >> 6) & 0b111;decodedInstr.type = thumbOperation::THUMB_ADD_IMM; break;
+			case(0b11): decodedInstr.imm = (instr >> 6) & 0b111;decodedInstr.type = thumbOperation::THUMB_SUB_IMM; break;
 			}
 		}
 	}break;
@@ -1596,8 +1593,8 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 		{
 			decodedInstr.rd = (instr) & 0b111;
 			decodedInstr.rs = (instr >> 3) & 0b111;
-			decodedInstr.h1 = (instr >> 6) & 0b1;
-			decodedInstr.h2 = (instr >> 7) & 0b1;
+			decodedInstr.h1 = (instr >> 7) & 0b1;
+			decodedInstr.h2 = (instr >> 6) & 0b1;
 
 			if (decodedInstr.h1) decodedInstr.rd += 8;
 			if (decodedInstr.h2) decodedInstr.rs += 8;
@@ -1616,7 +1613,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 		}
 		else if (((instr >> 11) & 0b11) == 0b01) // pc relative load
 		{
-			decodedInstr.imm = (instr) & 0xFF;
+			decodedInstr.imm = ((instr) & 0xFF)<<2;
 			decodedInstr.rd = (instr >> 8) & 0b111;
 
 			decodedInstr.type = thumbOperation::THUMB_LDR_PC;
@@ -1670,7 +1667,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 		{
 			decodedInstr.rd = (instr) & 0b111;
 			decodedInstr.rs = (instr >> 3) & 0b111; // where rs is used instead or rb for rbase
-			decodedInstr.imm = ((instr >> 6) & 0b11111) < 1;
+			decodedInstr.imm = ((instr >> 6) & 0b11111) << 1;
 
 			switch ((instr >> 11) & 0b1)
 			{
@@ -1682,6 +1679,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 		{
 			decodedInstr.imm = (instr & 0xFF) << 2;
 			decodedInstr.rd = (instr >> 8) & 0b111;
+			decodedInstr.rs = 13;
 
 			switch ((instr >> 11) & 0b1)
 			{
@@ -1743,10 +1741,9 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 		}
 		else if (((instr >> 8) & 0b11111) != 0b11111) //  conditional branch (done by making sure it isnt SWI first)
 		{
-			decodedInstr.imm = (instr & 0b1111111) << 2;
 			decodedInstr.cond = (instr >> 8) & 0b1111;
-
-			if ((instr >> 7) & 0b1) decodedInstr.imm = -(int32_t)decodedInstr.imm;
+			int8_t offset8 = (instr & 0xFF); 
+			decodedInstr.imm = (int32_t)offset8 << 1;
 
 			decodedInstr.type = thumbOperation::THUMB_B_COND;
 		}
@@ -1760,9 +1757,9 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 	{
 		if (((instr >> 12) & 0b1) == 0b0) // (uncond branch)
 		{
-			decodedInstr.imm = (instr & 0x7FF);
-			if (decodedInstr.imm & 0x400) decodedInstr.imm |= 0xF800; 
-			decodedInstr.imm = (int32_t)decodedInstr.imm << 1; 
+			int16_t offset11 = (instr & 0x7FF);
+			if (offset11 & 0x400) offset11 |= 0xF800;
+			decodedInstr.imm = (int32_t)offset11 << 1;
 
 			decodedInstr.type = thumbOperation::THUMB_B;
 		}
@@ -1771,8 +1768,9 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 			decodedInstr.imm = (instr & 0x7FF);
 			if (! ((instr >> 11) & 0b1))
 			{
-				if (decodedInstr.imm & 0x400) decodedInstr.imm |= 0xF800;
-				decodedInstr.imm = (int32_t)decodedInstr.imm << 12;
+				int16_t offset11 = (instr & 0x7FF);
+				if (offset11 & 0x400) offset11 |= 0xF800;
+				decodedInstr.imm = (int32_t)offset11 << 12;
 
 				decodedInstr.type = thumbOperation::THUMB_BL_PREFIX;
 			}

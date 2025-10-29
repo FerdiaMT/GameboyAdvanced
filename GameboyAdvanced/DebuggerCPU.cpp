@@ -65,6 +65,13 @@ bool needsRd(CPU::thumbOperation type)
     case  CPU::thumbOperation::THUMB_BL_PREFIX:
     case  CPU::thumbOperation::THUMB_BL_SUFFIX:
     case  CPU::thumbOperation::THUMB_ADD_SP_IMM:
+
+    case CPU::thumbOperation::THUMB_PUSH:
+    case CPU::thumbOperation::THUMB_POP:
+    case CPU::thumbOperation::THUMB_STMIA:
+    case CPU::thumbOperation::THUMB_LDMIA:
+    case CPU::thumbOperation::THUMB_SWI:
+
     return false;
     default:
     return true;
@@ -135,20 +142,16 @@ std::string DebuggerCPU::thumbToStr(const CPU::thumbInstr& instr)
         "B_COND", "B", "BL_PREFIX", "BL_SUFFIX", "SWI", "UNDEFINED"
     };
 
-    ss << opNames[(int)instr.type];
+    ss <<std::dec<< opNames[(int)instr.type];
 
-    bool hasRd = (instr.rd != 0 || needsRd(instr.type));
-    bool hasRs = (instr.rs != 0 || needsRs(instr.type));
-    bool hasRn = (instr.rn != 0);
-
-    if (hasRd) ss << " Rd=R" << (int)instr.rd;
-    if (hasRs) ss << " Rs=R" << (int)instr.rs;
-    if (hasRn) ss << " Rn=R" << (int)instr.rn;
+    if ((instr.rd != NULL)) ss << " Rd=R" << (int)instr.rd;
+    if ((instr.rs != NULL)) ss << " Rs=R" << (int)instr.rs;
+    if ((instr.rn != NULL)) ss << " Rn=R" << (int)instr.rn;
 
 
     if (instr.imm != 0)
     {
-        ss << " imm=0x" << std::hex << instr.imm;
+        ss << " imm=0x" << std::dec << instr.imm;
     }
 
 

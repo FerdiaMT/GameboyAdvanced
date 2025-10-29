@@ -17,7 +17,7 @@ GBA::GBA(): cpu(&bus) , debuggerCPU(&cpu)
 		return;
 	}
 
-	debuggerCPU.DecodeIns(0x00000000, 0x000400);
+	debuggerCPU.DecodeIns(0x00000000, 0x000120);
 }
 
 void GBA::tick()
