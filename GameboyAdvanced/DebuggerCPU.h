@@ -20,5 +20,6 @@ public:
 
 
 
+	void runAllThumbTests(CPU& cpu);
 };
 

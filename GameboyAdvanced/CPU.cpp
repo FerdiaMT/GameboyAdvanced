@@ -212,8 +212,8 @@ uint32_t CPU::tick()
 		pc += 2;
 		curThumbInstr = decodeThumb(thumbCode);
 
-		printf("MODE:%s ,PC: 0x%08X, Instruction: 0x%04X    , Flags: %s ,Opcode: %s \n",
-			"T", pc - pcOffset(), thumbCode, CPSRtoString(),thumbToStr(curThumbInstr).c_str() );
+		printf("MODE:%s ,PC: 0x%08X, Instruction: 0x%04X    , Flags: %s ,Opcode: %s ,  1st8regs: %08x,%08x,%08x,%08x, %08x,%08x,%08x,%08x \n",
+			"T", pc - pcOffset(), thumbCode, CPSRtoString(),thumbToStr(curThumbInstr).c_str() , reg[0], reg[1], reg[2], reg[3], reg[4], reg[5], reg[6], reg[7]);
 
 		curOpCycles = thumbExecute(curThumbInstr);
 	}
@@ -1614,7 +1614,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 
 			switch ((instr >> 9) & 0b11)
 			{// 00 reg and, 01, reg sub, 10 immed and, 11 immed sub
-			case(0b00): decodedInstr.rn = (instr >> 6) & 0b111; decodedInstr.type =  thumbOperation::THUMB_ADD_REG; break;
+			case(0b00): decodedInstr.rn = (instr >> 6) & 0b111; decodedInstr.type = thumbOperation::THUMB_ADD_REG; break;
 			case(0b01): decodedInstr.rn = (instr >> 6) & 0b111; decodedInstr.type =  thumbOperation::THUMB_SUB_REG; break;
 			case(0b10): decodedInstr.imm = (instr >> 6) & 0b111;decodedInstr.type = thumbOperation::THUMB_ADD_IMM; break;
 			case(0b11): decodedInstr.imm = (instr >> 6) & 0b111;decodedInstr.type = thumbOperation::THUMB_SUB_IMM; break;
@@ -1867,7 +1867,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 
 inline void CPU::updateFlagsNZCV_Add(uint32_t result, uint32_t op1, uint32_t op2)
 {
-	N = result & 0x80000000;
+	N = (result >> 31) & 0x1;
 	Z = result == 0;
 	C = result < op1;
 
@@ -1876,7 +1876,7 @@ inline void CPU::updateFlagsNZCV_Add(uint32_t result, uint32_t op1, uint32_t op2
 
 inline void CPU::updateFlagsNZCV_Sub(uint32_t result, uint32_t op1, uint32_t op2)
 {
-	N = result & 0x80000000;
+	N = (result >> 31) & 0x1;
 	Z = result == 0;
 	C = op1 >= op2;
 	V = ((op1 & 0x80000000) != (op2 & 0x80000000)) && ((op1 & 0x80000000) != (result & 0x80000000));
@@ -2244,7 +2244,9 @@ inline int CPU::opT_BX(thumbInstr instr)
 	uint32_t target = reg[instr.rs];
 	if (target & 1)
 	{
+		T = 1;
 		pc = target & ~1; // keep thumb
+		
 	}
 	else
 	{
@@ -2272,7 +2274,7 @@ inline int CPU::opT_BLX_REG(thumbInstr instr)
 
 inline int CPU::opT_LDR_PC(thumbInstr instr)
 {
-	uint32_t address = (pc & ~2) + instr.imm;
+	uint32_t address = ((pc+4) & ~2) + instr.imm;
 	reg[instr.rd] = read32(address);
 	return 3;
 }
@@ -2393,19 +2395,21 @@ inline int CPU::opT_STR_SP(thumbInstr instr)
 
 inline int CPU::opT_ADD_PC(thumbInstr instr)
 {
-	reg[instr.rd] = (pc & ~2) + instr.imm;
+	reg[instr.rd] = (pc+4 & ~2) + instr.imm;
 	return 1;
 }
 
 inline int CPU::opT_ADD_SP(thumbInstr instr)
 {
-	reg[instr.rd] = sp + instr.imm;
+	sp += instr.imm;
+	reg[instr.rd] = sp;
 	return 1;
 }
 
 inline int CPU::opT_ADD_SP_IMM(thumbInstr instr)
 {
 	sp = sp + (int32_t)instr.imm;  
+	reg[instr.rd] = sp;
 	return 1;
 }
 

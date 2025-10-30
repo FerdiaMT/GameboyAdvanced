@@ -7,7 +7,8 @@ int main()
 	GBA gba;
 
 
-	while (true){
+	while (true)
+	{
 		gba.tick();
 	}
 }
