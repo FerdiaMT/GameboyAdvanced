@@ -2893,14 +2893,35 @@ std::string CPU::thumbToStr(CPU::thumbInstr& instr)
 }
 
 // made specially for this 
+
+//THUMB TESTS
+//    thumb_add_cmp_mov_hi.json.bin - 860 passed
+//		thumb_add_sp_or_pc.json.bin - 34 passed
+//		thumb_add_sub.json.bin -  50000 passed
+//		thumb_add_sub_sp.json.bin- 0 passed
+//		thumb_b.json.bin - 6 passed
+//		thumb_bcc.json.bin - 216 passed
+//		thumb_bl_blx_prefix.json - 0 passed
+//		thumb_bl_suffix.json.bin - o passed
+//	     thumb_bx.json - 0 passed
+//		thumb_data_proc.json - 46813 passed
+//		thumb_ldm_stm.json.bin - 1 passed
+
 void CPU::runThumbTests()
 {
-	FILE* f = fopen("thumb_add_sub.json.bin", "rb");
+	const char* str = "thumb_ldm_stm.json.bin";
+
+	FILE* f = fopen(str, "rb");
 	if (!f)
 	{
 		printf("ERROR: Could not open test file!\n");
 		return;
 	}
+
+	int passed = 0;
+	int failed = 0;
+	int maxFailuresToShow = 10;
+	int failuresShown = 0;
 
 	uint32_t magic, numTests, testSize, stateSize, val;
 	fread(&magic, 4, 1, f);
@@ -2912,144 +2933,59 @@ void CPU::runThumbTests()
 	printf("Magic: 0x%08x\n", magic);
 	printf("Number of tests: %d\n\n", numTests);
 
-	for (int i = 0; i < 3; i++)
+	for (int i = 0; i < numTests; i++)
 	{
-
 		fseek(f, 0x14 + (i * testSize), SEEK_SET);
-		printf("=== TEST %d ===\n" , i);
+
+
+		//LOAD ALL VALUES from file
 
 		uint32_t R_init[16];
 		fread(R_init, 4, 16, f);
-		printf("R:\n");
-		for (int i = 0; i < 16; i++)
-			printf("  R[%d]: %u\n", i, R_init[i]);
-
 		uint32_t R_fiq_init[7];
 		fread(R_fiq_init, 4, 7, f);
-		printf("\nR_fiq:\n");
-		for (int i = 0; i < 7; i++)
-			printf("  R_fiq[%d]: %u\n", i, R_fiq_init[i]);
-
 		uint32_t R_svc_init[2];
 		fread(R_svc_init, 4, 2, f);
-		printf("\nR_svc:\n");
-		for (int i = 0; i < 2; i++)
-			printf("  R_svc[%d]: %u\n", i, R_svc_init[i]);
-
 		uint32_t R_abt_init[2];
 		fread(R_abt_init, 4, 2, f);
-		printf("\nR_abt:\n");
-		for (int i = 0; i < 2; i++)
-			printf("  R_abt[%d]: %u\n", i, R_abt_init[i]);
-
 		uint32_t R_irq_init[2];
 		fread(R_irq_init, 4, 2, f);
-		printf("\nR_irq:\n");
-		for (int i = 0; i < 2; i++)
-			printf("  R_irq[%d]: %u\n", i, R_irq_init[i]);
-
 		uint32_t R_und_init[2];
 		fread(R_und_init, 4, 2, f);
-		printf("\nR_und:\n");
-		for (int i = 0; i < 2; i++)
-			printf("  R_und[%d]: %u\n", i, R_und_init[i]);
-
 		uint32_t CPSR_init;
 		fread(&CPSR_init, 4, 1, f);
-		printf("\nCPSR: %u\n", CPSR_init);
-
 		uint32_t SPSR_init[5];
 		fread(SPSR_init, 4, 5, f);
-		printf("\nSPSR:\n");
-		for (int i = 0; i < 5; i++)
-			printf("  SPSR[%d]: %u\n", i, SPSR_init[i]);
-
 		uint32_t pipeline_init[2];
 		fread(pipeline_init, 4, 2, f);
-		printf("\npipeline:\n");
-		for (int i = 0; i < 2; i++)
-			printf("  pipeline[%d]: %u\n", i, pipeline_init[i]);
-
 		uint32_t access_init;
 		fread(&access_init, 4, 1, f);
-		printf("\naccess: %u\n", access_init);
-
 		uint64_t junk;
 		fread(&junk, 8, 1, f);
-
-		// FINAL STATE
-		printf("\n=== FINAL STATE ===\n");
-
 		uint32_t R_final[16];
 		fread(R_final, 4, 16, f);
-		printf("R (showing only changes):\n");
-		for (int i = 0; i < 16; i++)
-		{
-			if (R_final[i] != R_init[i])
-				printf("  R[%d]: %u (was %u)\n", i, R_final[i], R_init[i]);
-		}
-
-		// Skip rest of final state for now
 		uint32_t R_fiq_final[7];
 		fread(R_fiq_final, 4, 7, f);
-		printf("\nR_fiq:\n");
-		for (int i = 0; i < 7; i++)
-			printf("  R_fiq[%d]: %u\n", i, R_fiq_final[i]);
-
 		uint32_t R_svc_final[2];
 		fread(R_svc_final, 4, 2, f);
-		printf("\nR_svc:\n");
-		for (int i = 0; i < 2; i++)
-			printf("  R_svc[%d]: %u\n", i, R_svc_final[i]);
-
 		uint32_t R_abt_final[2];
 		fread(R_abt_final, 4, 2, f);
-		printf("\nR_abt:\n");
-		for (int i = 0; i < 2; i++)
-			printf("  R_abt[%d]: %u\n", i, R_abt_final[i]);
-
 		uint32_t R_irq_final[2];
 		fread(R_irq_final, 4, 2, f);
-		printf("\nR_irq:\n");
-		for (int i = 0; i < 2; i++)
-			printf("  R_irq[%d]: %u\n", i, R_irq_final[i]);
-
 		uint32_t R_und_final[2];
 		fread(R_und_final, 4, 2, f);
-		printf("\nR_und:\n");
-		for (int i = 0; i < 2; i++)
-			printf("  R_und[%d]: %u\n", i, R_und_final[i]);
-
 		uint32_t CPSR_final;
 		fread(&CPSR_final, 4, 1, f);
-		if (CPSR_final != CPSR_init)
-			printf("\nCPSR: %u (was %u)\n", CPSR_final, CPSR_init);
+
 
 		uint32_t SPSR_final[5];
 		fread(SPSR_final, 4, 5, f);
-		printf("\nSPSR:\n");
-		for (int i = 0; i < 5; i++)
-			printf("  SPSR[%d]: %u\n", i, SPSR_final[i]);
-
-
 		uint32_t pipeline_final[2];
 		fread(pipeline_final, 4, 2, f);
-		for (int i = 0; i < 2; i++)
-			printf("  pipeline[%d]: %u\n", i, pipeline_final[i]);
-
-
-
-
 		uint32_t access_final;
 		fread(&access_final, 4, 1, f);
-		printf("\naccess: %u\n", access_final);
-
 		uint32_t junkArr[3];
 		fread(&junkArr, 4, 3, f);
-
-
-		// TRANSACTIONS
-		printf("\n=== TRANSACTIONS ===\n");
 		uint32_t trans_kind, trans_size, trans_addr, trans_data, trans_cycle, trans_access;
 		fread(&trans_kind, 4, 1, f);
 		fread(&trans_size, 4, 1, f);
@@ -3057,31 +2993,232 @@ void CPU::runThumbTests()
 		fread(&trans_data, 4, 1, f);
 		fread(&trans_cycle, 4, 1, f);
 		fread(&trans_access, 4, 1, f);
-
-		printf("Transaction 0:\n");
-		printf("  kind: %u\n", trans_kind);
-		printf("  size: %u\n", trans_size);
-		printf("  addr: %u\n", trans_addr);
-		printf("  data: %u\n", trans_data);
-		printf("  cycle: %u\n", trans_cycle);
-		printf("  access: %u\n", trans_access);
-
-		// OPCODE and BASE_ADDR
-		printf("\n=== OPCODE & BASE_ADDR ===\n");
-
 		uint32_t junkArr2[3];
 		fread(&junkArr2, 4, 2, f);
-
 		uint16_t opcode, padding;
 		uint32_t base_addr;
 		fread(&opcode, 2, 1, f);
 		fread(&padding, 2, 1, f);
 		fread(&base_addr, 4, 1, f);
 
-		printf("opcode: %u (0x%04x)\n", opcode, opcode);
-		printf("padding: %u (0x%04x)\n", padding, padding);
-		printf("base_addr: %u (0x%08x)\n", base_addr, base_addr);
+		for (int r = 0; r < 16; r++)
+			reg[r] = R_init[r];
+
+		thumbInstr decoded = decodeThumb(opcode);
+		thumbExecute(decoded);
+
+		pc += 2;
+
+		// Check results - compare ALL registers including PC
+		bool testPassed = true;
+
+		for (int r = 0; r < 16; r++)
+		{
+			if (reg[r] != R_final[r])
+			{
+				testPassed = false;
+				if (failuresShown < maxFailuresToShow)
+				{
+					printf("Test %d FAILED (opcode 0x%04x @ 0x%08x): r%d = 0x%08x, expected 0x%08x\n",
+						i, opcode, base_addr, r, reg[r], R_final[r]);
+				}
+			}
+		}
+
+		if (testPassed)
+			passed++;
+		else
+		{
+			failed++;
+			if (failuresShown < maxFailuresToShow)
+				failuresShown++;
+			else if (failuresShown == maxFailuresToShow)
+			{
+				printf("  ... (suppressing further failures)\n");
+				failuresShown++;
+			}
+		}
+
+		// Progress
+		if (i > 0 && i % 5000 == 0)
+			printf("  Progress: %d/%d... (%d passed, %d failed)\n",
+				i, numTests, passed, failed);
 	}
+
+	printf("\n========================================\n");
+	printf("Results: %d passed, %d failed out of %d\n",
+		passed, failed, numTests);
+	printf("========================================\n");
 
 	fclose(f);
 }
+
+//void logTest()
+//{
+//
+//	printf("=== TEST %d ===\n", i);
+//
+//	uint32_t R_init[16];
+//	fread(R_init, 4, 16, f);
+//	printf("R:\n");
+//	for (int i = 0; i < 16; i++)
+//		printf("  R[%d]: %u\n", i, R_init[i]);
+//
+//	uint32_t R_fiq_init[7];
+//	fread(R_fiq_init, 4, 7, f);
+//	printf("\nR_fiq:\n");
+//	for (int i = 0; i < 7; i++)
+//		printf("  R_fiq[%d]: %u\n", i, R_fiq_init[i]);
+//
+//	uint32_t R_svc_init[2];
+//	fread(R_svc_init, 4, 2, f);
+//	printf("\nR_svc:\n");
+//	for (int i = 0; i < 2; i++)
+//		printf("  R_svc[%d]: %u\n", i, R_svc_init[i]);
+//
+//	uint32_t R_abt_init[2];
+//	fread(R_abt_init, 4, 2, f);
+//	printf("\nR_abt:\n");
+//	for (int i = 0; i < 2; i++)
+//		printf("  R_abt[%d]: %u\n", i, R_abt_init[i]);
+//
+//	uint32_t R_irq_init[2];
+//	fread(R_irq_init, 4, 2, f);
+//	printf("\nR_irq:\n");
+//	for (int i = 0; i < 2; i++)
+//		printf("  R_irq[%d]: %u\n", i, R_irq_init[i]);
+//
+//	uint32_t R_und_init[2];
+//	fread(R_und_init, 4, 2, f);
+//	printf("\nR_und:\n");
+//	for (int i = 0; i < 2; i++)
+//		printf("  R_und[%d]: %u\n", i, R_und_init[i]);
+//
+//	uint32_t CPSR_init;
+//	fread(&CPSR_init, 4, 1, f);
+//	printf("\nCPSR: %u\n", CPSR_init);
+//
+//	uint32_t SPSR_init[5];
+//	fread(SPSR_init, 4, 5, f);
+//	printf("\nSPSR:\n");
+//	for (int i = 0; i < 5; i++)
+//		printf("  SPSR[%d]: %u\n", i, SPSR_init[i]);
+//
+//	uint32_t pipeline_init[2];
+//	fread(pipeline_init, 4, 2, f);
+//	printf("\npipeline:\n");
+//	for (int i = 0; i < 2; i++)
+//		printf("  pipeline[%d]: %u\n", i, pipeline_init[i]);
+//
+//	uint32_t access_init;
+//	fread(&access_init, 4, 1, f);
+//	printf("\naccess: %u\n", access_init);
+//
+//	uint64_t junk;
+//	fread(&junk, 8, 1, f);
+//
+//	// FINAL STATE
+//	printf("\n=== FINAL STATE ===\n");
+//
+//	uint32_t R_final[16];
+//	fread(R_final, 4, 16, f);
+//	printf("R (showing only changes):\n");
+//	for (int i = 0; i < 16; i++)
+//	{
+//		if (R_final[i] != R_init[i])
+//			printf("  R[%d]: %u (was %u)\n", i, R_final[i], R_init[i]);
+//	}
+//
+//	// Skip rest of final state for now
+//	uint32_t R_fiq_final[7];
+//	fread(R_fiq_final, 4, 7, f);
+//	printf("\nR_fiq:\n");
+//	for (int i = 0; i < 7; i++)
+//		printf("  R_fiq[%d]: %u\n", i, R_fiq_final[i]);
+//
+//	uint32_t R_svc_final[2];
+//	fread(R_svc_final, 4, 2, f);
+//	printf("\nR_svc:\n");
+//	for (int i = 0; i < 2; i++)
+//		printf("  R_svc[%d]: %u\n", i, R_svc_final[i]);
+//
+//	uint32_t R_abt_final[2];
+//	fread(R_abt_final, 4, 2, f);
+//	printf("\nR_abt:\n");
+//	for (int i = 0; i < 2; i++)
+//		printf("  R_abt[%d]: %u\n", i, R_abt_final[i]);
+//
+//	uint32_t R_irq_final[2];
+//	fread(R_irq_final, 4, 2, f);
+//	printf("\nR_irq:\n");
+//	for (int i = 0; i < 2; i++)
+//		printf("  R_irq[%d]: %u\n", i, R_irq_final[i]);
+//
+//	uint32_t R_und_final[2];
+//	fread(R_und_final, 4, 2, f);
+//	printf("\nR_und:\n");
+//	for (int i = 0; i < 2; i++)
+//		printf("  R_und[%d]: %u\n", i, R_und_final[i]);
+//
+//	uint32_t CPSR_final;
+//	fread(&CPSR_final, 4, 1, f);
+//	if (CPSR_final != CPSR_init)
+//		printf("\nCPSR: %u (was %u)\n", CPSR_final, CPSR_init);
+//
+//	uint32_t SPSR_final[5];
+//	fread(SPSR_final, 4, 5, f);
+//	printf("\nSPSR:\n");
+//	for (int i = 0; i < 5; i++)
+//		printf("  SPSR[%d]: %u\n", i, SPSR_final[i]);
+//
+//
+//	uint32_t pipeline_final[2];
+//	fread(pipeline_final, 4, 2, f);
+//	for (int i = 0; i < 2; i++)
+//		printf("  pipeline[%d]: %u\n", i, pipeline_final[i]);
+//
+//
+//
+//
+//	uint32_t access_final;
+//	fread(&access_final, 4, 1, f);
+//	printf("\naccess: %u\n", access_final);
+//
+//	uint32_t junkArr[3];
+//	fread(&junkArr, 4, 3, f);
+//
+//
+//	// TRANSACTIONS
+//	printf("\n=== TRANSACTIONS ===\n");
+//	uint32_t trans_kind, trans_size, trans_addr, trans_data, trans_cycle, trans_access;
+//	fread(&trans_kind, 4, 1, f);
+//	fread(&trans_size, 4, 1, f);
+//	fread(&trans_addr, 4, 1, f);
+//	fread(&trans_data, 4, 1, f);
+//	fread(&trans_cycle, 4, 1, f);
+//	fread(&trans_access, 4, 1, f);
+//
+//	printf("Transaction 0:\n");
+//	printf("  kind: %u\n", trans_kind);
+//	printf("  size: %u\n", trans_size);
+//	printf("  addr: %u\n", trans_addr);
+//	printf("  data: %u\n", trans_data);
+//	printf("  cycle: %u\n", trans_cycle);
+//	printf("  access: %u\n", trans_access);
+//
+//	// OPCODE and BASE_ADDR
+//	printf("\n=== OPCODE & BASE_ADDR ===\n");
+//
+//	uint32_t junkArr2[3];
+//	fread(&junkArr2, 4, 2, f);
+//
+//	uint16_t opcode, padding;
+//	uint32_t base_addr;
+//	fread(&opcode, 2, 1, f);
+//	fread(&padding, 2, 1, f);
+//	fread(&base_addr, 4, 1, f);
+//
+//	printf("opcode: %u (0x%04x)\n", opcode, opcode);
+//	printf("padding: %u (0x%04x)\n", padding, padding);
+//	printf("base_addr: %u (0x%08x)\n", base_addr, base_addr);
+//}
