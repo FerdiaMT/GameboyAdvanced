@@ -581,5 +581,6 @@ public:
 		}
 
 		void runThumbTests();
+		void runThumbTestsEXTRADEBUG();
 };
 

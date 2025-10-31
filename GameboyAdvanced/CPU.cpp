@@ -20,7 +20,7 @@ namespace Vector // use these for jumping
 }
 
 
-CPU::CPU(Bus* bus) : bus(bus) , sp(reg[13]) , lr(reg[14]) , pc(reg[15])
+CPU::CPU(Bus* bus) : bus(bus), sp(reg[13]), lr(reg[14]), pc(reg[15])
 {
 	reset();
 
@@ -35,7 +35,7 @@ void CPU::reset()
 	CPSR = static_cast<uint8_t>(mode::Supervisor) | 0xC0;
 	for (int i = 0; i < 16; i++) reg[i] = 0;
 	reg[13] = 0x03007F00;  // SP
-	pc = 0x08000000;  
+	pc = 0x08000000;
 	T = 0;  // DEFAULT TO ARM
 	N = Z = C = V = 0;
 	unbankRegisters(curMode);
@@ -53,7 +53,7 @@ uint32_t CPU::tick()
 
 		curOP = decode(instruction);
 
-		printf("MODE:%s ,PC: 0x%08X, Instruction: 0x%08X, Flags: %s , R12: %08X ,Opcode: %s, \n", 
+		printf("MODE:%s ,PC: 0x%08X, Instruction: 0x%08X, Flags: %s , R12: %08X ,Opcode: %s, \n",
 			"A",
 			pc - pcOffset(), instruction, CPSRtoString(), reg[12], opcodeToString(curOP));
 
@@ -66,7 +66,7 @@ uint32_t CPU::tick()
 		pc += 2;
 		curThumbInstr = decodeThumb(thumbCode);
 
-		printf("MODE:%s ,PC: 0x%08X, Instruction: 0x%04X    , Flags: %08X , R12: %s ,Opcode: %s  \n", 
+		printf("MODE:%s ,PC: 0x%08X, Instruction: 0x%04X    , Flags: %08X , R12: %s ,Opcode: %s  \n",
 			"T",
 			pc - pcOffset(), thumbCode, CPSRtoString(), reg[12], thumbToStr(curThumbInstr).c_str());
 
@@ -405,7 +405,7 @@ const char* CPU::CPSRtoString()
 	str[2] = C ? 'C' : '-';
 	str[3] = V ? 'V' : '-';
 	str[4] = '\0';
-	
+
 	return str;
 }
 
@@ -480,7 +480,7 @@ void CPU::switchMode(mode newMode) // main function used for mode switching, cal
 		unbankRegisters(newMode);
 	}
 
-	
+
 }
 
 void CPU::saveIntoSpsr(uint8_t index)
@@ -533,7 +533,7 @@ uint32_t CPU::getSPSR()
 	{
 		return spsrBank[idx - 1];
 	}
-	return CPSR; 
+	return CPSR;
 }
 void  CPU::setSPSR(uint32_t value)
 {
@@ -553,11 +553,11 @@ void CPU::writeCPSR(uint32_t value)
 
 	if (curMode != newMode) // if we should swap modes
 	{
-		switchMode(newMode); 
+		switchMode(newMode);
 	}
 	else
 	{
-		CPSR = value;  
+		CPSR = value;
 	}
 }
 
@@ -598,20 +598,20 @@ inline bool CPU::checkConditional(uint8_t cond) const
 
 const inline uint8_t CPU::pcOffset()
 {
-	return (T)? 2 : 4;
+	return (T) ? 2 : 4;
 }
 
 //HELPER FUNCTIONS FOR DATA PROCESSING
 
 
 
-const inline uint8_t CPU::DPgetRn() {return (instruction >> 16) & 0xF;}
-const inline uint8_t CPU::DPgetRd() {return (instruction >> 12) & 0xF;}
+const inline uint8_t CPU::DPgetRn() { return (instruction >> 16) & 0xF; }
+const inline uint8_t CPU::DPgetRd() { return (instruction >> 12) & 0xF; }
 const inline uint8_t CPU::DPgetRs() { return (instruction >> 8) & 0xF; }
-const inline uint8_t CPU::DPgetRm() { return instruction & 0xF;}
+const inline uint8_t CPU::DPgetRm() { return instruction & 0xF; }
 const inline uint8_t CPU::DPgetShift() { return (instruction >> 4) & 0xFF; }
 const inline uint8_t CPU::DPgetImmed() { return instruction & 0xFF; }
-const inline uint8_t CPU::DPgetRotate() { return (2 * ((instruction >> 8) & 0xF) ); }
+const inline uint8_t CPU::DPgetRotate() { return (2 * ((instruction >> 8) & 0xF)); }
 const inline bool CPU::DPs() { return (instruction >> 20) & 0b1; } // condition code
 const inline bool CPU::DPi() { return (instruction >> 25) & 0b1; } // immediate code
 const inline uint8_t CPU::DPgetShiftAmount(uint8_t shift)
@@ -648,7 +648,7 @@ inline uint32_t CPU::DPshiftLSL(uint32_t value, uint8_t shift_amount, bool* carr
 		return 0;
 	}
 }
-inline uint32_t CPU::DPshiftLSR(uint32_t value, uint8_t shift_amount, bool* carry_out) 
+inline uint32_t CPU::DPshiftLSR(uint32_t value, uint8_t shift_amount, bool* carry_out)
 {
 	if (shift_amount == 0) shift_amount = 32;
 	if (shift_amount < 32)
@@ -667,7 +667,7 @@ inline uint32_t CPU::DPshiftLSR(uint32_t value, uint8_t shift_amount, bool* carr
 		return 0;
 	}
 }
-inline uint32_t CPU::DPshiftASR(uint32_t value, uint8_t shift_amount, bool* carry_out) 
+inline uint32_t CPU::DPshiftASR(uint32_t value, uint8_t shift_amount, bool* carry_out)
 {
 	if (shift_amount == 0) shift_amount = 32;
 	if (shift_amount < 32)
@@ -689,7 +689,7 @@ inline uint32_t CPU::DPshiftASR(uint32_t value, uint8_t shift_amount, bool* carr
 		}
 	}
 }
-inline uint32_t CPU::DPshiftROR(uint32_t value, uint8_t shift_amount, bool* carry_out) 
+inline uint32_t CPU::DPshiftROR(uint32_t value, uint8_t shift_amount, bool* carry_out)
 {
 	if (shift_amount == 0)
 	{
@@ -699,13 +699,14 @@ inline uint32_t CPU::DPshiftROR(uint32_t value, uint8_t shift_amount, bool* carr
 	}
 	else
 	{
-		shift_amount &= 0x1F; 
+		shift_amount &= 0x1F;
 		if (shift_amount == 0) return value;
 		if (carry_out) *carry_out = (value >> (shift_amount - 1)) & 1;
 		return (value >> shift_amount) | (value << (32 - shift_amount));
 	}
 }
-inline uint32_t CPU::DPgetOp2(bool* carryFlag) {
+inline uint32_t CPU::DPgetOp2(bool* carryFlag)
+{
 
 	if (DPi()) // if immediate mode bit is set
 	{
@@ -721,7 +722,7 @@ inline uint32_t CPU::DPgetOp2(bool* carryFlag) {
 	}
 	else // using the register shift
 	{
-		
+
 		uint8_t rmVal = reg[DPgetRm()]; // this is the rms inside val we will shift
 		uint8_t shift = DPgetShift(); // this is a very general purpouse value we will have to extract from now
 
@@ -755,7 +756,7 @@ inline void CPU::setFlagsSub(uint32_t res, uint32_t op1, uint32_t op2) // SUB CH
 {
 	N = (res & 0x80000000) != 0;
 	Z = (res == 0);
-	C = (op1 >= op2); 
+	C = (op1 >= op2);
 	V = (((op1 ^ op2) & (op1 ^ res)) & 0x80000000) != 0;
 }
 inline void CPU::setNZ(uint32_t res) // TEST CHECK
@@ -787,11 +788,11 @@ inline void CPU::writeALUResult(uint8_t rdI, uint32_t result, bool s)
 
 inline int CPU::dataProcessingCycleCalculator()
 {
-	int cycles = 1; 
+	int cycles = 1;
 
-	if (!DPi() && (DPgetShift() & 0b1)) cycles+=1;
+	if (!DPi() && (DPgetShift() & 0b1)) cycles += 1;
 
-	if (DPgetRd() == 15) cycles += 3; 
+	if (DPgetRd() == 15) cycles += 3;
 
 	return cycles;
 }
@@ -810,12 +811,12 @@ inline int CPU::op_BX()
 	if (newAddr & 0b1) // 1 = THUMB
 	{
 		T = 1;
-		pc = (newAddr+4) & 0xFFFFFFFE; //clears bit for valid 2 jumping
+		pc = (newAddr + 4) & 0xFFFFFFFE; //clears bit for valid 2 jumping
 	}
 	else // 0 = arm
 	{
 		T = 0;
-		pc = (newAddr+4) & 0xFFFFFFFC; // sets it to a valid num for +4 jumping 
+		pc = (newAddr + 4) & 0xFFFFFFFC; // sets it to a valid num for +4 jumping 
 	}
 
 	return 3; // constant
@@ -1108,7 +1109,7 @@ inline int CPU::op_MUL()
 	uint8_t rs = reg[(instruction >> 8) & 0xF];
 	uint8_t rdI = (instruction >> 16) & 0xF;
 
-	uint32_t res = (static_cast<uint64_t>(rm) * static_cast<uint64_t>(rs))&0xFFFFFFFF;
+	uint32_t res = (static_cast<uint64_t>(rm) * static_cast<uint64_t>(rs)) & 0xFFFFFFFF;
 	reg[rdI] = res;
 
 	if ((instruction >> 20) & 0b1) // set flags
@@ -1119,10 +1120,10 @@ inline int CPU::op_MUL()
 
 	//shortcutting the booths algo here
 	uint8_t m = 0;
-	if ((rs & 0xFFFFFF00) == 0 || (rs & 0xFFFFFF00) == 0xFFFFFF00) m= 1;
-	else if ((rs & 0xFFFF0000) == 0 || (rs & 0xFFFF0000) == 0xFFFF0000) m= 2;
-	else if ((rs & 0xFF000000) == 0 || (rs & 0xFF000000) == 0xFF000000) m= 3;
-	else m= 4;
+	if ((rs & 0xFFFFFF00) == 0 || (rs & 0xFFFFFF00) == 0xFFFFFF00) m = 1;
+	else if ((rs & 0xFFFF0000) == 0 || (rs & 0xFFFF0000) == 0xFFFF0000) m = 2;
+	else if ((rs & 0xFF000000) == 0 || (rs & 0xFF000000) == 0xFF000000) m = 3;
+	else m = 4;
 
 	return m + 2;
 }
@@ -1131,7 +1132,7 @@ inline int CPU::op_MLA()
 	uint8_t rm = reg[instruction & 0xF];
 	uint8_t rs = reg[(instruction >> 8) & 0xF];
 	uint8_t rn = reg[(instruction >> 12) & 0xF];
-	uint8_t rdI = (instruction >> 16 & 0xF) ;
+	uint8_t rdI = (instruction >> 16 & 0xF);
 
 	uint32_t res = rm * rs + rn;
 	reg[rdI] = res;
@@ -1201,7 +1202,7 @@ inline uint32_t SDOffset(bool u, uint32_t newAddr, uint32_t offset)
 
 inline int CPU::op_LDR()
 {
-	
+
 	uint8_t rdI = (instruction >> 12) & 0xF;
 	uint8_t rnI = (instruction >> 16) & 0xF;
 
@@ -1216,12 +1217,12 @@ inline int CPU::op_LDR()
 	uint32_t offset = instruction & 0x0FFF;
 	if (i) // use reg and rm shift
 	{
-		offset = SDapplyShift(reg[(instruction & 0xF )], ((instruction >> 5) & 0x3), ((instruction >> 7) & 0x1F));
-	} 
+		offset = SDapplyShift(reg[(instruction & 0xF)], ((instruction >> 5) & 0x3), ((instruction >> 7) & 0x1F));
+	}
 
 
 
-	if (p) newAddr = SDOffset(u, newAddr,offset);
+	if (p) newAddr = SDOffset(u, newAddr, offset);
 
 	uint32_t readVal;
 	if (b) readVal = read8(newAddr);
@@ -1266,7 +1267,7 @@ inline int CPU::op_STR()
 	uint32_t valToStore = reg[rdI];
 	if (rdI == 15) valToStore += pcOffset();
 
-	if (b) write8(newAddr , valToStore &0xFF);
+	if (b) write8(newAddr, valToStore & 0xFF);
 	else write32(newAddr & ~3, valToStore);
 
 	if (!p) newAddr = SDOffset(u, newAddr, offset);
@@ -1345,7 +1346,7 @@ inline int CPU::op_LDRSB() //load signed byte
 
 	if (p) newAddr = SDOffset(u, newAddr, offset);
 
-	int8_t byteVal= read8(newAddr);
+	int8_t byteVal = read8(newAddr);
 	uint32_t readVal = static_cast<int32_t>(byteVal);
 
 	if (!p) newAddr = SDOffset(u, newAddr, offset);
@@ -1407,7 +1408,7 @@ inline int numOfRegisters(uint16_t registerList)
 inline int CPU::op_LDM()
 {
 	uint16_t registerList = instruction & 0xFFFF;
-	uint8_t rnI = (instruction>>16) & 0xF;
+	uint8_t rnI = (instruction >> 16) & 0xF;
 	bool w = (instruction >> 21) & 0b1;
 	bool s = (instruction >> 22) & 0b1; // 1 ~ load PSR / force user mode, else dont
 	bool u = (instruction >> 23) & 0b1;
@@ -1461,7 +1462,7 @@ inline int CPU::op_LDM()
 		if (reg[15] & 0x1) // thumb switching
 		{
 			T = true;
-			reg[15] &= ~0x1;  
+			reg[15] &= ~0x1;
 		}
 		else
 		{
@@ -1483,7 +1484,7 @@ inline int CPU::op_STM()
 	bool p = (instruction >> 24) & 0b1;
 
 	int numRegs = numOfRegisters(registerList);
-	if (numRegs == 0) return 1; 
+	if (numRegs == 0) return 1;
 
 	uint32_t startAddr = reg[rnI];
 	if (!u) startAddr -= (numRegs * 4);  // if down bit, subtract now
@@ -1493,7 +1494,7 @@ inline int CPU::op_STM()
 	uint32_t addr = startAddr;
 	for (uint8_t i = 0; i < 16; i++)
 	{
-		if (!((registerList >> i) & 0b1)) continue;  
+		if (!((registerList >> i) & 0b1)) continue;
 
 		if (p) addr += 4;  // pre increment
 
@@ -1502,7 +1503,7 @@ inline int CPU::op_STM()
 		{
 			// standard use
 			val = reg[i];
-			if (i == 15) val += 4;  
+			if (i == 15) val += 4;
 		}
 		else
 		{
@@ -1554,7 +1555,7 @@ inline int CPU::op_SWP() { return 1; }
 
 inline int CPU::op_SWPB() { return 1; }
 
-inline int CPU::op_LDC()  { return 1; }
+inline int CPU::op_LDC() { return 1; }
 inline int CPU::op_STC() { return 1; }
 inline int CPU::op_CDP() { return 1; }
 inline int CPU::op_MRC() { return 1; }
@@ -1589,7 +1590,7 @@ CPU::thumbInstr CPU::debugDecodedInstr()
 	debugInstr.h2 = NULL;
 
 	return debugInstr;
-}	
+}
 
 CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr struct
 {
@@ -1624,7 +1625,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 			switch ((instr >> 9) & 0b11)
 			{// 00 reg and, 01, reg sub, 10 immed and, 11 immed sub
 			case(0b00): decodedInstr.rn = (instr >> 6) & 0b111; decodedInstr.type = thumbOperation::THUMB_ADD_REG; break;
-			case(0b01): decodedInstr.rn = (instr >> 6) & 0b111; decodedInstr.type =  thumbOperation::THUMB_SUB_REG; break;
+			case(0b01): decodedInstr.rn = (instr >> 6) & 0b111; decodedInstr.type = thumbOperation::THUMB_SUB_REG; break;
 			case(0b10): decodedInstr.imm = (instr >> 6) & 0b111;decodedInstr.type = thumbOperation::THUMB_ADD_IMM; break;
 			case(0b11): decodedInstr.imm = (instr >> 6) & 0b111;decodedInstr.type = thumbOperation::THUMB_SUB_IMM; break;
 			}
@@ -1694,7 +1695,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 		}
 		else if (((instr >> 11) & 0b11) == 0b01) // pc relative load
 		{
-			decodedInstr.imm = ((instr) & 0xFF)<<2;
+			decodedInstr.imm = ((instr) & 0xFF) << 2;
 			decodedInstr.rd = (instr >> 8) & 0b111;
 
 			decodedInstr.type = thumbOperation::THUMB_LDR_PC;
@@ -1823,7 +1824,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 		else if (((instr >> 8) & 0b11111) != 0b11111) //  conditional branch (done by making sure it isnt SWI first)
 		{
 			decodedInstr.cond = (instr >> 8) & 0b1111;
-			int8_t offset8 = (instr & 0xFF); 
+			int8_t offset8 = (instr & 0xFF);
 			decodedInstr.imm = (int32_t)offset8 << 1;
 
 			decodedInstr.type = thumbOperation::THUMB_B_COND;
@@ -1847,7 +1848,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 		else // (long branch w/link)
 		{
 			decodedInstr.imm = (instr & 0x7FF);
-			if (! ((instr >> 11) & 0b1))
+			if (!((instr >> 11) & 0b1))
 			{
 				int16_t offset11 = (instr & 0x7FF);
 				if (offset11 & 0x400) offset11 |= 0xF800;
@@ -1856,7 +1857,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 				decodedInstr.type = thumbOperation::THUMB_BL_PREFIX;
 			}
 			else
-			{ 
+			{
 				decodedInstr.imm = decodedInstr.imm << 1;
 				decodedInstr.type = thumbOperation::THUMB_BL_SUFFIX;
 			}
@@ -2051,7 +2052,7 @@ inline int CPU::opT_EOR_REG(thumbInstr instr)
 inline int CPU::opT_LSL_REG(thumbInstr instr)
 {
 	uint32_t shift = reg[instr.rs] & 0xFF;
-	if (shift == 0){}
+	if (shift == 0) {}
 	else if (shift < 32)
 	{
 		C = (reg[instr.rd] >> (32 - shift)) & 1;
@@ -2075,7 +2076,7 @@ inline int CPU::opT_LSL_REG(thumbInstr instr)
 inline int CPU::opT_LSR_REG(thumbInstr instr)
 {
 	uint32_t shift = reg[instr.rs] & 0xFF;
-	if (shift == 0){}
+	if (shift == 0) {}
 	else if (shift < 32)
 	{
 		C = (reg[instr.rd] >> (shift - 1)) & 1;
@@ -2100,7 +2101,7 @@ inline int CPU::opT_ASR_REG(thumbInstr instr)
 {
 	uint32_t shift = reg[instr.rs] & 0xFF;
 	int32_t value = (int32_t)reg[instr.rd];
-	if (shift == 0){}
+	if (shift == 0) {}
 	else if (shift < 32)
 	{
 		C = (value >> (shift - 1)) & 1;
@@ -2141,7 +2142,7 @@ inline int CPU::opT_SBC_REG(thumbInstr instr)
 inline int CPU::opT_ROR_REG(thumbInstr instr)
 {
 	uint32_t shift = reg[instr.rs] & 0xFF;
-	if (shift == 0){}
+	if (shift == 0) {}
 	else
 	{
 		shift = shift & 0x1F;
@@ -2255,7 +2256,7 @@ inline int CPU::opT_BX(thumbInstr instr)
 	{
 		T = 1;
 		pc = target & ~1; // keep thumb
-		
+
 	}
 	else
 	{
@@ -2268,14 +2269,14 @@ inline int CPU::opT_BX(thumbInstr instr)
 inline int CPU::opT_BLX_REG(thumbInstr instr)
 {
 	uint32_t target = reg[instr.rs];
-	lr = (pc - 2) | 1; 
+	lr = (pc - 2) | 1;
 	if (target & 1)
 	{
-		pc = target & ~1; 
+		pc = target & ~1;
 	}
 	else
 	{
-		T = 0;           
+		T = 0;
 		pc = target & ~3;
 	}
 	return 3;
@@ -2283,7 +2284,7 @@ inline int CPU::opT_BLX_REG(thumbInstr instr)
 
 inline int CPU::opT_LDR_PC(thumbInstr instr)
 {
-	uint32_t address = ((pc+4) & ~2) + instr.imm;
+	uint32_t address = ((pc + 4) & ~2) + instr.imm;
 	reg[instr.rd] = read32(address);
 	return 3;
 }
@@ -2404,7 +2405,7 @@ inline int CPU::opT_STR_SP(thumbInstr instr)
 
 inline int CPU::opT_ADD_PC(thumbInstr instr)
 {
-	reg[instr.rd] = (pc+4 & ~2) + instr.imm;
+	reg[instr.rd] = (pc + 4 & ~2) + instr.imm;
 	return 1;
 }
 
@@ -2417,7 +2418,7 @@ inline int CPU::opT_ADD_SP(thumbInstr instr)
 
 inline int CPU::opT_ADD_SP_IMM(thumbInstr instr)
 {
-	sp = sp + (int32_t)instr.imm;  
+	sp = sp + (int32_t)instr.imm;
 	reg[instr.rd] = sp;
 	return 1;
 }
@@ -2474,7 +2475,7 @@ inline int CPU::opT_LDMIA(thumbInstr instr)
 			address += 4;
 		}
 	}
-	reg[instr.rs] = address; 
+	reg[instr.rs] = address;
 	return 1 + countSetBits(instr.imm & 0xFF);
 }
 
@@ -2483,7 +2484,7 @@ inline int CPU::opT_B_COND(thumbInstr instr)
 	if (checkConditional((uint8_t)instr.cond & 0xFF))
 	{
 
-		pc = pc + 4 + (int32_t)instr.imm; 
+		pc = pc + 4 + (int32_t)instr.imm;
 	}
 	return 3;
 }
@@ -2491,24 +2492,24 @@ inline int CPU::opT_B_COND(thumbInstr instr)
 inline int CPU::opT_B(thumbInstr instr)
 {
 
-	pc = pc + 4 + (int32_t)instr.imm; 
+	pc = pc + 2 + (int32_t)instr.imm;
 	return 3;
 }
 
 inline int CPU::opT_BL_PREFIX(thumbInstr instr)
 {
 
-	lr = pc + 4 + (int32_t)instr.imm;  
+	lr = pc + 4 + (int32_t)instr.imm;
 	return 1;
 }
 
 inline int CPU::opT_BL_SUFFIX(thumbInstr instr)
 {
 
-	uint32_t target = lr + (int32_t)instr.imm; 
+	uint32_t target = lr + (int32_t)instr.imm;
 
-	lr = (pc + 2) | 1;  
-	pc = target & ~1;  
+	lr = (pc + 2) | 1;
+	pc = target & ~1;
 	return 3;
 }
 
@@ -2531,7 +2532,7 @@ inline int CPU::opT_UNDEFINED(thumbInstr instr)
 ///             READ FUNCTIONS            ///
 /////////////////////////////////////////////
 
-uint8_t CPU::read8(uint32_t addr , bool bReadOnly)
+uint8_t CPU::read8(uint32_t addr, bool bReadOnly)
 {
 	return bus->read8(addr);
 }
@@ -2899,17 +2900,20 @@ std::string CPU::thumbToStr(CPU::thumbInstr& instr)
 //		thumb_add_sp_or_pc.json.bin - 34 passed
 //		thumb_add_sub.json.bin -  50000 passed
 //		thumb_add_sub_sp.json.bin- 0 passed
-//		thumb_b.json.bin - 6 passed
+
 //		thumb_bcc.json.bin - 216 passed
 //		thumb_bl_blx_prefix.json - 0 passed
 //		thumb_bl_suffix.json.bin - o passed
 //	     thumb_bx.json - 0 passed
 //		thumb_data_proc.json - 46813 passed
 //		thumb_ldm_stm.json.bin - 1 passed
+//		thumb_ldr_pc_rel.json.bin =- 0
+//       thumb_ldr_str_imm_offset.json - 5542
+
 
 void CPU::runThumbTests()
 {
-	const char* str = "thumb_ldm_stm.json.bin";
+	const char* str = "thumb_bl_suffix.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -2926,123 +2930,139 @@ void CPU::runThumbTests()
 	uint32_t magic, numTests, testSize, stateSize, val;
 	fread(&magic, 4, 1, f);
 	fread(&numTests, 4, 1, f);
-	fread(&testSize, 4, 1, f);
-	fread(&stateSize, 4, 1, f);
-	fread(&val, 4, 1, f);
+
 
 	printf("Magic: 0x%08x\n", magic);
 	printf("Number of tests: %d\n\n", numTests);
 
+
 	for (int i = 0; i < numTests; i++)
 	{
-		fseek(f, 0x14 + (i * testSize), SEEK_SET);
-
-
-		//LOAD ALL VALUES from file
-
-		uint32_t R_init[16];
-		fread(R_init, 4, 16, f);
-		uint32_t R_fiq_init[7];
-		fread(R_fiq_init, 4, 7, f);
-		uint32_t R_svc_init[2];
-		fread(R_svc_init, 4, 2, f);
-		uint32_t R_abt_init[2];
-		fread(R_abt_init, 4, 2, f);
-		uint32_t R_irq_init[2];
-		fread(R_irq_init, 4, 2, f);
-		uint32_t R_und_init[2];
-		fread(R_und_init, 4, 2, f);
-		uint32_t CPSR_init;
-		fread(&CPSR_init, 4, 1, f);
-		uint32_t SPSR_init[5];
-		fread(SPSR_init, 4, 5, f);
-		uint32_t pipeline_init[2];
-		fread(pipeline_init, 4, 2, f);
-		uint32_t access_init;
-		fread(&access_init, 4, 1, f);
-		uint64_t junk;
-		fread(&junk, 8, 1, f);
-		uint32_t R_final[16];
-		fread(R_final, 4, 16, f);
-		uint32_t R_fiq_final[7];
-		fread(R_fiq_final, 4, 7, f);
-		uint32_t R_svc_final[2];
-		fread(R_svc_final, 4, 2, f);
-		uint32_t R_abt_final[2];
-		fread(R_abt_final, 4, 2, f);
-		uint32_t R_irq_final[2];
-		fread(R_irq_final, 4, 2, f);
-		uint32_t R_und_final[2];
-		fread(R_und_final, 4, 2, f);
-		uint32_t CPSR_final;
-		fread(&CPSR_final, 4, 1, f);
-
-
-		uint32_t SPSR_final[5];
-		fread(SPSR_final, 4, 5, f);
-		uint32_t pipeline_final[2];
-		fread(pipeline_final, 4, 2, f);
-		uint32_t access_final;
-		fread(&access_final, 4, 1, f);
-		uint32_t junkArr[3];
-		fread(&junkArr, 4, 3, f);
-		uint32_t trans_kind, trans_size, trans_addr, trans_data, trans_cycle, trans_access;
-		fread(&trans_kind, 4, 1, f);
-		fread(&trans_size, 4, 1, f);
-		fread(&trans_addr, 4, 1, f);
-		fread(&trans_data, 4, 1, f);
-		fread(&trans_cycle, 4, 1, f);
-		fread(&trans_access, 4, 1, f);
-		uint32_t junkArr2[3];
-		fread(&junkArr2, 4, 2, f);
-		uint16_t opcode, padding;
-		uint32_t base_addr;
-		fread(&opcode, 2, 1, f);
-		fread(&padding, 2, 1, f);
-		fread(&base_addr, 4, 1, f);
-
-		for (int r = 0; r < 16; r++)
-			reg[r] = R_init[r];
-
-		thumbInstr decoded = decodeThumb(opcode);
-		thumbExecute(decoded);
-
-		pc += 2;
-
-		// Check results - compare ALL registers including PC
-		bool testPassed = true;
-
-		for (int r = 0; r < 16; r++)
+		if (i>=0)
 		{
-			if (reg[r] != R_final[r])
+			fread(&testSize, 4, 1, f);
+			fread(&stateSize, 4, 1, f);
+			fread(&val, 4, 1, f);
+			int amtOfTransactions = (testSize - 368) / 24;
+			uint32_t R_init[16];
+			fread(R_init, 4, 16, f);
+			uint32_t R_fiq_init[7];
+			fread(R_fiq_init, 4, 7, f);
+			uint32_t R_svc_init[2];
+			fread(R_svc_init, 4, 2, f);
+			uint32_t R_abt_init[2];
+			fread(R_abt_init, 4, 2, f);
+			uint32_t R_irq_init[2];
+			fread(R_irq_init, 4, 2, f);
+			uint32_t R_und_init[2];
+			fread(R_und_init, 4, 2, f);
+			uint32_t CPSR_init;
+			fread(&CPSR_init, 4, 1, f);
+			uint32_t SPSR_init[5];
+			fread(SPSR_init, 4, 5, f);
+			uint32_t pipeline_init[2];
+			fread(pipeline_init, 4, 2, f);
+			uint32_t access_init;
+			fread(&access_init, 4, 1, f);
+			uint32_t junkA;
+			fread(&junkA, 4, 1, f);
+			uint32_t junkB;
+			fread(&junkB, 4, 1, f);
+			uint32_t R_final[16];
+			fread(R_final, 4, 16, f);
+			uint32_t R_fiq_final[7];
+			fread(R_fiq_final, 4, 7, f);
+			uint32_t R_svc_final[2];
+			fread(R_svc_final, 4, 2, f);
+			uint32_t R_abt_final[2];
+			fread(R_abt_final, 4, 2, f);
+			uint32_t R_irq_final[2];
+			fread(R_irq_final, 4, 2, f);
+			uint32_t R_und_final[2];
+			fread(R_und_final, 4, 2, f);
+			uint32_t CPSR_final;
+			fread(&CPSR_final, 4, 1, f);
+			uint32_t SPSR_final[5];
+			fread(SPSR_final, 4, 5, f);
+			uint32_t pipeline_final[2];
+			fread(pipeline_final, 4, 2, f);
+			uint32_t access_final;
+			fread(&access_final, 4, 1, f);;
+			junkA;
+			fread(&junkA, 4, 1, f);
+			junkB;
+			fread(&junkB, 4, 1, f);
+			uint32_t junkC;
+			fread(&junkC, 4, 1, f);
+			// TRANSACTIONS
+			int transactionCounter = 0;
+			while (transactionCounter < amtOfTransactions)
 			{
-				testPassed = false;
-				if (failuresShown < maxFailuresToShow)
+				uint32_t trans_kind, trans_size, trans_addr, trans_data, trans_cycle, trans_access;
+				fread(&trans_kind, 4, 1, f);
+				fread(&trans_size, 4, 1, f);
+				fread(&trans_addr, 4, 1, f);
+				fread(&trans_data, 4, 1, f);
+				fread(&trans_cycle, 4, 1, f);
+				fread(&trans_access, 4, 1, f);
+				transactionCounter++;
+
+			}
+			uint32_t junkArr2[3];
+			fread(&junkArr2, 4, 2, f);
+			uint16_t opcode, padding;
+			uint32_t base_addr;
+			fread(&opcode, 2, 1, f);
+			fread(&padding, 2, 1, f);
+			fread(&base_addr, 4, 1, f);
+
+			//load register
+			for (int r = 0; r < 16; r++)
+				reg[r] = R_init[r];
+
+			///DECODE / EXECUTE
+
+			thumbInstr decoded = decodeThumb(opcode);
+			pc += 2;
+			thumbExecute(decoded);
+
+
+			// Check results - compare ALL registers including PC
+			bool testPassed = true;
+
+			for (int r = 0; r < 16; r++)
+			{
+				if (reg[r] != R_final[r])
 				{
-					printf("Test %d FAILED (opcode 0x%04x @ 0x%08x): r%d = 0x%08x, expected 0x%08x\n",
-						i, opcode, base_addr, r, reg[r], R_final[r]);
+					testPassed = false;
+					if (failuresShown < maxFailuresToShow)
+					{
+						printf("Test %d FAILED (opcode 0x%04x @ 0x%08x): r%d = 0x%08x, expected 0x%08x\n",
+							i, opcode, base_addr, r, reg[r], R_final[r]);
+					}
 				}
 			}
-		}
 
-		if (testPassed)
-			passed++;
-		else
-		{
-			failed++;
-			if (failuresShown < maxFailuresToShow)
-				failuresShown++;
-			else if (failuresShown == maxFailuresToShow)
+			if (testPassed)
+				passed++;
+			else
 			{
-				printf("  ... (suppressing further failures)\n");
-				failuresShown++;
+				failed++;
+				if (failuresShown < maxFailuresToShow)
+					failuresShown++;
+				else if (failuresShown == maxFailuresToShow)
+				{
+					printf("  ... (suppressing further failures)\n");
+					failuresShown++;
+				}
 			}
+
+			// Progress
+			if (i > 0 && i % 5000 == 0)
+				printf("  Progress: %d/%d... (%d passed, %d failed)\n",
+					i, numTests, passed, failed);
 		}
 
-		// Progress
-		if (i > 0 && i % 5000 == 0)
-			printf("  Progress: %d/%d... (%d passed, %d failed)\n",
-				i, numTests, passed, failed);
 	}
 
 	printf("\n========================================\n");
@@ -3053,172 +3073,288 @@ void CPU::runThumbTests()
 	fclose(f);
 }
 
-//void logTest()
-//{
-//
-//	printf("=== TEST %d ===\n", i);
-//
-//	uint32_t R_init[16];
-//	fread(R_init, 4, 16, f);
-//	printf("R:\n");
-//	for (int i = 0; i < 16; i++)
-//		printf("  R[%d]: %u\n", i, R_init[i]);
-//
-//	uint32_t R_fiq_init[7];
-//	fread(R_fiq_init, 4, 7, f);
-//	printf("\nR_fiq:\n");
-//	for (int i = 0; i < 7; i++)
-//		printf("  R_fiq[%d]: %u\n", i, R_fiq_init[i]);
-//
-//	uint32_t R_svc_init[2];
-//	fread(R_svc_init, 4, 2, f);
-//	printf("\nR_svc:\n");
-//	for (int i = 0; i < 2; i++)
-//		printf("  R_svc[%d]: %u\n", i, R_svc_init[i]);
-//
-//	uint32_t R_abt_init[2];
-//	fread(R_abt_init, 4, 2, f);
-//	printf("\nR_abt:\n");
-//	for (int i = 0; i < 2; i++)
-//		printf("  R_abt[%d]: %u\n", i, R_abt_init[i]);
-//
-//	uint32_t R_irq_init[2];
-//	fread(R_irq_init, 4, 2, f);
-//	printf("\nR_irq:\n");
-//	for (int i = 0; i < 2; i++)
-//		printf("  R_irq[%d]: %u\n", i, R_irq_init[i]);
-//
-//	uint32_t R_und_init[2];
-//	fread(R_und_init, 4, 2, f);
-//	printf("\nR_und:\n");
-//	for (int i = 0; i < 2; i++)
-//		printf("  R_und[%d]: %u\n", i, R_und_init[i]);
-//
-//	uint32_t CPSR_init;
-//	fread(&CPSR_init, 4, 1, f);
-//	printf("\nCPSR: %u\n", CPSR_init);
-//
-//	uint32_t SPSR_init[5];
-//	fread(SPSR_init, 4, 5, f);
-//	printf("\nSPSR:\n");
-//	for (int i = 0; i < 5; i++)
-//		printf("  SPSR[%d]: %u\n", i, SPSR_init[i]);
-//
-//	uint32_t pipeline_init[2];
-//	fread(pipeline_init, 4, 2, f);
-//	printf("\npipeline:\n");
-//	for (int i = 0; i < 2; i++)
-//		printf("  pipeline[%d]: %u\n", i, pipeline_init[i]);
-//
-//	uint32_t access_init;
-//	fread(&access_init, 4, 1, f);
-//	printf("\naccess: %u\n", access_init);
-//
-//	uint64_t junk;
-//	fread(&junk, 8, 1, f);
-//
-//	// FINAL STATE
-//	printf("\n=== FINAL STATE ===\n");
-//
-//	uint32_t R_final[16];
-//	fread(R_final, 4, 16, f);
-//	printf("R (showing only changes):\n");
-//	for (int i = 0; i < 16; i++)
-//	{
-//		if (R_final[i] != R_init[i])
-//			printf("  R[%d]: %u (was %u)\n", i, R_final[i], R_init[i]);
-//	}
-//
-//	// Skip rest of final state for now
-//	uint32_t R_fiq_final[7];
-//	fread(R_fiq_final, 4, 7, f);
-//	printf("\nR_fiq:\n");
-//	for (int i = 0; i < 7; i++)
-//		printf("  R_fiq[%d]: %u\n", i, R_fiq_final[i]);
-//
-//	uint32_t R_svc_final[2];
-//	fread(R_svc_final, 4, 2, f);
-//	printf("\nR_svc:\n");
-//	for (int i = 0; i < 2; i++)
-//		printf("  R_svc[%d]: %u\n", i, R_svc_final[i]);
-//
-//	uint32_t R_abt_final[2];
-//	fread(R_abt_final, 4, 2, f);
-//	printf("\nR_abt:\n");
-//	for (int i = 0; i < 2; i++)
-//		printf("  R_abt[%d]: %u\n", i, R_abt_final[i]);
-//
-//	uint32_t R_irq_final[2];
-//	fread(R_irq_final, 4, 2, f);
-//	printf("\nR_irq:\n");
-//	for (int i = 0; i < 2; i++)
-//		printf("  R_irq[%d]: %u\n", i, R_irq_final[i]);
-//
-//	uint32_t R_und_final[2];
-//	fread(R_und_final, 4, 2, f);
-//	printf("\nR_und:\n");
-//	for (int i = 0; i < 2; i++)
-//		printf("  R_und[%d]: %u\n", i, R_und_final[i]);
-//
-//	uint32_t CPSR_final;
-//	fread(&CPSR_final, 4, 1, f);
-//	if (CPSR_final != CPSR_init)
-//		printf("\nCPSR: %u (was %u)\n", CPSR_final, CPSR_init);
-//
-//	uint32_t SPSR_final[5];
-//	fread(SPSR_final, 4, 5, f);
-//	printf("\nSPSR:\n");
-//	for (int i = 0; i < 5; i++)
-//		printf("  SPSR[%d]: %u\n", i, SPSR_final[i]);
-//
-//
-//	uint32_t pipeline_final[2];
-//	fread(pipeline_final, 4, 2, f);
-//	for (int i = 0; i < 2; i++)
-//		printf("  pipeline[%d]: %u\n", i, pipeline_final[i]);
-//
-//
-//
-//
-//	uint32_t access_final;
-//	fread(&access_final, 4, 1, f);
-//	printf("\naccess: %u\n", access_final);
-//
-//	uint32_t junkArr[3];
-//	fread(&junkArr, 4, 3, f);
-//
-//
-//	// TRANSACTIONS
-//	printf("\n=== TRANSACTIONS ===\n");
-//	uint32_t trans_kind, trans_size, trans_addr, trans_data, trans_cycle, trans_access;
-//	fread(&trans_kind, 4, 1, f);
-//	fread(&trans_size, 4, 1, f);
-//	fread(&trans_addr, 4, 1, f);
-//	fread(&trans_data, 4, 1, f);
-//	fread(&trans_cycle, 4, 1, f);
-//	fread(&trans_access, 4, 1, f);
-//
-//	printf("Transaction 0:\n");
-//	printf("  kind: %u\n", trans_kind);
-//	printf("  size: %u\n", trans_size);
-//	printf("  addr: %u\n", trans_addr);
-//	printf("  data: %u\n", trans_data);
-//	printf("  cycle: %u\n", trans_cycle);
-//	printf("  access: %u\n", trans_access);
-//
-//	// OPCODE and BASE_ADDR
-//	printf("\n=== OPCODE & BASE_ADDR ===\n");
-//
-//	uint32_t junkArr2[3];
-//	fread(&junkArr2, 4, 2, f);
-//
-//	uint16_t opcode, padding;
-//	uint32_t base_addr;
-//	fread(&opcode, 2, 1, f);
-//	fread(&padding, 2, 1, f);
-//	fread(&base_addr, 4, 1, f);
-//
-//	printf("opcode: %u (0x%04x)\n", opcode, opcode);
-//	printf("padding: %u (0x%04x)\n", padding, padding);
-//	printf("base_addr: %u (0x%08x)\n", base_addr, base_addr);
-//}
+void CPU::runThumbTestsEXTRADEBUG()
+{
+	const char* str = "thumb_add_sub.json.bin";
+
+	FILE* f = fopen(str, "rb");
+	if (!f)
+	{
+		printf("ERROR: Could not open test file!\n");
+		return;
+	}
+
+	int passed = 0;
+	int failed = 0;
+	int maxFailuresToShow = 10;
+	int failuresShown = 0;
+
+	uint32_t magic, numTests, testSize, stateSize, val;
+	fread(&magic, 4, 1, f);
+	fread(&numTests, 4, 1, f);
+
+
+	printf("Magic: 0x%08x\n", magic);
+	printf("Number of tests: %d\n\n", numTests);
+
+
+
+
+
+	//test is 368 size with 0 transactions , with each one being 24. why did the test makers make this like deciphering an ancient code 
+
+
+
+	for (int i = 0; i < numTests; i++)
+	{
+		if (i <= 100)//(i>=0)
+		{
+			printf("=== TEST %d ===\n", i);
+
+			fread(&testSize, 4, 1, f);
+			fread(&stateSize, 4, 1, f);
+			fread(&val, 4, 1, f);
+			printf("testSize: %d\n\n", testSize);
+			printf("stateSize: %d\n\n", stateSize);
+			printf("val: %d\n\n", val);
+
+			int amtOfTransactions = (testSize - 368) / 24;
+
+			printf("AMOUNT OF TRANSACTIONS TO PRINT %d\n\n", amtOfTransactions);
+			printf("=== TEST %d ===\n", i);
+
+			uint32_t R_init[16];
+			fread(R_init, 4, 16, f);
+			printf("R:\n");
+			for (int i = 0; i < 16; i++)
+				printf("  R[%d]: %u\n", i, R_init[i]);
+
+			uint32_t R_fiq_init[7];
+			fread(R_fiq_init, 4, 7, f);
+			printf("\nR_fiq:\n");
+			for (int i = 0; i < 7; i++)
+				printf("  R_fiq[%d]: %u\n", i, R_fiq_init[i]);
+
+			uint32_t R_svc_init[2];
+			fread(R_svc_init, 4, 2, f);
+			printf("\nR_svc:\n");
+			for (int i = 0; i < 2; i++)
+				printf("  R_svc[%d]: %u\n", i, R_svc_init[i]);
+
+			uint32_t R_abt_init[2];
+			fread(R_abt_init, 4, 2, f);
+			printf("\nR_abt:\n");
+			for (int i = 0; i < 2; i++)
+				printf("  R_abt[%d]: %u\n", i, R_abt_init[i]);
+
+			uint32_t R_irq_init[2];
+			fread(R_irq_init, 4, 2, f);
+			printf("\nR_irq:\n");
+			for (int i = 0; i < 2; i++)
+				printf("  R_irq[%d]: %u\n", i, R_irq_init[i]);
+
+			uint32_t R_und_init[2];
+			fread(R_und_init, 4, 2, f);
+			printf("\nR_und:\n");
+			for (int i = 0; i < 2; i++)
+				printf("  R_und[%d]: %u\n", i, R_und_init[i]);
+
+			uint32_t CPSR_init;
+			fread(&CPSR_init, 4, 1, f);
+			printf("\nCPSR: %u\n", CPSR_init);
+
+			uint32_t SPSR_init[5];
+			fread(SPSR_init, 4, 5, f);
+			printf("\nSPSR:\n");
+			for (int i = 0; i < 5; i++)
+				printf("  SPSR[%d]: %u\n", i, SPSR_init[i]);
+
+			uint32_t pipeline_init[2];
+			fread(pipeline_init, 4, 2, f);
+			printf("\npipeline:\n");
+			for (int i = 0; i < 2; i++)
+				printf("  pipeline[%d]: %u\n", i, pipeline_init[i]);
+
+			uint32_t access_init;
+			fread(&access_init, 4, 1, f);
+			printf("\naccess: %u\n", access_init);
+
+			uint32_t junkA;
+			fread(&junkA, 4, 1, f);
+			uint32_t junkB;
+			fread(&junkB, 4, 1, f);
+			printf("\n JUNK DATA : A %0X8 B %0X8  \n", junkA, junkB);
+
+			// FINAL STATE
+			printf("\n=== FINAL STATE ===\n");
+
+			uint32_t R_final[16];
+			fread(R_final, 4, 16, f);
+			printf("R (showing only changes):\n");
+			for (int i = 0; i < 16; i++)
+			{
+				if (R_final[i] != R_init[i])
+					printf("  R[%d]: %u (was %u)\n", i, R_final[i], R_init[i]);
+			}
+
+			// Skip rest of final state for now
+			uint32_t R_fiq_final[7];
+			fread(R_fiq_final, 4, 7, f);
+			printf("\nR_fiq:\n");
+			for (int i = 0; i < 7; i++)
+				printf("  R_fiq[%d]: %u\n", i, R_fiq_final[i]);
+
+			uint32_t R_svc_final[2];
+			fread(R_svc_final, 4, 2, f);
+			printf("\nR_svc:\n");
+			for (int i = 0; i < 2; i++)
+				printf("  R_svc[%d]: %u\n", i, R_svc_final[i]);
+
+			uint32_t R_abt_final[2];
+			fread(R_abt_final, 4, 2, f);
+			printf("\nR_abt:\n");
+			for (int i = 0; i < 2; i++)
+				printf("  R_abt[%d]: %u\n", i, R_abt_final[i]);
+
+			uint32_t R_irq_final[2];
+			fread(R_irq_final, 4, 2, f);
+			printf("\nR_irq:\n");
+			for (int i = 0; i < 2; i++)
+				printf("  R_irq[%d]: %u\n", i, R_irq_final[i]);
+
+			uint32_t R_und_final[2];
+			fread(R_und_final, 4, 2, f);
+			printf("\nR_und:\n");
+			for (int i = 0; i < 2; i++)
+				printf("  R_und[%d]: %u\n", i, R_und_final[i]);
+
+			uint32_t CPSR_final;
+			fread(&CPSR_final, 4, 1, f);
+			printf("\nCPSR: %u\n", CPSR_final);
+
+			uint32_t SPSR_final[5];
+			fread(SPSR_final, 4, 5, f);
+			printf("\nSPSR:\n");
+			for (int i = 0; i < 5; i++)
+				printf("  SPSR[%d]: %u\n", i, SPSR_final[i]);
+
+
+			uint32_t pipeline_final[2];
+			fread(pipeline_final, 4, 2, f);
+			for (int i = 0; i < 2; i++)
+				printf("  pipeline[%d]: %u\n", i, pipeline_final[i]);
+
+
+
+
+			uint32_t access_final;
+			fread(&access_final, 4, 1, f);
+			printf("\naccess: %u\n", access_final);
+
+			junkA;
+			fread(&junkA, 4, 1, f);
+			junkB;
+			fread(&junkB, 4, 1, f);
+			uint32_t junkC;
+			fread(&junkC, 4, 1, f);
+
+			printf("\n JUNK DATA : A %0X8 B %0X8  C %0X8 \n", junkA, junkB, junkC);
+
+
+			// TRANSACTIONS
+			int transactionCounter = 0;
+			while (transactionCounter < amtOfTransactions)
+			{
+				printf("\n=== TRANSACTION %d ===\n", transactionCounter);
+				uint32_t trans_kind, trans_size, trans_addr, trans_data, trans_cycle, trans_access;
+				fread(&trans_kind, 4, 1, f);
+				fread(&trans_size, 4, 1, f);
+				fread(&trans_addr, 4, 1, f);
+				fread(&trans_data, 4, 1, f);
+				fread(&trans_cycle, 4, 1, f);
+				fread(&trans_access, 4, 1, f);
+
+				printf("Transaction 0:\n");
+				printf("  kind: %u\n", trans_kind);
+				printf("  size: %u\n", trans_size);
+				printf("  addr: %u\n", trans_addr);
+				printf("  data: %u\n", trans_data);
+				printf("  cycle: %u\n", trans_cycle);
+				printf("  access: %u\n", trans_access);
+				transactionCounter++;
+
+			}
+
+			// OPCODE and BASE_ADDR
+			printf("\n=== OPCODE & BASE_ADDR ===\n");
+
+			uint32_t junkArr2[3];
+			fread(&junkArr2, 4, 2, f);
+
+			uint16_t opcode, padding;
+			uint32_t base_addr;
+			fread(&opcode, 2, 1, f);
+			fread(&padding, 2, 1, f);
+			fread(&base_addr, 4, 1, f);
+
+			printf("opcode: %u (0x%04x)\n", opcode, opcode);
+			printf("padding: %u (0x%04x)\n", padding, padding);
+			printf("base_addr: %u (0x%08x)\n", base_addr, base_addr);
+
+
+			//load register
+			for (int r = 0; r < 16; r++)
+				reg[r] = R_init[r];
+
+			///DECODE / EXECUTE
+
+			thumbInstr decoded = decodeThumb(opcode);
+			thumbExecute(decoded);
+
+			pc += 2;
+
+			// Check results - compare ALL registers including PC
+			bool testPassed = true;
+
+			for (int r = 0; r < 16; r++)
+			{
+				if (reg[r] != R_final[r])
+				{
+					testPassed = false;
+					if (failuresShown < maxFailuresToShow)
+					{
+						printf("Test %d FAILED (opcode 0x%04x @ 0x%08x): r%d = 0x%08x, expected 0x%08x\n",
+							i, opcode, base_addr, r, reg[r], R_final[r]);
+					}
+				}
+			}
+
+			if (testPassed)
+				passed++;
+			else
+			{
+				failed++;
+				if (failuresShown < maxFailuresToShow)
+					failuresShown++;
+				else if (failuresShown == maxFailuresToShow)
+				{
+					printf("  ... (suppressing further failures)\n");
+					failuresShown++;
+				}
+			}
+
+			// Progress
+			if (i > 0 && i % 5000 == 0)
+				printf("  Progress: %d/%d... (%d passed, %d failed)\n",
+					i, numTests, passed, failed);
+		}
+
+	}
+
+	printf("\n========================================\n");
+	printf("Results: %d passed, %d failed out of %d\n",
+		passed, failed, numTests);
+	printf("========================================\n");
+
+	fclose(f);
+}
