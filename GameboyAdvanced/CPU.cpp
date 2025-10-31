@@ -28,15 +28,19 @@ void CPU::reset()
 {
 	instruction = 0;
 	curOP = Operation::UNKNOWN;
-	curMode = mode::Supervisor;
+	curMode = mode::System;
 	CPSR = static_cast<uint8_t>(mode::Supervisor) | 0xC0;
 	for (int i = 0; i < 16; i++) reg[i] = 0;
 	reg[13] = 0x03007F00;  // SP
 	pc = 0x08000000;  
-	T = false;  // DEFAULT TO ARM
-	N = Z = C = V = false;
+	T = 0;  // DEFAULT TO ARM
+	N = Z = C = V = 0;
 	unbankRegisters(curMode);
+	lr = 0x08000000;
 }
+
+
+
 
 
 
@@ -212,8 +216,8 @@ uint32_t CPU::tick()
 		pc += 2;
 		curThumbInstr = decodeThumb(thumbCode);
 
-		printf("MODE:%s ,PC: 0x%08X, Instruction: 0x%04X    , Flags: %s ,Opcode: %s ,  1st8regs: %08x,%08x,%08x,%08x, %08x,%08x,%08x,%08x \n",
-			"T", pc - pcOffset(), thumbCode, CPSRtoString(),thumbToStr(curThumbInstr).c_str() , reg[0], reg[1], reg[2], reg[3], reg[4], reg[5], reg[6], reg[7]);
+		printf("MODE:%s ,PC: 0x%08X, Instruction: 0x%04X    , Flags: %s ,Opcode: %s  \n",
+			"T", pc - pcOffset(), thumbCode, CPSRtoString(),thumbToStr(curThumbInstr).c_str() );
 
 		curOpCycles = thumbExecute(curThumbInstr);
 	}
@@ -2415,7 +2419,7 @@ inline int CPU::opT_ADD_SP_IMM(thumbInstr instr)
 
 inline int CPU::opT_PUSH(thumbInstr instr)
 {
-	for (int i = 0; i < 16; i++)
+	for (int i = 15; i >= 0; i--)
 	{
 		if (instr.imm & (1 << i))
 		{
@@ -2471,31 +2475,35 @@ inline int CPU::opT_LDMIA(thumbInstr instr)
 
 inline int CPU::opT_B_COND(thumbInstr instr)
 {
-	if (checkConditional((uint8_t)instr.cond&0xFF)) // this is using the main cpus function, should be fine
+	if (checkConditional((uint8_t)instr.cond & 0xFF))
 	{
-		pc = pc + (int32_t)instr.imm+2;
+
+		pc = pc + 4 + (int32_t)instr.imm; 
 	}
 	return 3;
 }
 
 inline int CPU::opT_B(thumbInstr instr)
 {
-	pc = pc + (int32_t)instr.imm+2;
+
+	pc = pc + 4 + (int32_t)instr.imm; 
 	return 3;
 }
 
 inline int CPU::opT_BL_PREFIX(thumbInstr instr)
 {
-	lr = pc + (int32_t)instr.imm+2;
+
+	lr = pc + 4 + (int32_t)instr.imm;  
 	return 1;
 }
 
 inline int CPU::opT_BL_SUFFIX(thumbInstr instr)
 {
-	uint32_t target = lr + instr.imm;
 
-	lr = (pc - 2) | 1; 
-	pc = target;
+	uint32_t target = lr + (int32_t)instr.imm; 
+
+	lr = (pc + 2) | 1;  
+	pc = target & ~1;  
 	return 3;
 }
 

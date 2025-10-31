@@ -72,6 +72,19 @@ void Bus::write32(uint32_t addr, uint32_t data)
         biosRom[addr + 2] = (data >> 16) & 0xFF;
         biosRom[addr + 3] = (data >> 24) & 0xFF;
     }
+
+    if (addr == 0x03000000) // this is here for the arm tester
+    {
+        if (data == 0)
+        {
+            printf(" All tests passed!\n");
+        }
+        else
+        {
+            printf("Test failed: %d\n", data);
+        }
+    }
+
 }
 
 

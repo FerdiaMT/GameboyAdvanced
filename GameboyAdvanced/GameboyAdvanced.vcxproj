@@ -132,12 +132,14 @@
     <ClCompile Include="GBA.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="Bus.cpp" />
+    <ClCompile Include="PPU.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="CPU.h" />
     <ClInclude Include="DebuggerCPU.h" />
     <ClInclude Include="GBA.h" />
     <ClInclude Include="Bus.h" />
+    <ClInclude Include="PPU.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="armwrestler.gba" />

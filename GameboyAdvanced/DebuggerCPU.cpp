@@ -1661,11 +1661,8 @@ bool testPUSH_LR(CPU& cpu)
     cpu.reg[0] = 0x11111111;
     cpu.reg[14] = 0x08000100;
     cpu.reg[13] = 0x03007F10;
-
     CPU::thumbInstr instr;
-    instr.imm = 0x01;  // R0
-   // instr.r = 1;  // Include LR
-
+    instr.imm = 0x01 | (1 << 14);
     cpu.opT_PUSH(instr);
 
     if (cpu.reg[13] != 0x03007F08)
@@ -1674,12 +1671,33 @@ bool testPUSH_LR(CPU& cpu)
         return false;
     }
 
-    if (cpu.read32(0x03007F0C) != 0x08000100)
+    if (cpu.read32(0x03007F08) != 0x11111111)
     {
-        std::cout << "  LR not pushed correctly" << std::endl;
+        std::cout << "  R0 not pushed correctly, got 0x" << std::hex << cpu.read32(0x03007F08) << std::endl;
         return false;
     }
 
+    if (cpu.read32(0x03007F0C) != 0x08000100)
+    {
+        std::cout << "  LR not pushed correctly, got 0x" << std::hex << cpu.read32(0x03007F0C) << std::endl;
+        return false;
+    }
+
+    return true;
+}
+bool testPOP_PC(CPU& cpu)
+{
+    cpu.reset();
+    cpu.reg[13] = 0x03007F0C;
+    cpu.write32(0x03007F0C, 0x08000100);
+    CPU::thumbInstr instr;
+    instr.imm = (1 << 15); 
+    cpu.opT_POP(instr);
+    if (cpu.pc != 0x08000100)
+    {
+        std::cout << "  Expected PC=0x08000100, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
     return true;
 }
 
@@ -1689,45 +1707,19 @@ bool testPOP(CPU& cpu)
     cpu.reg[13] = 0x03007F08;
     cpu.write32(0x03007F08, 0x11111111);
     cpu.write32(0x03007F0C, 0x22222222);
-
     CPU::thumbInstr instr;
     instr.imm = 0x03;  // R0 and R1
-
     cpu.opT_POP(instr);
-
     if (cpu.reg[0] != 0x11111111 || cpu.reg[1] != 0x22222222)
     {
         std::cout << "  Registers not loaded correctly" << std::endl;
         return false;
     }
-
     if (cpu.reg[13] != 0x03007F10)
     {
         std::cout << "  Expected SP=0x03007F10, got 0x" << std::hex << cpu.reg[13] << std::dec << std::endl;
         return false;
     }
-
-    return true;
-}
-
-bool testPOP_PC(CPU& cpu)
-{
-    cpu.reset();
-    cpu.reg[13] = 0x03007F0C;
-    cpu.write32(0x03007F0C, 0x08000100);
-
-    CPU::thumbInstr instr;
-    instr.imm = 0x00;
-    //instr.r = 1;  // Include PC
-
-    cpu.opT_POP(instr);
-
-    if (cpu.pc != 0x08000100)
-    {
-        std::cout << "  Expected PC=0x08000100, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
-        return false;
-    }
-
     return true;
 }
 
@@ -1790,6 +1782,789 @@ bool testLDMIA(CPU& cpu)
 
     return true;
 }
+
+bool testPUSH_All(CPU& cpu)
+{
+    cpu.reset();
+    for (int i = 0; i < 8; i++)
+    {
+        cpu.reg[i] = 0x11111111 * (i + 1);
+    }
+    cpu.reg[13] = 0x03008000;
+    CPU::thumbInstr instr;
+    instr.imm = 0xFF;  // All low registers
+    cpu.opT_PUSH(instr);
+    if (cpu.reg[13] != 0x03007FE0)  // Pushed 8 registers = 32 bytes
+    {
+        std::cout << "  Expected SP=0x03007FE0, got 0x" << std::hex << cpu.reg[13] << std::dec << std::endl;
+        return false;
+    }
+    // Verify memory
+    for (int i = 0; i < 8; i++)
+    {
+        uint32_t expected = 0x11111111 * (i + 1);
+        uint32_t addr = 0x03007FE0 + (i * 4);
+        if (cpu.read32(addr) != expected)
+        {
+            std::cout << "  R" << i << " not pushed correctly" << std::endl;
+            return false;
+        }
+    }
+    return true;
+}
+
+// ============================================================
+// FORMAT 16: CONDITIONAL BRANCH
+// ============================================================
+
+// Test BEQ (cond=0x0, branch if equal, Z=1)
+bool testBEQ_Taken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.Z = 1;  // Condition true
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x0;  // EQ condition
+    instr.imm = 0x04 << 1;  // Already shifted by decoder (8 bytes)
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != 0x0800010C)  // 0x100 + 4 + 8
+    {
+        std::cout << "  Expected PC=0x0800010C, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool testBEQ_NotTaken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.Z = 0;  // Condition false
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x0;  // EQ
+    instr.imm = 0x04 << 1;
+    uint32_t oldPC = cpu.pc;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != oldPC && cpu.pc != oldPC + 2)
+    {
+        std::cout << "  Branch should not be taken, PC changed incorrectly" << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// Test BNE (cond=0x1, branch if not equal, Z=0)
+bool testBNE_Taken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.Z = 0;  // Condition true
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x1;  // NE condition
+    instr.imm = 0x08 << 1;  // Already shifted (16 bytes)
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != 0x08000114)  // 0x100 + 4 + 0x10
+    {
+        std::cout << "  Expected PC=0x08000114, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool testBNE_NotTaken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.Z = 1;  // Condition false
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x1;  // NE
+    instr.imm = 0x08 << 1;
+    uint32_t oldPC = cpu.pc;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != oldPC && cpu.pc != oldPC + 2)
+    {
+        std::cout << "  Branch should not be taken" << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// Test BCS/BHS (cond=0x2, branch if carry set, C=1)
+bool testBCS_Taken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.C = 1;  // Condition true
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x2;  // CS/HS condition
+    instr.imm = 0x02 << 1;  // Already shifted
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != 0x08000108)
+    {
+        std::cout << "  Expected PC=0x08000108, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool testBCS_NotTaken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.C = 0;  // Condition false
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x2;  // CS/HS
+    instr.imm = 0x02 << 1;
+    uint32_t oldPC = cpu.pc;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != oldPC && cpu.pc != oldPC + 2)
+    {
+        std::cout << "  Branch should not be taken" << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// Test BCC/BLO (cond=0x3, branch if carry clear, C=0)
+bool testBCC_Taken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.C = 0;  // Condition true
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x3;  // CC/LO condition
+    instr.imm = 0x02 << 1;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != 0x08000108)
+    {
+        std::cout << "  Expected PC=0x08000108, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// Test BMI (cond=0x4, branch if minus/negative, N=1)
+bool testBMI_Taken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.N = 1;  // Condition true
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x4;  // MI condition
+    instr.imm = 0x02 << 1;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != 0x08000108)
+    {
+        std::cout << "  Expected PC=0x08000108, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// Test BPL (cond=0x5, branch if plus/positive, N=0)
+bool testBPL_Taken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.N = 0;  // Condition true
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x5;  // PL condition
+    instr.imm = 0x02 << 1;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != 0x08000108)
+    {
+        std::cout << "  Expected PC=0x08000108, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// Test BVS (cond=0x6, branch if overflow set, V=1)
+bool testBVS_Taken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.V = 1;  // Condition true
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x6;  // VS condition
+    instr.imm = 0x02 << 1;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != 0x08000108)
+    {
+        std::cout << "  Expected PC=0x08000108, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// Test BVC (cond=0x7, branch if overflow clear, V=0)
+bool testBVC_Taken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.V = 0;  // Condition true
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x7;  // VC condition
+    instr.imm = 0x02 << 1;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != 0x08000108)
+    {
+        std::cout << "  Expected PC=0x08000108, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// Test BHI (cond=0x8, branch if higher, C=1 and Z=0)
+bool testBHI_Taken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.C = 1;
+    cpu.Z = 0;  // Condition true
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x8;  // HI condition
+    instr.imm = 0x02 << 1;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != 0x08000108)
+    {
+        std::cout << "  Expected PC=0x08000108, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool testBHI_NotTaken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.C = 1;
+    cpu.Z = 1;  // Condition false (Z=1 means equal)
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x8;  // HI
+    instr.imm = 0x02 << 1;
+    uint32_t oldPC = cpu.pc;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != oldPC && cpu.pc != oldPC + 2)
+    {
+        std::cout << "  Branch should not be taken" << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// Test BLS (cond=0x9, branch if lower or same, C=0 or Z=1)
+bool testBLS_Taken_Carry(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.C = 0;  // Condition true (carry clear)
+    cpu.Z = 0;
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x9;  // LS condition
+    instr.imm = 0x02 << 1;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != 0x08000108)
+    {
+        std::cout << "  Expected PC=0x08000108, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool testBLS_Taken_Zero(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.C = 1;
+    cpu.Z = 1;  // Condition true (zero set)
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x9;  // LS
+    instr.imm = 0x02 << 1;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != 0x08000108)
+    {
+        std::cout << "  Expected PC=0x08000108, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool testBLS_NotTaken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.C = 1;  // Both conditions false
+    cpu.Z = 0;
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x9;  // LS
+    instr.imm = 0x02 << 1;
+    uint32_t oldPC = cpu.pc;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != oldPC && cpu.pc != oldPC + 2)
+    {
+        std::cout << "  Branch should not be taken" << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// Test BGE (cond=0xA, branch if greater or equal, N=V)
+bool testBGE_Taken_BothSet(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.N = 1;
+    cpu.V = 1;  // N=V, condition true
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0xA;  // GE condition
+    instr.imm = 0x02 << 1;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != 0x08000108)
+    {
+        std::cout << "  Expected PC=0x08000108, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool testBGE_Taken_BothClear(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.N = 0;
+    cpu.V = 0;  // N=V, condition true
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0xA;  // GE
+    instr.imm = 0x02 << 1;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != 0x08000108)
+    {
+        std::cout << "  Expected PC=0x08000108, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool testBGE_NotTaken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.N = 1;
+    cpu.V = 0;  // N!=V, condition false
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0xA;  // GE
+    instr.imm = 0x02 << 1;
+    uint32_t oldPC = cpu.pc;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != oldPC && cpu.pc != oldPC + 2)
+    {
+        std::cout << "  Branch should not be taken" << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// Test BLT (cond=0xB, branch if less than, N!=V)
+bool testBLT_Taken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.N = 1;
+    cpu.V = 0;  // N!=V, condition true
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0xB;  // LT condition
+    instr.imm = 0x02 << 1;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != 0x08000108)
+    {
+        std::cout << "  Expected PC=0x08000108, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool testBLT_NotTaken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.N = 1;
+    cpu.V = 1;  // N=V, condition false
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0xB;  // LT
+    instr.imm = 0x02 << 1;
+    uint32_t oldPC = cpu.pc;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != oldPC && cpu.pc != oldPC + 2)
+    {
+        std::cout << "  Branch should not be taken" << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// Test BGT (cond=0xC, branch if greater than, Z=0 and N=V)
+bool testBGT_Taken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.Z = 0;
+    cpu.N = 1;
+    cpu.V = 1;  // Z=0 and N=V, condition true
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0xC;  // GT condition
+    instr.imm = 0x02 << 1;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != 0x08000108)
+    {
+        std::cout << "  Expected PC=0x08000108, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool testBGT_NotTaken_Zero(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.Z = 1;  // Zero set, condition false
+    cpu.N = 1;
+    cpu.V = 1;
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0xC;  // GT
+    instr.imm = 0x02 << 1;
+    uint32_t oldPC = cpu.pc;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != oldPC && cpu.pc != oldPC + 2)
+    {
+        std::cout << "  Branch should not be taken (Z=1)" << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool testBGT_NotTaken_NV(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.Z = 0;
+    cpu.N = 1;
+    cpu.V = 0;  // N!=V, condition false
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0xC;  // GT
+    instr.imm = 0x02 << 1;
+    uint32_t oldPC = cpu.pc;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != oldPC && cpu.pc != oldPC + 2)
+    {
+        std::cout << "  Branch should not be taken (N!=V)" << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// Test BLE (cond=0xD, branch if less than or equal, Z=1 or N!=V)
+bool testBLE_Taken_Zero(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.Z = 1;  // Condition true (zero set)
+    cpu.N = 0;
+    cpu.V = 0;
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0xD;  // LE condition
+    instr.imm = 0x02 << 1;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != 0x08000108)
+    {
+        std::cout << "  Expected PC=0x08000108, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool testBLE_Taken_NV(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.Z = 0;
+    cpu.N = 1;
+    cpu.V = 0;  // N!=V, condition true
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0xD;  // LE
+    instr.imm = 0x02 << 1;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != 0x08000108)
+    {
+        std::cout << "  Expected PC=0x08000108, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool testBLE_NotTaken(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.Z = 0;  // Both conditions false
+    cpu.N = 1;
+    cpu.V = 1;
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0xD;  // LE
+    instr.imm = 0x02 << 1;
+    uint32_t oldPC = cpu.pc;
+    cpu.opT_B_COND(instr);
+    if (cpu.pc != oldPC && cpu.pc != oldPC + 2)
+    {
+        std::cout << "  Branch should not be taken" << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// Test backward branches (negative offsets)
+bool testBEQ_Backward(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.Z = 1;
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x0;  // EQ
+    instr.imm = (int32_t)(-4 << 1);  // Already shifted: -8 bytes
+    cpu.opT_B_COND(instr);
+    // PC = 0x100 + 4 + (-8) = 0xFC
+    if (cpu.pc != 0x080000FC)
+    {
+        std::cout << "  Expected PC=0x080000FC, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// Test maximum forward branch
+bool testBranch_MaxForward(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.Z = 1;
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x0;  // EQ
+    instr.imm = 127 << 1;  // Already shifted: 254 bytes
+    cpu.opT_B_COND(instr);
+    // PC = 0x100 + 4 + 254 = 0x1FE
+    if (cpu.pc != 0x8000202)
+    {
+        std::cout << "  Expected PC=0x080001FE, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// Test maximum backward branch
+bool testBranch_MaxBackward(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    cpu.Z = 1;
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B_COND;
+    instr.cond = 0x0;  // EQ
+    instr.imm = (int32_t)(-128 << 1);  // Already shifted: -256 bytes
+    cpu.opT_B_COND(instr);
+    // PC = 0x100 + 4 + (-256) = 0x04
+    if (cpu.pc != 0x08000004)
+    {
+        std::cout << "  Expected PC=0x08000004, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// ============================================================
+// FORMAT 18: UNCONDITIONAL BRANCH
+// ============================================================
+
+bool testB_Forward(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B;
+    instr.imm = 0x100 << 1;  // Already shifted: 512 bytes
+    cpu.opT_B(instr);
+    // PC = 0x100 + 4 + 0x200 = 0x304
+    if (cpu.pc != 0x08000304)
+    {
+        std::cout << "  Expected PC=0x08000304, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool testB_Backward(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B;
+    instr.imm = (int32_t)(-256 << 1);  // Already shifted: -512 bytes
+    cpu.opT_B(instr);
+    // PC = 0x100 + 4 + (-0x200) = 0x7FFFF04
+    if (cpu.pc != 0x07FFFF04)
+    {
+        std::cout << "  Expected PC=0x07FFFF04, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool testB_MaxRange(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_B;
+    instr.imm = 1023 << 1;  // Already shifted: 2046 bytes
+    cpu.opT_B(instr);
+    // PC = 0x100 + 4 + 0x7FE = 0x902
+    if (cpu.pc != 0x08000902)
+    {
+        std::cout << "  Expected PC=0x08000902, got 0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// ============================================================
+// FORMAT 19: LONG BRANCH WITH LINK (BL)
+// ============================================================
+
+bool testBL_Prefix(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_BL_PREFIX;
+    instr.imm = 0x400 << 12;  // Already shifted by 12: 0x400000
+    cpu.opT_BL_PREFIX(instr);
+    // LR = PC + 4 + 0x400000 = 0x08400104
+    uint32_t expected = 0x08400104;
+    if (cpu.lr != expected)
+    {
+        std::cout << "  Expected LR=0x" << std::hex << expected << ", got 0x" << cpu.lr << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool testBL_Suffix(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000102;  // After BL prefix instruction
+    cpu.lr = 0x08400104;  // From BL prefix
+    CPU::thumbInstr instr;
+    instr.type = CPU::thumbOperation::THUMB_BL_SUFFIX;
+    instr.imm = 0x200 << 1;  // Already shifted by 1: 0x400
+    uint32_t oldPC = cpu.pc;
+    cpu.opT_BL_SUFFIX(instr);
+    // PC = LR + 0x400 = 0x08400504
+    uint32_t expectedPC = 0x08400504;
+    if (cpu.pc != expectedPC)
+    {
+        std::cout << "  Expected PC=0x" << std::hex << expectedPC << ", got 0x" << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    // LR = (oldPC + 2) | 1 = 0x08000105
+    uint32_t expectedLR = (oldPC + 2) | 1;
+    if (cpu.lr != expectedLR)
+    {
+        std::cout << "  Expected LR=0x" << std::hex << expectedLR << ", got 0x" << cpu.lr << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+bool testBL_NegativeOffset(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000100;
+    // First instruction: BL prefix with negative offset
+    CPU::thumbInstr instr1;
+    instr1.type = CPU::thumbOperation::THUMB_BL_PREFIX;
+    // Decoder would have: sign extended -1, then shifted by 12
+    instr1.imm = (int32_t)(-1 << 12);  // 0xFFFFF000
+    cpu.opT_BL_PREFIX(instr1);
+
+    cpu.pc = 0x08000102;
+    CPU::thumbInstr instr2;
+    instr2.type = CPU::thumbOperation::THUMB_BL_SUFFIX;
+    instr2.imm = 0x400 << 1;  // Already shifted
+    cpu.opT_BL_SUFFIX(instr2);
+
+    // Should branch backward
+    if (cpu.pc >= 0x08000100)
+    {
+        std::cout << "  Branch should go backward, got PC=0x" << std::hex << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
+// Test BL with maximum range
+bool testBL_MaxRange(CPU& cpu)
+{
+    cpu.reset();
+    cpu.pc = 0x08000000;
+
+    CPU::thumbInstr instr1;
+    instr1.type = CPU::thumbOperation::THUMB_BL_PREFIX;
+    instr1.imm = 0x7FF << 12; 
+    cpu.opT_BL_PREFIX(instr1);
+
+    cpu.pc = 0x08000002;
+    CPU::thumbInstr instr2;
+    instr2.type = CPU::thumbOperation::THUMB_BL_SUFFIX;
+    instr2.imm = 0x7FF << 1; 
+    cpu.opT_BL_SUFFIX(instr2);
+
+    uint32_t expected = 0x08800002;
+    if (cpu.pc != expected)
+    {
+        std::cout << "  Expected PC=0x" << std::hex << expected << ", got 0x" << cpu.pc << std::dec << std::endl;
+        return false;
+    }
+    return true;
+}
+
 
 // ============================================================
 // MAIN TEST RUNNER
@@ -1980,6 +2755,96 @@ void DebuggerCPU::runAllThumbTests(CPU& cpu)
     else { printTestResult("STMIA", false); failCount++; }
     if (testLDMIA(cpu)) { printTestResult("LDMIA", true); passCount++; }
     else { printTestResult("LDMIA", false); failCount++; }
+
+    // Format 16: Conditional branches
+    std::cout << "\n--- Format 16: Conditional Branch ---" << std::endl;
+    if (testBEQ_Taken(cpu)) { printTestResult("BEQ_Taken", true); passCount++; }
+    else { printTestResult("BEQ_Taken", false); failCount++; }
+    if (testBEQ_NotTaken(cpu)) { printTestResult("BEQ_NotTaken", true); passCount++; }
+    else { printTestResult("BEQ_NotTaken", false); failCount++; }
+    if (testBNE_Taken(cpu)) { printTestResult("BNE_Taken", true); passCount++; }
+    else { printTestResult("BNE_Taken", false); failCount++; }
+    if (testBNE_NotTaken(cpu)) { printTestResult("BNE_NotTaken", true); passCount++; }
+    else { printTestResult("BNE_NotTaken", false); failCount++; }
+    if (testBCS_Taken(cpu)) { printTestResult("BCS_Taken", true); passCount++; }
+    else { printTestResult("BCS_Taken", false); failCount++; }
+    if (testBCS_NotTaken(cpu)) { printTestResult("BCS_NotTaken", true); passCount++; }
+    else { printTestResult("BCS_NotTaken", false); failCount++; }
+    if (testBCC_Taken(cpu)) { printTestResult("BCC_Taken", true); passCount++; }
+    else { printTestResult("BCC_Taken", false); failCount++; }
+    if (testBMI_Taken(cpu)) { printTestResult("BMI_Taken", true); passCount++; }
+    else { printTestResult("BMI_Taken", false); failCount++; }
+    if (testBPL_Taken(cpu)) { printTestResult("BPL_Taken", true); passCount++; }
+    else { printTestResult("BPL_Taken", false); failCount++; }
+    if (testBVS_Taken(cpu)) { printTestResult("BVS_Taken", true); passCount++; }
+    else { printTestResult("BVS_Taken", false); failCount++; }
+    if (testBVC_Taken(cpu)) { printTestResult("BVC_Taken", true); passCount++; }
+    else { printTestResult("BVC_Taken", false); failCount++; }
+    if (testBHI_Taken(cpu)) { printTestResult("BHI_Taken", true); passCount++; }
+    else { printTestResult("BHI_Taken", false); failCount++; }
+    if (testBHI_NotTaken(cpu)) { printTestResult("BHI_NotTaken", true); passCount++; }
+    else { printTestResult("BHI_NotTaken", false); failCount++; }
+    if (testBLS_Taken_Carry(cpu)) { printTestResult("BLS_Taken_Carry", true); passCount++; }
+    else { printTestResult("BLS_Taken_Carry", false); failCount++; }
+    if (testBLS_Taken_Zero(cpu)) { printTestResult("BLS_Taken_Zero", true); passCount++; }
+    else { printTestResult("BLS_Taken_Zero", false); failCount++; }
+    if (testBLS_NotTaken(cpu)) { printTestResult("BLS_NotTaken", true); passCount++; }
+    else { printTestResult("BLS_NotTaken", false); failCount++; }
+    if (testBGE_Taken_BothSet(cpu)) { printTestResult("BGE_Taken_BothSet", true); passCount++; }
+    else { printTestResult("BGE_Taken_BothSet", false); failCount++; }
+    if (testBGE_Taken_BothClear(cpu)) { printTestResult("BGE_Taken_BothClear", true); passCount++; }
+    else { printTestResult("BGE_Taken_BothClear", false); failCount++; }
+    if (testBGE_NotTaken(cpu)) { printTestResult("BGE_NotTaken", true); passCount++; }
+    else { printTestResult("BGE_NotTaken", false); failCount++; }
+    if (testBLT_Taken(cpu)) { printTestResult("BLT_Taken", true); passCount++; }
+    else { printTestResult("BLT_Taken", false); failCount++; }
+    if (testBLT_NotTaken(cpu)) { printTestResult("BLT_NotTaken", true); passCount++; }
+    else { printTestResult("BLT_NotTaken", false); failCount++; }
+    if (testBGT_Taken(cpu)) { printTestResult("BGT_Taken", true); passCount++; }
+    else { printTestResult("BGT_Taken", false); failCount++; }
+    if (testBGT_NotTaken_Zero(cpu)) { printTestResult("BGT_NotTaken_Zero", true); passCount++; }
+    else { printTestResult("BGT_NotTaken_Zero", false); failCount++; }
+    if (testBGT_NotTaken_NV(cpu)) { printTestResult("BGT_NotTaken_NV", true); passCount++; }
+    else { printTestResult("BGT_NotTaken_NV", false); failCount++; }
+    if (testBLE_Taken_Zero(cpu)) { printTestResult("BLE_Taken_Zero", true); passCount++; }
+    else { printTestResult("BLE_Taken_Zero", false); failCount++; }
+    if (testBLE_Taken_NV(cpu)) { printTestResult("BLE_Taken_NV", true); passCount++; }
+    else { printTestResult("BLE_Taken_NV", false); failCount++; }
+    if (testBLE_NotTaken(cpu)) { printTestResult("BLE_NotTaken", true); passCount++; }
+    else { printTestResult("BLE_NotTaken", false); failCount++; }
+    if (testBEQ_Backward(cpu)) { printTestResult("BEQ_Backward", true); passCount++; }
+    else { printTestResult("BEQ_Backward", false); failCount++; }
+    if (testBranch_MaxForward(cpu)) { printTestResult("Branch_MaxForward", true); passCount++; }
+    else { printTestResult("Branch_MaxForward", false); failCount++; }
+    if (testBranch_MaxBackward(cpu)) { printTestResult("Branch_MaxBackward", true); passCount++; }
+    else { printTestResult("Branch_MaxBackward", false); failCount++; }
+
+    // Format 18: Unconditional branch
+    std::cout << "\n--- Format 18: Unconditional Branch ---" << std::endl;
+    if (testB_Forward(cpu)) { printTestResult("B_Forward", true); passCount++; }
+    else { printTestResult("B_Forward", false); failCount++; }
+    if (testB_Backward(cpu)) { printTestResult("B_Backward", true); passCount++; }
+    else { printTestResult("B_Backward", false); failCount++; }
+    if (testB_MaxRange(cpu)) { printTestResult("B_MaxRange", true); passCount++; }
+    else { printTestResult("B_MaxRange", false); failCount++; }
+
+    // Format 19: Long branch with link
+    std::cout << "\n--- Format 19: Long Branch with Link ---" << std::endl;
+    if (testBL_Prefix(cpu)) { printTestResult("BL_Prefix", true); passCount++; }
+    else { printTestResult("BL_Prefix", false); failCount++; }
+    if (testBL_Suffix(cpu)) { printTestResult("BL_Suffix", true); passCount++; }
+    else { printTestResult("BL_Suffix", false); failCount++; }
+    if (testBL_NegativeOffset(cpu)) { printTestResult("BL_NegativeOffset", true); passCount++; }
+    else { printTestResult("BL_NegativeOffset", false); failCount++; }
+    if (testBL_MaxRange(cpu)) { printTestResult("BL_MaxRange", true); passCount++; }
+    else { printTestResult("BL_MaxRange", false); failCount++; }
+
+
+
+    // Format None : Random tests to ensure reliability
+    std::cout << "\n--- Format X: Random Tests ---" << std::endl;
+    if (testPUSH_All(cpu)) { printTestResult("PUSH_All", true); passCount++; }
+    else { printTestResult("PUSH_All", false); failCount++; }
 
     // Print summary
     std::cout << "\n========================================" << std::endl;

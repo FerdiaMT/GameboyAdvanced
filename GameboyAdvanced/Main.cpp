@@ -6,9 +6,10 @@ int main()
 {
 	GBA gba;
 
-
-	while (true)
+	int x = 0;
+	while (x<100)
 	{
 		gba.tick();
+		x += 1;
 	}
 }
