@@ -1,3 +1,6 @@
+#define _CRT_SECURE_NO_WARNINGS
+
+
 #include "CPU.h"
 #include <cstdint>
 #include <iostream>
@@ -41,6 +44,40 @@ void CPU::reset()
 
 
 
+uint32_t CPU::tick()
+{
+	if (!T) // if arm mode
+	{
+		instruction = read32(pc);
+		pc += 4;
+
+		curOP = decode(instruction);
+
+		printf("MODE:%s ,PC: 0x%08X, Instruction: 0x%08X, Flags: %s , R12: %08X ,Opcode: %s, \n", 
+			"A",
+			pc - pcOffset(), instruction, CPSRtoString(), reg[12], opcodeToString(curOP));
+
+		curOpCycles = execute();
+
+	}
+	else // if thumb mode
+	{
+		uint16_t thumbCode = read16(pc);
+		pc += 2;
+		curThumbInstr = decodeThumb(thumbCode);
+
+		printf("MODE:%s ,PC: 0x%08X, Instruction: 0x%04X    , Flags: %08X , R12: %s ,Opcode: %s  \n", 
+			"T",
+			pc - pcOffset(), thumbCode, CPSRtoString(), reg[12], thumbToStr(curThumbInstr).c_str());
+
+		curOpCycles = thumbExecute(curThumbInstr);
+	}
+
+
+	cycleTotal += curOpCycles; // this could be returned and made so the ppu does this many frames too ... 
+
+	return cycleTotal;// doing this for now
+}
 
 
 
@@ -195,38 +232,6 @@ void CPU::initializeOpFunctions()
 	opT_functions[static_cast<int>(thumbOperation::THUMB_UNDEFINED)] = &CPU::opT_UNDEFINED;
 }
 
-uint32_t CPU::tick()
-{
-	if (!T) // if arm mode
-	{
-		instruction = read32(pc);
-		pc += 4;
-
-		curOP = decode(instruction);
-
-		printf( "MODE:%s ,PC: 0x%08X, Instruction: 0x%08X, Flags: %s , Opcode: %s, \n",
-			"A", pc - pcOffset(), instruction, CPSRtoString(),opcodeToString(curOP)   );
-
-		curOpCycles = execute();
-
-	}
-	else // if thumb mode
-	{
-		uint16_t thumbCode = read16(pc);
-		pc += 2;
-		curThumbInstr = decodeThumb(thumbCode);
-
-		printf("MODE:%s ,PC: 0x%08X, Instruction: 0x%04X    , Flags: %s ,Opcode: %s  \n",
-			"T", pc - pcOffset(), thumbCode, CPSRtoString(),thumbToStr(curThumbInstr).c_str() );
-
-		curOpCycles = thumbExecute(curThumbInstr);
-	}
-	
-
-	cycleTotal += curOpCycles; // this could be returned and made so the ppu does this many frames too ... 
-
-	return cycleTotal;// doing this for now
-}
 
 CPU::Operation CPU::decode(uint32_t passedIns)
 {
@@ -1584,15 +1589,15 @@ CPU::thumbInstr CPU::debugDecodedInstr()
 	debugInstr.h2 = NULL;
 
 	return debugInstr;
-}
+}	
 
 CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr struct
 {
 	thumbInstr decodedInstr = {}; // creates empty struct for us to fill
 	decodedInstr.type = thumbOperation::THUMB_UNDEFINED;
 
+	//decodedInstr = debugDecodedInstr();
 
-	decodedInstr = debugDecodedInstr();
 
 	switch ((instr >> 13) & 0b111)
 	{
@@ -2560,44 +2565,523 @@ std::string CPU::thumbToStr(CPU::thumbInstr& instr)
 {
 	std::stringstream ss;
 
-	const char* opNames[] = {
-		"MOV_IMM", "ADD_REG", "ADD_IMM", "ADD_IMM3", "SUB_REG", "SUB_IMM", "SUB_IMM3", "CMP_IMM",
-		"LSL_IMM", "LSR_IMM", "ASR_IMM", "AND_REG", "EOR_REG", "LSL_REG",
-		"LSR_REG", "ASR_REG", "ADC_REG", "SBC_REG", "ROR_REG", "TST_REG",
-		"NEG_REG", "CMP_REG", "CMN_REG", "ORR_REG", "MUL_REG", "BIC_REG",
-		"MVN_REG", "ADD_HI", "CMP_HI", "MOV_HI", "BX", "BLX_REG",
-		"LDR_PC", "LDR_REG", "STR_REG", "LDRB_REG", "STRB_REG", "LDRH_REG",
-		"STRH_REG", "LDRSB_REG", "LDRSH_REG", "LDR_IMM", "STR_IMM", "LDRB_IMM",
-		"STRB_IMM", "LDRH_IMM", "STRH_IMM", "LDR_SP", "STR_SP", "ADD_PC",
-		"ADD_SP", "ADD_SP_IMM", "PUSH", "POP", "STMIA", "LDMIA",
-		"B_COND", "B", "BL_PREFIX", "BL_SUFFIX", "SWI", "UNDEFINED"
-	};
+	auto regStr = [&](int regNum) -> std::string
+		{
+			std::stringstream rs;
+			if (regNum == 13)
+				rs << "sp[0x" << std::hex << sp << "]" << std::dec;
+			else if (regNum == 14)
+				rs << "lr[0x" << std::hex << lr << "]" << std::dec;
+			else if (regNum == 15)
+				rs << "pc[0x" << std::hex << pc << "]" << std::dec;
+			else
+				rs << "r" << regNum << "[0x" << std::hex << reg[regNum] << "]" << std::dec;
+			return rs.str();
+		};
 
-	ss << std::dec << opNames[(int)instr.type];
-
-	if ((instr.rd != NULL)) ss << " Rd=R" << (int)instr.rd;
-	if ((instr.rs != NULL)) ss << " Rs=R" << (int)instr.rs;
-	if ((instr.rn != NULL)) ss << " Rn=R" << (int)instr.rn;
-
-
-	if (instr.imm != 0)
+	switch (instr.type)
 	{
-		ss << " imm=0x" << std::dec << instr.imm;
+	case thumbOperation::THUMB_LSL_IMM:
+	case thumbOperation::THUMB_LSR_IMM:
+	case thumbOperation::THUMB_ASR_IMM:
+	{
+		const char* op = (instr.type == thumbOperation::THUMB_LSL_IMM) ? "lsl" :
+			(instr.type == thumbOperation::THUMB_LSR_IMM) ? "lsr" : "asr";
+		const char* sym = (instr.type == thumbOperation::THUMB_LSL_IMM) ? "<<" :
+			(instr.type == thumbOperation::THUMB_LSR_IMM) ? ">>" : ">>(s)";
+		ss << op << "     " << regStr(instr.rd) << ", " << regStr(instr.rs) << ", #" << instr.imm;
+		ss << "    | " << regStr(instr.rd) << " = " << regStr(instr.rs) << " " << sym << " " << instr.imm;
+		break;
 	}
 
+	case thumbOperation::THUMB_ADD_REG:
+	case thumbOperation::THUMB_SUB_REG:
+	{
+		const char* op = (instr.type == thumbOperation::THUMB_ADD_REG) ? "add" : "sub";
+		const char* sym = (instr.type == thumbOperation::THUMB_ADD_REG) ? "+" : "-";
+		ss << op << "     " << regStr(instr.rd) << ", " << regStr(instr.rs) << ", " << regStr(instr.rn);
+		ss << "    | " << regStr(instr.rd) << " = " << regStr(instr.rs) << " " << sym << " " << regStr(instr.rn);
+		break;
+	}
 
-	if (instr.type == CPU::thumbOperation::THUMB_B_COND)
+	case thumbOperation::THUMB_ADD_IMM:
+	case thumbOperation::THUMB_SUB_IMM:
+	{
+		const char* op = (instr.type == thumbOperation::THUMB_ADD_IMM) ? "add" : "sub";
+		const char* sym = (instr.type == thumbOperation::THUMB_ADD_IMM) ? "+" : "-";
+		ss << op << "     " << regStr(instr.rd) << ", " << regStr(instr.rs) << ", #" << instr.imm;
+		ss << "    | " << regStr(instr.rd) << " = " << regStr(instr.rs) << " " << sym << " #" << instr.imm;
+		break;
+	}
+
+	case thumbOperation::THUMB_MOV_IMM:
+	ss << "mov     " << regStr(instr.rd) << ", #0x" << std::hex << instr.imm << std::dec;
+	ss << "    | " << regStr(instr.rd) << " = #0x" << std::hex << instr.imm << std::dec;
+	break;
+
+	case thumbOperation::THUMB_CMP_IMM:
+	ss << "cmp     " << regStr(instr.rd) << ", #0x" << std::hex << instr.imm << std::dec;
+	ss << "    | flags = " << regStr(instr.rd) << " - #0x" << std::hex << instr.imm << std::dec;
+	break;
+
+	case thumbOperation::THUMB_ADD_IMM3:
+	case thumbOperation::THUMB_SUB_IMM3:
+	{
+		const char* op = (instr.type == thumbOperation::THUMB_ADD_IMM3) ? "add" : "sub";
+		const char* sym = (instr.type == thumbOperation::THUMB_ADD_IMM3) ? "+=" : "-=";
+		ss << op << "     " << regStr(instr.rd) << ", #0x" << std::hex << instr.imm << std::dec;
+		ss << "    | " << regStr(instr.rd) << " " << sym << " #0x" << std::hex << instr.imm << std::dec;
+		break;
+	}
+
+	case thumbOperation::THUMB_AND_REG:
+	ss << "and     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | " << regStr(instr.rd) << " &= " << regStr(instr.rs);
+	break;
+	case thumbOperation::THUMB_EOR_REG:
+	ss << "eor     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | " << regStr(instr.rd) << " ^= " << regStr(instr.rs);
+	break;
+	case thumbOperation::THUMB_LSL_REG:
+	ss << "lsl     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | " << regStr(instr.rd) << " <<= " << regStr(instr.rs);
+	break;
+	case thumbOperation::THUMB_LSR_REG:
+	ss << "lsr     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | " << regStr(instr.rd) << " >>= " << regStr(instr.rs);
+	break;
+	case thumbOperation::THUMB_ASR_REG:
+	ss << "asr     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | " << regStr(instr.rd) << " >>= (signed) " << regStr(instr.rs);
+	break;
+	case thumbOperation::THUMB_ADC_REG:
+	ss << "adc     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | " << regStr(instr.rd) << " += " << regStr(instr.rs) << " + C";
+	break;
+	case thumbOperation::THUMB_SBC_REG:
+	ss << "sbc     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | " << regStr(instr.rd) << " -= " << regStr(instr.rs) << " - !C";
+	break;
+	case thumbOperation::THUMB_ROR_REG:
+	ss << "ror     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | " << regStr(instr.rd) << " = ror(" << regStr(instr.rd) << ", " << regStr(instr.rs) << ")";
+	break;
+	case thumbOperation::THUMB_TST_REG:
+	ss << "tst     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | flags = " << regStr(instr.rd) << " & " << regStr(instr.rs);
+	break;
+	case thumbOperation::THUMB_NEG_REG:
+	ss << "neg     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | " << regStr(instr.rd) << " = -" << regStr(instr.rs);
+	break;
+	case thumbOperation::THUMB_CMP_REG:
+	ss << "cmp     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | flags = " << regStr(instr.rd) << " - " << regStr(instr.rs);
+	break;
+	case thumbOperation::THUMB_CMN_REG:
+	ss << "cmn     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | flags = " << regStr(instr.rd) << " + " << regStr(instr.rs);
+	break;
+	case thumbOperation::THUMB_ORR_REG:
+	ss << "orr     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | " << regStr(instr.rd) << " |= " << regStr(instr.rs);
+	break;
+	case thumbOperation::THUMB_MUL_REG:
+	ss << "mul     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | " << regStr(instr.rd) << " *= " << regStr(instr.rs);
+	break;
+	case thumbOperation::THUMB_BIC_REG:
+	ss << "bic     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | " << regStr(instr.rd) << " &= ~" << regStr(instr.rs);
+	break;
+	case thumbOperation::THUMB_MVN_REG:
+	ss << "mvn     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | " << regStr(instr.rd) << " = ~" << regStr(instr.rs);
+	break;
+
+	case thumbOperation::THUMB_ADD_HI:
+	ss << "add     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | " << regStr(instr.rd) << " += " << regStr(instr.rs);
+	break;
+	case thumbOperation::THUMB_CMP_HI:
+	ss << "cmp     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | flags = " << regStr(instr.rd) << " - " << regStr(instr.rs);
+	break;
+	case thumbOperation::THUMB_MOV_HI:
+	ss << "mov     " << regStr(instr.rd) << ", " << regStr(instr.rs);
+	ss << "    | " << regStr(instr.rd) << " = " << regStr(instr.rs);
+	break;
+
+	case thumbOperation::THUMB_BX:
+	ss << "bx      " << regStr(instr.rs);
+	ss << "    | pc = " << regStr(instr.rs) << " & ~1, T = bit0";
+	break;
+	case thumbOperation::THUMB_BLX_REG:
+	ss << "blx     " << regStr(instr.rs);
+	ss << "    | lr = pc+2, pc = " << regStr(instr.rs) << " & ~1, T = bit0";
+	break;
+
+	case thumbOperation::THUMB_LDR_PC:
+	{
+		uint32_t addr = (pc & ~2) + 4 + instr.imm;
+		ss << "ldr     " << regStr(instr.rd) << ", [pc, #0x" << std::hex << instr.imm << "]" << std::dec;
+		ss << "    | " << regStr(instr.rd) << " = [0x" << std::hex << addr << "]" << std::dec;
+		break;
+	}
+
+	case thumbOperation::THUMB_STR_REG:
+	case thumbOperation::THUMB_STRB_REG:
+	case thumbOperation::THUMB_LDR_REG:
+	case thumbOperation::THUMB_LDRB_REG:
+	case thumbOperation::THUMB_STRH_REG:
+	case thumbOperation::THUMB_LDRSB_REG:
+	case thumbOperation::THUMB_LDRH_REG:
+	case thumbOperation::THUMB_LDRSH_REG:
+	{
+		const char* opNames[] = {
+			"str", "strb", "ldr", "ldrb", "strh", "ldrsb", "ldrh", "ldrsh"
+		};
+		int idx = (int)instr.type - (int)thumbOperation::THUMB_STR_REG;
+		bool isLoad = (idx >= 2 && idx != 4);
+
+		ss << opNames[idx] << "    " << regStr(instr.rd) << ", [" << regStr(instr.rs) << ", " << regStr(instr.rn) << "]";
+		if (isLoad)
+			ss << "    | " << regStr(instr.rd) << " = [" << regStr(instr.rs) << " + " << regStr(instr.rn) << "]";
+		else
+			ss << "    | [" << regStr(instr.rs) << " + " << regStr(instr.rn) << "] = " << regStr(instr.rd);
+		break;
+	}
+
+	case thumbOperation::THUMB_STR_IMM:
+	case thumbOperation::THUMB_LDR_IMM:
+	case thumbOperation::THUMB_STRB_IMM:
+	case thumbOperation::THUMB_LDRB_IMM:
+	case thumbOperation::THUMB_STRH_IMM:
+	case thumbOperation::THUMB_LDRH_IMM:
+	{
+		const char* opNames[] = {
+			"str", "ldr", "strb", "ldrb", "strh", "ldrh"
+		};
+		int idx = (int)instr.type - (int)thumbOperation::THUMB_STR_IMM;
+		bool isLoad = (idx % 2 == 1);
+
+		ss << opNames[idx] << "     " << regStr(instr.rd) << ", [" << regStr(instr.rs) << ", #0x" << std::hex << instr.imm << "]" << std::dec;
+		if (isLoad)
+			ss << "    | " << regStr(instr.rd) << " = [" << regStr(instr.rs) << " + #0x" << std::hex << instr.imm << "]" << std::dec;
+		else
+			ss << "    | [" << regStr(instr.rs) << " + #0x" << std::hex << instr.imm << "] = " << std::dec << regStr(instr.rd);
+		break;
+	}
+
+	case thumbOperation::THUMB_STR_SP:
+	ss << "str     " << regStr(instr.rd) << ", [sp, #0x" << std::hex << instr.imm << "]" << std::dec;
+	ss << "    | [sp + #0x" << std::hex << instr.imm << "] = " << std::dec << regStr(instr.rd);
+	break;
+	case thumbOperation::THUMB_LDR_SP:
+	ss << "ldr     " << regStr(instr.rd) << ", [sp, #0x" << std::hex << instr.imm << "]" << std::dec;
+	ss << "    | " << regStr(instr.rd) << " = [sp + #0x" << std::hex << instr.imm << "]" << std::dec;
+	break;
+
+	case thumbOperation::THUMB_ADD_PC:
+	ss << "add     " << regStr(instr.rd) << ", pc, #0x" << std::hex << instr.imm << std::dec;
+	ss << "    | " << regStr(instr.rd) << " = pc + #0x" << std::hex << instr.imm << std::dec;
+	break;
+	case thumbOperation::THUMB_ADD_SP_IMM:
+	ss << "add     " << regStr(instr.rd) << ", sp, #0x" << std::hex << instr.imm << std::dec;
+	ss << "    | " << regStr(instr.rd) << " = sp + #0x" << std::hex << instr.imm << std::dec;
+	break;
+
+	case thumbOperation::THUMB_ADD_SP:
+	if ((int32_t)instr.imm < 0)
+	{
+		ss << "sub     sp, #0x" << std::hex << (-(int32_t)instr.imm) << std::dec;
+		ss << "    | sp -= #0x" << std::hex << (-(int32_t)instr.imm) << std::dec;
+	}
+	else
+	{
+		ss << "add     sp, #0x" << std::hex << instr.imm << std::dec;
+		ss << "    | sp += #0x" << std::hex << instr.imm << std::dec;
+	}
+	break;
+
+	case thumbOperation::THUMB_PUSH:
+	case thumbOperation::THUMB_POP:
+	{
+		const char* op = (instr.type == thumbOperation::THUMB_PUSH) ? "push" : "pop";
+		ss << op << "    {";
+		bool first = true;
+		for (int i = 0; i < 16; i++)
+		{
+			if (instr.imm & (1 << i))
+			{
+				if (!first) ss << ", ";
+				ss << regStr(i);
+				first = false;
+			}
+		}
+		ss << "}";
+		break;
+	}
+
+	case thumbOperation::THUMB_STMIA:
+	case thumbOperation::THUMB_LDMIA:
+	{
+		const char* op = (instr.type == thumbOperation::THUMB_STMIA) ? "stmia" : "ldmia";
+		ss << op << "   " << regStr(instr.rs) << "!, {";
+		bool first = true;
+		for (int i = 0; i < 8; i++)
+		{
+			if (instr.imm & (1 << i))
+			{
+				if (!first) ss << ", ";
+				ss << regStr(i);
+				first = false;
+			}
+		}
+		ss << "}";
+		break;
+	}
+
+	case thumbOperation::THUMB_B_COND:
 	{
 		const char* condNames[] = {
-			"EQ", "NE", "CS", "CC", "MI", "PL", "VS", "VC",
-			"HI", "LS", "GE", "LT", "GT", "LE", "AL", "NV"
+			"eq", "ne", "cs", "cc", "mi", "pl", "vs", "vc",
+			"hi", "ls", "ge", "lt", "gt", "le", "al", "nv"
 		};
-		ss << " cond=" << condNames[instr.cond];
+		int32_t offset = (int32_t)instr.imm;
+		uint32_t target = (pc + 4 + offset) & ~1;
+		ss << "b" << condNames[instr.cond] << "     0x" << std::hex << target << std::dec;
+		ss << "    | if " << condNames[instr.cond] << " then pc = 0x" << std::hex << target << std::dec;
+		break;
 	}
 
-	if (instr.h1) ss << " H1";
-	if (instr.h2) ss << " H2";
+	case thumbOperation::THUMB_B:
+	{
+		int32_t offset = (int32_t)instr.imm;
+		uint32_t target = (pc + 4 + offset) & ~1;
+		ss << "b       0x" << std::hex << target << std::dec;
+		ss << "    | pc = 0x" << std::hex << target << std::dec;
+		break;
+	}
+
+	case thumbOperation::THUMB_BL_PREFIX:
+	ss << "bl_hi   0x" << std::hex << instr.imm << std::dec;
+	ss << "    | lr = pc + 0x" << std::hex << instr.imm << std::dec;
+	break;
+	case thumbOperation::THUMB_BL_SUFFIX:
+	{
+		uint32_t target = (lr + instr.imm) & ~1;
+		ss << "bl_lo   0x" << std::hex << target << std::dec;
+		ss << "    | pc = 0x" << std::hex << target << ", lr = 0x" << (pc + 2) << std::dec;
+		break;
+	}
+
+	case thumbOperation::THUMB_SWI:
+	ss << "swi     #0x" << std::hex << (instr.imm & 0xFF) << std::dec;
+	break;
+
+	case thumbOperation::THUMB_UNDEFINED:
+	ss << "undefined";
+	break;
+
+	default:
+	ss << "unknown";
+	break;
+	}
 
 	return ss.str();
 }
 
+// made specially for this 
+void CPU::runThumbTests()
+{
+	FILE* f = fopen("thumb_add_sub.json.bin", "rb");
+	if (!f)
+	{
+		printf("ERROR: Could not open test file!\n");
+		return;
+	}
+
+	uint32_t magic, numTests, testSize, stateSize, val;
+	fread(&magic, 4, 1, f);
+	fread(&numTests, 4, 1, f);
+	fread(&testSize, 4, 1, f);
+	fread(&stateSize, 4, 1, f);
+	fread(&val, 4, 1, f);
+
+	printf("Magic: 0x%08x\n", magic);
+	printf("Number of tests: %d\n\n", numTests);
+
+	for (int i = 0; i < 3; i++)
+	{
+
+		fseek(f, 0x14 + (i * testSize), SEEK_SET);
+		printf("=== TEST %d ===\n" , i);
+
+		uint32_t R_init[16];
+		fread(R_init, 4, 16, f);
+		printf("R:\n");
+		for (int i = 0; i < 16; i++)
+			printf("  R[%d]: %u\n", i, R_init[i]);
+
+		uint32_t R_fiq_init[7];
+		fread(R_fiq_init, 4, 7, f);
+		printf("\nR_fiq:\n");
+		for (int i = 0; i < 7; i++)
+			printf("  R_fiq[%d]: %u\n", i, R_fiq_init[i]);
+
+		uint32_t R_svc_init[2];
+		fread(R_svc_init, 4, 2, f);
+		printf("\nR_svc:\n");
+		for (int i = 0; i < 2; i++)
+			printf("  R_svc[%d]: %u\n", i, R_svc_init[i]);
+
+		uint32_t R_abt_init[2];
+		fread(R_abt_init, 4, 2, f);
+		printf("\nR_abt:\n");
+		for (int i = 0; i < 2; i++)
+			printf("  R_abt[%d]: %u\n", i, R_abt_init[i]);
+
+		uint32_t R_irq_init[2];
+		fread(R_irq_init, 4, 2, f);
+		printf("\nR_irq:\n");
+		for (int i = 0; i < 2; i++)
+			printf("  R_irq[%d]: %u\n", i, R_irq_init[i]);
+
+		uint32_t R_und_init[2];
+		fread(R_und_init, 4, 2, f);
+		printf("\nR_und:\n");
+		for (int i = 0; i < 2; i++)
+			printf("  R_und[%d]: %u\n", i, R_und_init[i]);
+
+		uint32_t CPSR_init;
+		fread(&CPSR_init, 4, 1, f);
+		printf("\nCPSR: %u\n", CPSR_init);
+
+		uint32_t SPSR_init[5];
+		fread(SPSR_init, 4, 5, f);
+		printf("\nSPSR:\n");
+		for (int i = 0; i < 5; i++)
+			printf("  SPSR[%d]: %u\n", i, SPSR_init[i]);
+
+		uint32_t pipeline_init[2];
+		fread(pipeline_init, 4, 2, f);
+		printf("\npipeline:\n");
+		for (int i = 0; i < 2; i++)
+			printf("  pipeline[%d]: %u\n", i, pipeline_init[i]);
+
+		uint32_t access_init;
+		fread(&access_init, 4, 1, f);
+		printf("\naccess: %u\n", access_init);
+
+		uint64_t junk;
+		fread(&junk, 8, 1, f);
+
+		// FINAL STATE
+		printf("\n=== FINAL STATE ===\n");
+
+		uint32_t R_final[16];
+		fread(R_final, 4, 16, f);
+		printf("R (showing only changes):\n");
+		for (int i = 0; i < 16; i++)
+		{
+			if (R_final[i] != R_init[i])
+				printf("  R[%d]: %u (was %u)\n", i, R_final[i], R_init[i]);
+		}
+
+		// Skip rest of final state for now
+		uint32_t R_fiq_final[7];
+		fread(R_fiq_final, 4, 7, f);
+		printf("\nR_fiq:\n");
+		for (int i = 0; i < 7; i++)
+			printf("  R_fiq[%d]: %u\n", i, R_fiq_final[i]);
+
+		uint32_t R_svc_final[2];
+		fread(R_svc_final, 4, 2, f);
+		printf("\nR_svc:\n");
+		for (int i = 0; i < 2; i++)
+			printf("  R_svc[%d]: %u\n", i, R_svc_final[i]);
+
+		uint32_t R_abt_final[2];
+		fread(R_abt_final, 4, 2, f);
+		printf("\nR_abt:\n");
+		for (int i = 0; i < 2; i++)
+			printf("  R_abt[%d]: %u\n", i, R_abt_final[i]);
+
+		uint32_t R_irq_final[2];
+		fread(R_irq_final, 4, 2, f);
+		printf("\nR_irq:\n");
+		for (int i = 0; i < 2; i++)
+			printf("  R_irq[%d]: %u\n", i, R_irq_final[i]);
+
+		uint32_t R_und_final[2];
+		fread(R_und_final, 4, 2, f);
+		printf("\nR_und:\n");
+		for (int i = 0; i < 2; i++)
+			printf("  R_und[%d]: %u\n", i, R_und_final[i]);
+
+		uint32_t CPSR_final;
+		fread(&CPSR_final, 4, 1, f);
+		if (CPSR_final != CPSR_init)
+			printf("\nCPSR: %u (was %u)\n", CPSR_final, CPSR_init);
+
+		uint32_t SPSR_final[5];
+		fread(SPSR_final, 4, 5, f);
+		printf("\nSPSR:\n");
+		for (int i = 0; i < 5; i++)
+			printf("  SPSR[%d]: %u\n", i, SPSR_final[i]);
+
+
+		uint32_t pipeline_final[2];
+		fread(pipeline_final, 4, 2, f);
+		for (int i = 0; i < 2; i++)
+			printf("  pipeline[%d]: %u\n", i, pipeline_final[i]);
+
+
+
+
+		uint32_t access_final;
+		fread(&access_final, 4, 1, f);
+		printf("\naccess: %u\n", access_final);
+
+		uint32_t junkArr[3];
+		fread(&junkArr, 4, 3, f);
+
+
+		// TRANSACTIONS
+		printf("\n=== TRANSACTIONS ===\n");
+		uint32_t trans_kind, trans_size, trans_addr, trans_data, trans_cycle, trans_access;
+		fread(&trans_kind, 4, 1, f);
+		fread(&trans_size, 4, 1, f);
+		fread(&trans_addr, 4, 1, f);
+		fread(&trans_data, 4, 1, f);
+		fread(&trans_cycle, 4, 1, f);
+		fread(&trans_access, 4, 1, f);
+
+		printf("Transaction 0:\n");
+		printf("  kind: %u\n", trans_kind);
+		printf("  size: %u\n", trans_size);
+		printf("  addr: %u\n", trans_addr);
+		printf("  data: %u\n", trans_data);
+		printf("  cycle: %u\n", trans_cycle);
+		printf("  access: %u\n", trans_access);
+
+		// OPCODE and BASE_ADDR
+		printf("\n=== OPCODE & BASE_ADDR ===\n");
+
+		uint32_t junkArr2[3];
+		fread(&junkArr2, 4, 2, f);
+
+		uint16_t opcode, padding;
+		uint32_t base_addr;
+		fread(&opcode, 2, 1, f);
+		fread(&padding, 2, 1, f);
+		fread(&base_addr, 4, 1, f);
+
+		printf("opcode: %u (0x%04x)\n", opcode, opcode);
+		printf("padding: %u (0x%04x)\n", padding, padding);
+		printf("base_addr: %u (0x%08x)\n", base_addr, base_addr);
+	}
+
+	fclose(f);
+}

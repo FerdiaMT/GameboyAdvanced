@@ -117,6 +117,65 @@ public:
 
 		COUNT,
 	};
+
+	enum class armOperation
+	{
+		ARM_AND,
+		ARM_EOR,
+		ARM_SUB,
+		ARM_RSB,
+		ARM_ADD,
+		ARM_ADC,
+		ARM_SBC,
+		ARM_RSC,
+		ARM_TST,
+		ARM_TEQ,
+		ARM_CMP,
+		ARM_CMN,
+		ARM_ORR,
+		ARM_MOV,
+		ARM_BIC,
+		ARM_MVN,
+
+		ARM_MUL,
+		ARM_MLA,
+		ARM_UMULL,
+		ARM_UMLAL,
+		ARM_SMULL,
+		ARM_SMLAL,
+
+		ARM_LDR,
+		ARM_STR,
+		ARM_LDRH,
+		ARM_STRH,
+		ARM_LDRSB,
+		ARM_LDRSH,
+
+		ARM_LDM,
+		ARM_STM,
+
+
+		ARM_B,
+		ARM_BL,
+		ARM_BX,
+
+		ARM_MRS,
+		ARM_MSR,
+		ARM_SWP,
+
+
+		ARM_SWI,
+
+
+		ARM_CDP,
+		ARM_LDC,
+		ARM_STC,
+		ARM_MRC,
+		ARM_MCR,
+
+		ARM_UNDEFINED,
+		ARM_COUNT
+	};
 	
 	struct thumbInstr
 	{
@@ -521,6 +580,6 @@ public:
 			}
 		}
 
-		
+		void runThumbTests();
 };
 
