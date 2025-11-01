@@ -232,26 +232,24 @@ public:
 		union
 		{
 			struct
-			{ //declared from bit 0 onwards
-				bool M0;
-				bool M1;
-				bool M2;
-				bool M3;
-				bool M4;
-				bool T;
-				bool F;
-				bool I;//7
-				//JUNK FOR 8 TO 27
-				uint16_t RESERVED;//8 - 23
-				bool RESERVED1, RESERVED2, RESERVED3, RESERVED4;//24,25,26,27
-				bool V; // overflow flag
-				bool C; // carry flag
-				bool Z; // zero flag
-				bool N; // sign flag
-
+			{
+				uint32_t M0 : 1;
+				uint32_t M1 : 1;
+				uint32_t M2 : 1;
+				uint32_t M3 : 1;
+				uint32_t M4 : 1;
+				uint32_t T : 1;
+				uint32_t F : 1;
+				uint32_t I : 1;
+				uint32_t RESERVED : 20;
+				uint32_t V : 1;
+				uint32_t C : 1;
+				uint32_t Z : 1;
+				uint32_t N : 1;
 			};
 			uint32_t CPSR;
 		};
+
 		//SPSR
 
 

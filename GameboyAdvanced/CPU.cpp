@@ -3031,8 +3031,10 @@ void CPU::runThumbTests()
 				reg[r] = R_init[r];
 
 			pc = base_addr + 4;
-
+			
 			CPSR = CPSR_init; //load cspr
+
+			printf("0x%08X \n", CPSR_init);
 
 			for (int r = 0; r < 5; r++) // load spsr
 				spsrBank[r] = SPSR_init[r];
@@ -3052,8 +3054,8 @@ void CPU::runThumbTests()
 					testPassed = false;
 					if (failuresShown < maxFailuresToShow)
 					{
-						printf("Test %d FAILED (opcode 0x%04x @ 0x%08x): r%d = 0x%08x, expected 0x%08x\n",
-							tNum, opcode, base_addr, r, reg[r], R_final[r]);
+						printf("Test %d FAILED (opcode 0x%04x @ 0x%08x): r%d = 0x%08x, expected 0x%08x | %s | %s\n",
+							tNum, opcode, base_addr, r, reg[r], R_final[r] , CPSRtoString(), thumbToStr(decoded).c_str() );
 						if (CPSR != CPSR_final)
 						{
 							printf("Test %d FAILED (opcode 0x%04x @ 0x%08x): CPSR: %08x, expected CPSR: %08x\n",
