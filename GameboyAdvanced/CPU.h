@@ -241,6 +241,7 @@ public:
 				uint32_t T : 1;
 				uint32_t F : 1;
 				uint32_t I : 1;
+
 				uint32_t RESERVED : 20;
 				uint32_t V : 1;
 				uint32_t C : 1;

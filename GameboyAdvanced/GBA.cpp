@@ -9,15 +9,15 @@
 //LOAD / STORE BITS NOT PROPERLY HANDLED
 
 //const char* rom = "thumb.gba";
-const char* rom = "thumb_add_sub.json.bin";
+const char* rom = "gba_bios.bin";
 
 GBA::GBA(): cpu(&bus) , debuggerCPU(&cpu)
 {
-	//if (!bus.loadROM(rom, 0x08000000))
-	//{
-	//	printf("error with loading the binary tester");
-	//	return;
-	//}
+	if (!bus.loadROM(rom, 0x00000000))
+	{
+		printf("error with loading the binary tester");
+		return;
+	}
 
 	//debuggerCPU.runAllThumbTests(cpu);
 

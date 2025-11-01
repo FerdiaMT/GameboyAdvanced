@@ -1688,7 +1688,10 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 			case 0b01: decodedInstr.type = thumbOperation::THUMB_CMP_HI; break;
 			case 0b10: decodedInstr.type = thumbOperation::THUMB_MOV_HI; break;
 			case 0b11:
-			if (decodedInstr.h1) decodedInstr.type = thumbOperation::THUMB_BLX_REG;
+			if (decodedInstr.h1)
+			{
+				decodedInstr.type = thumbOperation::THUMB_BLX_REG;
+			}
 			else decodedInstr.type = thumbOperation::THUMB_BX;
 			break;
 			}
@@ -1850,9 +1853,9 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 			decodedInstr.imm = (instr & 0x7FF);
 			if (!((instr >> 11) & 0b1))
 			{
-				int16_t offset11 = (instr & 0x7FF);
-				if (offset11 & 0x400) offset11 |= 0xF800;
-				decodedInstr.imm = (int32_t)offset11 << 12;
+				int32_t offset11 = (instr & 0x7FF); 
+				if (offset11 & 0x400) offset11 |= 0xFFFFF800; 
+				decodedInstr.imm = offset11 << 12;
 
 				decodedInstr.type = thumbOperation::THUMB_BL_PREFIX;
 			}
@@ -2255,30 +2258,29 @@ inline int CPU::opT_BX(thumbInstr instr)
 	if (target & 1)
 	{
 		T = 1;
-		pc = target & ~1; // keep thumb
+		pc = (target+2) & ~1; // keep thumb
 
 	}
 	else
 	{
 		T = 0;  //swap arm
-		pc = target & ~3;
+		pc = (target + 6)&~1;
 	}
 	return 3;
 }
 
 inline int CPU::opT_BLX_REG(thumbInstr instr)
 {
-	uint32_t target = reg[instr.rs];
-	lr = (pc - 2) | 1;
-	if (target & 1)
-	{
-		pc = target & ~1;
-	}
+
+	uint32_t regI = instr.rs;
+	
+	uint32_t target = reg[regI];
+	lr = (pc + 2) | 1;
+	T = target & 1;
+	if (T)
+		pc = (target+2) & ~1;
 	else
-	{
-		T = 0;
-		pc = target & ~3;
-	}
+		pc = (target+6) & ~1;
 	return 3;
 }
 
@@ -2452,6 +2454,15 @@ inline int CPU::opT_POP(thumbInstr instr)
 inline int CPU::opT_STMIA(thumbInstr instr)
 {
 	uint32_t address = reg[instr.rs];
+
+
+	if ((instr.imm & 0xFF) == 0) // if loading from an empty list
+	{
+		write32(address, reg[15]);
+		reg[instr.rs] = address + 0x40;
+		return 1;
+	}
+
 	for (int i = 0; i < 8; i++)
 	{
 		if (instr.imm & (1 << i))
@@ -2460,13 +2471,26 @@ inline int CPU::opT_STMIA(thumbInstr instr)
 			address += 4;
 		}
 	}
+
 	reg[instr.rs] = address;
 	return 1 + countSetBits(instr.imm & 0xFF);
 }
 
+
 inline int CPU::opT_LDMIA(thumbInstr instr)
 {
 	uint32_t address = reg[instr.rs];
+
+
+	if ((instr.imm & 0xFF) == 0) // if loading from an empty list
+	{
+		reg[15] = read32(address)+4;  
+		reg[instr.rs] = address + 0x40;  
+		return 1;
+	}
+
+	bool baseInList = instr.imm & (1 << instr.rs);
+
 	for (int i = 0; i < 8; i++)
 	{
 		if (instr.imm & (1 << i))
@@ -2475,7 +2499,9 @@ inline int CPU::opT_LDMIA(thumbInstr instr)
 			address += 4;
 		}
 	}
-	reg[instr.rs] = address;
+
+	if (!baseInList) reg[instr.rs] = address;
+
 	return 1 + countSetBits(instr.imm & 0xFF);
 }
 
@@ -2483,14 +2509,9 @@ inline int CPU::opT_B_COND(thumbInstr instr)
 {
 	if (checkConditional((uint8_t)instr.cond & 0xFF))
 	{
-
 		pc = pc + 2 + (int32_t)instr.imm;
-		printf("condition TRUE\n");
 	}
-	else
-	{
-		printf("condition false so pc only increased by 2\n");
-	}
+
 	return 3;
 }
 
@@ -2504,7 +2525,7 @@ inline int CPU::opT_B(thumbInstr instr)
 inline int CPU::opT_BL_PREFIX(thumbInstr instr)
 {
 
-	lr = pc + 4 + (int32_t)instr.imm;
+	lr = pc + (int32_t)instr.imm;
 	return 1;
 }
 
@@ -2545,10 +2566,45 @@ uint16_t CPU::read16(uint32_t addr, bool bReadOnly)
 {
 	return bus->read16(addr);
 }
+
+struct Transaction
+{
+	uint32_t kind, size, addr, data, cycle, access;
+};
+std::vector<Transaction> currentTransactions;
+
+uint32_t curTestBaseAddr;
+uint16_t curTestOpTHUMB;
+
 uint32_t CPU::read32(uint32_t addr, bool bReadOnly)
 {
+	for (const auto& transaction : currentTransactions)
+	{
+		if (transaction.kind == 1 && transaction.addr == addr && transaction.size == 4)
+		{
+			return transaction.data;
+		}
+	}
+	// if not in there, check if its pc
+
+	if (addr = curTestBaseAddr)
+	{
+		return curTestOpTHUMB;
+	}
+
+
 	return bus->read32(addr);
 }
+
+//def read(addr, is_code) :   EXAMPLE CODE FROM THE TEST SUITE
+//	if not is_code :
+//		return lookup_transaction(addr)
+//		if (addr == test.base_addr) :
+//			return test.opcode;
+//		else :
+//			return addr;
+
+
 
 /////////////////////////////////////////////
 ///             WRITE FUNCTIONS           ///
@@ -2901,24 +2957,22 @@ std::string CPU::thumbToStr(CPU::thumbInstr& instr)
 // made specially for this 
 
 //THUMB TESTS
-//    thumb_add_cmp_mov_hi.json.bin - 860 passed
+//    thumb_add_cmp_mov_hi.json.bin - 37604 passed
 //		thumb_add_sp_or_pc.json.bin - 34 passed
 //		thumb_add_sub.json.bin -  50000 passed
 //		thumb_add_sub_sp.json.bin- 0 passed
 
-//		thumb_bcc.json.bin - 216 passed
 //		thumb_bl_blx_prefix.json - 0 passed
 //		thumb_bl_suffix.json.bin - o passed
 //	     thumb_bx.json - 0 passed
 //		thumb_data_proc.json - 46813 passed
-//		thumb_ldm_stm.json.bin - 1 passed
 //		thumb_ldr_pc_rel.json.bin =- 0
 //       thumb_ldr_str_imm_offset.json - 5542
 
 
 void CPU::runThumbTests()
 {
-	const char* str = "thumb_bcc.json.bin";
+	const char* str = "thumb_bx.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -2929,7 +2983,7 @@ void CPU::runThumbTests()
 
 	int passed = 0;
 	int failed = 0;
-	int maxFailuresToShow = 10;
+	int maxFailuresToShow = 100;
 	int failuresShown = 0;
 
 	uint32_t magic, numTests, testSize, stateSize, val;
@@ -2997,17 +3051,22 @@ void CPU::runThumbTests()
 		fread(&junkB, 4, 1, f);
 		uint32_t junkC;
 		fread(&junkC, 4, 1, f);
+
 		// TRANSACTIONS
+
+		currentTransactions.clear();
+
 		int transactionCounter = 0;
 		while (transactionCounter < amtOfTransactions)
 		{
-			uint32_t trans_kind, trans_size, trans_addr, trans_data, trans_cycle, trans_access;
-			fread(&trans_kind, 4, 1, f);
-			fread(&trans_size, 4, 1, f);
-			fread(&trans_addr, 4, 1, f);
-			fread(&trans_data, 4, 1, f);
-			fread(&trans_cycle, 4, 1, f);
-			fread(&trans_access, 4, 1, f);
+			Transaction trans;
+			fread(&trans.kind, 4, 1, f);
+			fread(&trans.size, 4, 1, f);
+			fread(&trans.addr, 4, 1, f);
+			fread(&trans.data, 4, 1, f);
+			fread(&trans.cycle, 4, 1, f);
+			fread(&trans.access, 4, 1, f);
+			currentTransactions.push_back(trans);
 			transactionCounter++;
 
 		}
@@ -3023,7 +3082,7 @@ void CPU::runThumbTests()
 		// LOADS
 		////////////
 
-		if (tNum ==1)
+		if (tNum < 1000 ) // jtest
 		{
 			reset();
 
@@ -3034,18 +3093,30 @@ void CPU::runThumbTests()
 			
 			CPSR = CPSR_init; //load cspr
 
-			printf("0x%08X \n", CPSR_init);
+			//printf("0x%08X \n", CPSR_init); INCASE FLAGS ARNT WORKING . UNCOMMENT TO DEBUG
 
 			for (int r = 0; r < 5; r++) // load spsr
 				spsrBank[r] = SPSR_init[r];
 
 			///DECODE / EXECUTE
 			thumbInstr decoded = decodeThumb(opcode);
-			pc += 2;
 			thumbExecute(decoded);
+			pc += 2;
 
 			// Check results - compare ALL registers including PC
 			bool testPassed = true;
+
+
+
+			if (CPSR != CPSR_final)
+			{
+				testPassed = false;
+				if (true)//(failuresShown < maxFailuresToShow)
+				{
+					printf("Test %d CSPR FAIL (opcode 0x%04x @ 0x%08x): CPSR: %08x, CPSR_init: %08x, expected CPSR: %08x\n",
+						tNum, opcode, base_addr, CPSR, CPSR_init, CPSR_final);
+				}
+			}
 
 			for (int r = 0; r < 16; r++)
 			{
@@ -3054,25 +3125,14 @@ void CPU::runThumbTests()
 					testPassed = false;
 					if (failuresShown < maxFailuresToShow)
 					{
-						printf("Test %d FAILED (opcode 0x%04x @ 0x%08x): r%d = 0x%08x, expected 0x%08x | %s | %s\n",
+						//printf("pre lr , R14: %08X \n", R_init[14]);
+						printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r%d = 0x%08x, expected 0x%08x | %s | %s\n",
 							tNum, opcode, base_addr, r, reg[r], R_final[r] , CPSRtoString(), thumbToStr(decoded).c_str() );
-						if (CPSR != CPSR_final)
-						{
-							printf("Test %d FAILED (opcode 0x%04x @ 0x%08x): CPSR: %08x, expected CPSR: %08x\n",
-								tNum, opcode, base_addr, CPSR, CPSR_final);
-						}
-					}
-				}
-				else if (CPSR != CPSR_final)
-				{
-					testPassed = false;
-					if (failuresShown < maxFailuresToShow)
-					{
-						printf("Test %d FAILED (opcode 0x%04x @ 0x%08x): CPSR: %08x, expected CPSR: %08x\n",
-							tNum, opcode, base_addr, CPSR, CPSR_final);
 					}
 				}
 			}
+
+
 
 			if (testPassed)
 				passed++;
