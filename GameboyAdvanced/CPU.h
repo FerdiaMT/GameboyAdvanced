@@ -258,6 +258,7 @@ public:
 public:
 
 	const char* CPSRtoString();
+	std::string CPSRtoStringPASSED(uint32_t base, uint32_t final, uint32_t passed);
 	uint32_t ThumbToARM(uint16_t thumbInstr, uint32_t pc, uint16_t nextThumbInstr);
 	inline bool checkConditional(uint8_t cond) const;
 
