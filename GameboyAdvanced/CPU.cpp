@@ -2359,12 +2359,12 @@ inline int CPU::opT_BLX_REG(thumbInstr instr) // so this doesnt exist for thumb,
 	//	pc = (target+2) & ~1;
 	//else
 	//	pc = (target+6) & ~1;
-	//return 3;
+	return 3;
 }
 
 inline int CPU::opT_LDR_PC(thumbInstr instr)
 {
-	uint32_t address = ((pc + 2) & ~2) + instr.imm;
+	uint32_t address = ((pc) & ~2) + instr.imm;
 	reg[instr.rd] = read32(address);
 	return 3;
 }
@@ -2400,7 +2400,16 @@ inline int CPU::opT_STRB_REG(thumbInstr instr)
 inline int CPU::opT_LDRH_REG(thumbInstr instr)
 {
 	uint32_t address = reg[instr.rs] + reg[instr.rn];
-	reg[instr.rd] = read16(address);
+
+	uint32_t value = read16(address);
+
+	uint32_t misalignment = address & 1; // if missaligned
+	if (misalignment != 0)
+	{
+		value = (value & 0xFF) | (value & 0xFF00) << 16;
+	}
+
+	reg[instr.rd] = value;
 	return 3;
 }
 
@@ -2422,8 +2431,38 @@ inline int CPU::opT_LDRSB_REG(thumbInstr instr)
 inline int CPU::opT_LDRSH_REG(thumbInstr instr)
 {
 	uint32_t address = reg[instr.rs] + reg[instr.rn];
-	int16_t value = (int16_t)read16(address);
-	reg[instr.rd] = (int32_t)value;
+	uint16_t value = read16(address);
+	uint32_t signedVal = value;
+
+	if (address & 1) // if unaligned
+	{
+		value = value & 0xFF;
+
+
+		if ((value >> 7) & 1)
+		{
+			signedVal |= 0xFFFFFF00;
+		}
+		else
+		{
+			signedVal = value;
+		}
+
+	}
+	else
+	{
+
+		if ((value >> 15) & 1)
+		{
+			signedVal |= 0xFFFF0000;
+		}
+	}
+
+	//set 16 to 31 whatever 5 is 
+
+
+
+	reg[instr.rd] = signedVal;
 	return 3;
 }
 
@@ -2458,10 +2497,18 @@ inline int CPU::opT_STRB_IMM(thumbInstr instr)
 inline int CPU::opT_LDRH_IMM(thumbInstr instr)
 {
 	uint32_t address = reg[instr.rs] + instr.imm;
-	reg[instr.rd] = read16(address);
+	uint32_t value = read16(address); 
+
+
+	uint32_t misalignment = address & 1; // if missaligned
+	if (misalignment != 0)
+	{
+		value = (value & 0xFF) | (value & 0xFF00) << 16;
+	}
+
+	reg[instr.rd] = value;
 	return 3;
 }
-
 inline int CPU::opT_STRH_IMM(thumbInstr instr)
 {
 	uint32_t address = reg[instr.rs] + instr.imm;
@@ -2655,14 +2702,6 @@ inline int CPU::opT_UNDEFINED(thumbInstr instr)
 ///             READ FUNCTIONS            ///
 /////////////////////////////////////////////
 
-uint8_t CPU::read8(uint32_t addr, bool bReadOnly)
-{
-	return bus->read8(addr);
-}
-uint16_t CPU::read16(uint32_t addr, bool bReadOnly)
-{
-	return bus->read16(addr);
-}
 
 struct Transaction
 {
@@ -2673,6 +2712,59 @@ std::vector<Transaction> currentTransactions;
 uint32_t curTestBaseAddr;
 uint16_t curTestOpTHUMB;
 
+
+
+uint8_t CPU::read8(uint32_t inputAddr, bool bReadOnly)
+{
+
+	uint32_t addr = inputAddr; //;& ~3;
+	for (const auto& transaction : currentTransactions)
+	{
+		//printf("%0x  \n", transaction.addr);
+		if (transaction.kind == 1 && transaction.addr == addr && transaction.size == 1)
+		{
+
+			return (uint8_t)transaction.data;
+		}
+	}
+	if (addr == curTestBaseAddr)
+	{
+		return curTestOpTHUMB;
+	}
+	printf("read8: No transaction found for addr 0x%08x (aligned 0x%08x), %d transactions available\n",
+		inputAddr, addr, (int)currentTransactions.size());
+
+	return bus->read8(addr);
+
+}
+uint16_t CPU::read16(uint32_t inputAddr, bool bReadOnly)
+{
+	uint32_t addr = inputAddr; //;& ~3;
+	for (const auto& transaction : currentTransactions)
+	{
+		if (transaction.kind == 1 && transaction.addr == addr && transaction.size == 2)
+		{
+			uint32_t value = transaction.data;
+
+			if (addr & 1)
+			{
+				value = ((value >> 8) | (value << 8)) & 0xFFFF;
+			}
+
+			return (uint16_t)value;
+		}
+	}
+	if (addr == curTestBaseAddr)
+	{
+		return curTestOpTHUMB;
+	}
+	printf("read8: No transaction found for addr 0x%08x (aligned 0x%08x), %d transactions available\n",
+		inputAddr, addr, (int)currentTransactions.size());
+
+	return bus->read16(inputAddr);
+}
+
+
 uint32_t CPU::read32(uint32_t inputAddr, bool bReadOnly)
 {
 
@@ -2682,21 +2774,28 @@ uint32_t CPU::read32(uint32_t inputAddr, bool bReadOnly)
 		//printf("%0x  \n", transaction.addr);
 		if (transaction.kind == 1 && transaction.addr == addr && transaction.size == 4)
 		{
-			return transaction.data;
+
+			uint32_t value = transaction.data;
+
+			uint32_t misalignment = addr & 3;
+			if (misalignment != 0)
+			{
+				uint32_t rotation = misalignment * 8;
+				value = (value >> rotation) | (value << (32 - rotation));
+			}
+
+			return value;
 		}
 	}
-	// if not in there, check if its pc
-
 	if (addr == curTestBaseAddr)
 	{
 		return curTestOpTHUMB;
 	}
-
 	printf("read32: No transaction found for addr 0x%08x (aligned 0x%08x), %d transactions available\n",
 		inputAddr , addr,(int)currentTransactions.size());
 
 
-	return bus->read32(addr);
+	return bus->read32(inputAddr);
 }
 
 //def read(addr, is_code) :   EXAMPLE CODE FROM THE TEST SUITE
@@ -2889,8 +2988,8 @@ std::string CPU::thumbToStr(CPU::thumbInstr& instr)
 
 	case thumbOperation::THUMB_LDR_PC:
 	{
-		uint32_t addr = (pc & ~2) + 4 + instr.imm;
-		ss << "ldr     " << regStr(instr.rd) << ", [pc, #0x" << std::hex << instr.imm << "]" << std::dec;
+		uint32_t addr = (pc & ~2)  + instr.imm;
+		ss << "ldr  PC " << regStr(instr.rd) << ", [pc, #0x" << std::hex << instr.imm << "]" << std::dec;
 		ss << "    | " << regStr(instr.rd) << " = [0x" << std::hex << addr << "]" << std::dec;
 		break;
 	}
@@ -2918,15 +3017,22 @@ std::string CPU::thumbToStr(CPU::thumbInstr& instr)
 		break;
 	}
 
-	case thumbOperation::THUMB_STR_IMM:
+	//THUMB_LDR_IMM,
+	//	THUMB_STR_IMM,
+	//	THUMB_LDRB_IMM,
+	//	THUMB_STRB_IMM,
+	//	THUMB_LDRH_IMM,
+	// 
+	//	THUMB_STRH_IMM,
 	case thumbOperation::THUMB_LDR_IMM:
-	case thumbOperation::THUMB_STRB_IMM:
+	case thumbOperation::THUMB_STR_IMM:
 	case thumbOperation::THUMB_LDRB_IMM:
-	case thumbOperation::THUMB_STRH_IMM:
+	case thumbOperation::THUMB_STRB_IMM:
 	case thumbOperation::THUMB_LDRH_IMM:
+	case thumbOperation::THUMB_STRH_IMM:
 	{
 		const char* opNames[] = {
-			"str", "ldr", "strb", "ldrb", "strh", "ldrh"
+			"ldrIMM", "strIMM","ldrbIMM" , "strbIMM", "ldrhIMM", "strhIMM"
 		};
 		int idx = (int)instr.type - (int)thumbOperation::THUMB_STR_IMM+1;
 		bool isLoad = (idx % 2 == 1);
@@ -3065,16 +3171,18 @@ std::string CPU::thumbToStr(CPU::thumbInstr& instr)
 // REMAINING TESTS THAT DONT PASS
 // 
 // thumb_add_sub_sp.json (DONE)
-// thumb_bx
-// ldr pc rel
-// thumb_ldr_str_imm_offset - just store here is broken
-// thumb_ldr_str_reg_offset - just store here is broken
-//  thumb_ldr_str_sp_rel.json - just ldr is broken
-// thumb_ldrb_strb_imm_offset.json // strb broken
-// thumb_ldrh_strh_imm_offset.json // strh is broken
-// thumb_ldrh_strh_reg_offset //strh is broken
-// thumb_ldrsb_strb_reg_offset.json //ldr is broken
-// thumb_ldrsh_ldrsb_reg_offset.json COMPLETELY NOT WORKING
+// thumb_bx (DONE)
+// ldr pc rel  (DONE)
+// 
+// thumb_ldr_str_imm_offset - just store here is broken  (DONE)
+// thumb_ldr_str_reg_offset - just store here is broken  (DONE)
+//  thumb_ldr_str_sp_rel.json - just ldr is broken   (DONE)
+// thumb_ldrb_strb_imm_offset.json // ldrb broken    (DONE)
+// thumb_ldrh_strh_imm_offset.json // ldrh is broken  (DONE)
+// thumb_ldrh_strh_reg_offset //strh is broken  (DONE)
+// 
+// thumb_ldrsb_strb_reg_offset.json //ldr is broken (DONE)
+// thumb_ldrsh_ldrsb_reg_offset.json (DONE)
 // thumb_swi (jump vectors and r14_svc special behaviour)
 
 
@@ -3083,7 +3191,7 @@ std::string CPU::thumbToStr(CPU::thumbInstr& instr)
 void CPU::runThumbTests()
 {
 	//ignore most he load stuff for now
-	const char* str = "thumb_bx.json.bin";
+	const char* str = "thumb_ldrsh_ldrsb_reg_offset.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -3194,7 +3302,7 @@ void CPU::runThumbTests()
 		////////////
 
 		//43 and 49
-		if (tNum >=0)// jtest
+		if (tNum >= 0)// jtest
 		{
 			reset();
 
