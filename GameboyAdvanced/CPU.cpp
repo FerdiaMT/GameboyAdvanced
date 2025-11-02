@@ -1758,9 +1758,9 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 			case 0b11:
 			if (decodedInstr.h1)
 			{
-				decodedInstr.type = thumbOperation::THUMB_BLX_REG;
+				decodedInstr.type = thumbOperation::THUMB_BX; //BLX was apparntly a figment of my imagination
 			}
-			else decodedInstr.type = thumbOperation::THUMB_BX;
+			else decodedInstr.type = thumbOperation::THUMB_BX; // ; 
 			break;
 			}
 		}
@@ -2301,16 +2301,8 @@ inline int CPU::opT_MVN_REG(thumbInstr instr)
 
 inline int CPU::opT_ADD_HI(thumbInstr instr)
 {
-
-
-	printf("%0X\n", reg[instr.rs]);
-	printf("%0X\n", reg[instr.rd]);
-
 	reg[instr.rd] = reg[instr.rd] + reg[instr.rs];
-
-	printf("%0X\n", reg[instr.rd]);
-
-
+	if (instr.rd == 15) reg[15] = (reg[15] & ~1) + 2;
 
 	return 1;
 }
@@ -2327,6 +2319,9 @@ inline int CPU::opT_CMP_HI(thumbInstr instr)
 inline int CPU::opT_MOV_HI(thumbInstr instr)
 {
 	reg[instr.rd] = reg[instr.rs];
+
+	if (instr.rd == 15) reg[15] = (reg[15] & ~1) + 2;
+
 	return 1;
 }
 
@@ -2347,24 +2342,29 @@ inline int CPU::opT_BX(thumbInstr instr)
 	return 3;
 }
 
-inline int CPU::opT_BLX_REG(thumbInstr instr)
+inline int CPU::opT_BLX_REG(thumbInstr instr) // so this doesnt exist for thumb, gonna keep t ion for now
 {
+	printf("CALLING LBX THUMB, THIS SHOULD BE UNCALLABLE!!!!");
+	//uint32_t regI = instr.rs;
+	//
+	//uint32_t target = reg[regI];
 
-	uint32_t regI = instr.rs;
-	
-	uint32_t target = reg[regI];
-	lr = (pc + 2) | 1;
-	T = target & 1;
-	if (T)
-		pc = (target+2) & ~1;
-	else
-		pc = (target+6) & ~1;
-	return 3;
+	//if (regI != 15)
+	//{
+	//	lr = (pc - 2) | 1;
+	//}
+
+	//T = target & 1;
+	//if (T)
+	//	pc = (target+2) & ~1;
+	//else
+	//	pc = (target+6) & ~1;
+	//return 3;
 }
 
 inline int CPU::opT_LDR_PC(thumbInstr instr)
 {
-	uint32_t address = ((pc + 4) & ~2) + instr.imm;
+	uint32_t address = ((pc + 2) & ~2) + instr.imm;
 	reg[instr.rd] = read32(address);
 	return 3;
 }
@@ -2485,21 +2485,21 @@ inline int CPU::opT_STR_SP(thumbInstr instr)
 
 inline int CPU::opT_ADD_PC(thumbInstr instr)
 {
-	reg[instr.rd] = (pc + 4 & ~2) + instr.imm;
+	reg[instr.rd] = (pc & ~2) + instr.imm;
 	return 1;
 }
 
 inline int CPU::opT_ADD_SP(thumbInstr instr)
 {
-	sp += instr.imm;
-	reg[instr.rd] = sp;
+	//sp += instr.imm;
+	reg[instr.rd] = sp+ instr.imm;
 	return 1;
 }
 
 inline int CPU::opT_ADD_SP_IMM(thumbInstr instr)
 {
 	sp = sp + (int32_t)instr.imm;
-	reg[instr.rd] = sp;
+	//reg[instr.rd] = sp; so i guess this isnt needed ???
 	return 1;
 }
 
@@ -2581,7 +2581,7 @@ inline int CPU::opT_LDMIA(thumbInstr instr)
 
 	if ((instr.imm & 0xFF) == 0) // if loading from an empty list
 	{
-		reg[15] = read32(address)+4;  
+		reg[15] = read32(address)+2;  
 		reg[instr.rs] = address + 0x40;  
 		return 1;
 	}
@@ -2631,8 +2631,8 @@ inline int CPU::opT_BL_SUFFIX(thumbInstr instr)
 
 	uint32_t target = lr + (int32_t)instr.imm;
 
-	lr = (pc + 2) | 1;
-	pc = target & ~1;
+	lr = (pc - 2) | 1;
+	pc = target+2 & ~1;
 	return 3;
 }
 
@@ -2907,7 +2907,7 @@ std::string CPU::thumbToStr(CPU::thumbInstr& instr)
 		const char* opNames[] = {
 			"str", "strb", "ldr", "ldrb", "strh", "ldrsb", "ldrh", "ldrsh"
 		};
-		int idx = (int)instr.type - (int)thumbOperation::THUMB_STR_REG;
+		int idx = (int)instr.type - (int)thumbOperation::THUMB_STR_REG+1;
 		bool isLoad = (idx >= 2 && idx != 4);
 
 		ss << opNames[idx] << "    " << regStr(instr.rd) << ", [" << regStr(instr.rs) << ", " << regStr(instr.rn) << "]";
@@ -2949,11 +2949,11 @@ std::string CPU::thumbToStr(CPU::thumbInstr& instr)
 	break;
 
 	case thumbOperation::THUMB_ADD_PC:
-	ss << "add     " << regStr(instr.rd) << ", pc, #0x" << std::hex << instr.imm << std::dec;
+	ss << "add PC  " << regStr(instr.rd) << ", pc, #0x" << std::hex << instr.imm << std::dec;
 	ss << "    | " << regStr(instr.rd) << " = pc + #0x" << std::hex << instr.imm << std::dec;
 	break;
 	case thumbOperation::THUMB_ADD_SP_IMM:
-	ss << "add     " << regStr(instr.rd) << ", sp, #0x" << std::hex << instr.imm << std::dec;
+	ss << "addSP IM  " << regStr(instr.rd) << ", sp, #0x" << std::hex << instr.imm << std::dec;
 	ss << "    | " << regStr(instr.rd) << " = sp + #0x" << std::hex << instr.imm << std::dec;
 	break;
 
@@ -3061,24 +3061,29 @@ std::string CPU::thumbToStr(CPU::thumbInstr& instr)
 // made specially for this 
 
 //THUMB TESTS
-//    thumb_add_cmp_mov_hi.json.bin - 37604 passed
-//		thumb_add_sp_or_pc.json.bin - 34 passed
-//		thumb_add_sub.json.bin -  50000 passed
-//		thumb_add_sub_sp.json.bin- 0 passed
-
-//		thumb_bl_blx_prefix.json - 0 passed
-//		thumb_bl_suffix.json.bin - o passed
-//	     thumb_bx.json - 0 passed
-//		thumb_data_proc.json - 46813 passed
-//		thumb_ldr_pc_rel.json.bin =- 0
-//       thumb_ldr_str_imm_offset.json - 5542
+//allot more cleared now
+// REMAINING TESTS THAT DONT PASS
+// 
+// thumb_add_sub_sp.json (DONE)
+// thumb_bx
+// ldr pc rel
+// thumb_ldr_str_imm_offset - just store here is broken
+// thumb_ldr_str_reg_offset - just store here is broken
+//  thumb_ldr_str_sp_rel.json - just ldr is broken
+// thumb_ldrb_strb_imm_offset.json // strb broken
+// thumb_ldrh_strh_imm_offset.json // strh is broken
+// thumb_ldrh_strh_reg_offset //strh is broken
+// thumb_ldrsb_strb_reg_offset.json //ldr is broken
+// thumb_ldrsh_ldrsb_reg_offset.json COMPLETELY NOT WORKING
+// thumb_swi (jump vectors and r14_svc special behaviour)
 
 
 
 
 void CPU::runThumbTests()
 {
-	const char* str = "thumb_push_pop.json.bin";
+	//ignore most he load stuff for now
+	const char* str = "thumb_bx.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -3188,11 +3193,10 @@ void CPU::runThumbTests()
 		// LOADS
 		////////////
 
-		if (tNum >0 )// jtest
+		//43 and 49
+		if (tNum >=0)// jtest
 		{
 			reset();
-
-		
 
 			for (int r = 0; r < 16; r++)
 				reg[r] = R_init[r];
@@ -3203,19 +3207,15 @@ void CPU::runThumbTests()
 				spsrBank[r] = SPSR_init[r];
 			for (int i = 0; i < 5; i++)
 				r8FIQ[i] = R_fiq_init[i];  
+
 			r13RegBank[1] = R_fiq_init[5];  
 			r14RegBank[1] = R_fiq_init[6];  
-
-
 			r13RegBank[2] = R_irq_init[0];
 			r14RegBank[2] = R_irq_init[1]; 
-
 			r13RegBank[3] = R_svc_init[0]; 
 			r14RegBank[3] = R_svc_init[1];  
-
 			r13RegBank[4] = R_abt_init[0];
 			r14RegBank[4] = R_abt_init[1];
-
 			r13RegBank[5] = R_und_init[0];
 			r14RegBank[5] = R_und_init[1];
 
@@ -3234,7 +3234,6 @@ void CPU::runThumbTests()
 			bool testPassed = true;
 
 			switchMode(mode::System);
-
 			if ( (CPSR & 0xF000) != (CPSR_final & 0xF000) ) // seems like random mode changes can upset this 
 			{
 				testPassed = false;
