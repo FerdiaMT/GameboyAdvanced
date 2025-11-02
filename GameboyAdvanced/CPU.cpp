@@ -2508,6 +2508,8 @@ inline int CPU::opT_POP(thumbInstr instr)
 		{
 			reg[i] = read32(sp);
 			sp += 4;
+
+			if (i == 15) reg[15] = reg[15] & ~1; // Clear bit 0 for THUMB mode
 		}
 	}
 	return 1 + countSetBits(instr.imm);
@@ -2638,12 +2640,13 @@ std::vector<Transaction> currentTransactions;
 uint32_t curTestBaseAddr;
 uint16_t curTestOpTHUMB;
 
-uint32_t CPU::read32(uint32_t addr, bool bReadOnly)
+uint32_t CPU::read32(uint32_t inputAddr, bool bReadOnly)
 {
 
-	addr = addr & ~3;
+	uint32_t addr = inputAddr; //;& ~3;
 	for (const auto& transaction : currentTransactions)
 	{
+		//printf("%0x  \n", transaction.addr);
 		if (transaction.kind == 1 && transaction.addr == addr && transaction.size == 4)
 		{
 			return transaction.data;
@@ -2655,6 +2658,9 @@ uint32_t CPU::read32(uint32_t addr, bool bReadOnly)
 	{
 		return curTestOpTHUMB;
 	}
+
+	printf("read32: No transaction found for addr 0x%08x (aligned 0x%08x), %d transactions available\n",
+		inputAddr , addr,(int)currentTransactions.size());
 
 
 	return bus->read32(addr);
@@ -3039,7 +3045,7 @@ std::string CPU::thumbToStr(CPU::thumbInstr& instr)
 
 void CPU::runThumbTests()
 {
-	const char* str = "thumb_add_cmp_mov_hi.json.bin";
+	const char* str = "thumb_push_pop.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -3135,7 +3141,7 @@ void CPU::runThumbTests()
 			fread(&trans.access, 4, 1, f);
 			currentTransactions.push_back(trans);
 			transactionCounter++;
-
+			
 		}
 		uint32_t junkArr2[3];
 		fread(&junkArr2, 4, 2, f);
@@ -3149,21 +3155,38 @@ void CPU::runThumbTests()
 		// LOADS
 		////////////
 
-		if (tNum  ==34 )// jtest
+		if (tNum >= 0 )// jtest
 		{
 			reset();
+
+		
 
 			for (int r = 0; r < 16; r++)
 				reg[r] = R_init[r];
 
 			pc = base_addr + 4;
-			
 			CPSR = CPSR_init; //load cspr
-
-			//printf("0x%08X \n", CPSR_init); INCASE FLAGS ARNT WORKING . UNCOMMENT TO DEBUG
-
 			for (int r = 0; r < 5; r++) // load spsr
 				spsrBank[r] = SPSR_init[r];
+			for (int i = 0; i < 5; i++)
+				r8FIQ[i] = R_fiq_init[i];  
+			r13RegBank[1] = R_fiq_init[5];  
+			r14RegBank[1] = R_fiq_init[6];  
+
+
+			r13RegBank[2] = R_irq_init[0];
+			r14RegBank[2] = R_irq_init[1]; 
+
+			r13RegBank[3] = R_svc_init[0]; 
+			r14RegBank[3] = R_svc_init[1];  
+
+			r13RegBank[4] = R_abt_init[0];
+			r14RegBank[4] = R_abt_init[1];
+
+			r13RegBank[5] = R_und_init[0];
+			r14RegBank[5] = R_und_init[1];
+
+			switchMode(CPSRbitToMode(CPSR & 0x1F));
 
 			///DECODE / EXECUTE
 			thumbInstr decoded = decodeThumb(opcode);
@@ -3176,7 +3199,7 @@ void CPU::runThumbTests()
 			// Check results - compare ALL registers including PC
 			bool testPassed = true;
 
-
+			switchMode(mode::System);
 
 			if ( (CPSR & 0xF000) != (CPSR_final & 0xF000) ) // seems like random mode changes can upset this 
 			{
@@ -3198,6 +3221,130 @@ void CPU::runThumbTests()
 						//printf("pre lr , R14: %08X \n", R_init[14]);
 						printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r%d = 0x%08x, expected 0x%08x | %s | %s\n", tNum, opcode, base_addr, r, reg[r], R_final[r] , CPSRtoString(), decodedStr.c_str());
 					}
+				}
+			}
+			for (int r = 0; r < 16; r++)
+			{
+				if (reg[r] != R_final[r])
+				{
+					testPassed = false;
+					if (failuresShown < maxFailuresToShow)
+					{
+						printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r%d = 0x%08x, expected 0x%08x | %s | %s\n",
+							tNum, opcode, base_addr, r, reg[r], R_final[r], CPSRtoString(), decodedStr.c_str());
+					}
+				}
+			}
+
+			// Check FIQ 
+			for (int i = 0; i < 5; i++)
+			{
+				if (r8FIQ[i] != R_fiq_final[i])
+				{
+					testPassed = false;
+					if (failuresShown < maxFailuresToShow)
+					{
+						printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r%d_fiq = 0x%08x, expected 0x%08x | %s | %s\n",
+							tNum, opcode, base_addr, 8 + i, r8FIQ[i], R_fiq_final[i], CPSRtoString(), decodedStr.c_str());
+					}
+				}
+			}
+			if (r13RegBank[1] != R_fiq_final[5])
+			{
+				testPassed = false;
+				if (failuresShown < maxFailuresToShow)
+				{
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r13_fiq = 0x%08x, expected 0x%08x | %s | %s\n",
+						tNum, opcode, base_addr, r13RegBank[1], R_fiq_final[5], CPSRtoString(), decodedStr.c_str());
+				}
+			}
+			if (r14RegBank[1] != R_fiq_final[6])
+			{
+				testPassed = false;
+				if (failuresShown < maxFailuresToShow)
+				{
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r14_fiq = 0x%08x, expected 0x%08x | %s | %s\n",
+						tNum, opcode, base_addr, r14RegBank[1], R_fiq_final[6], CPSRtoString(), decodedStr.c_str());
+				}
+			}
+
+			// Check IRQ 
+			if (r13RegBank[2] != R_irq_final[0])
+			{
+				testPassed = false;
+				if (failuresShown < maxFailuresToShow)
+				{
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r13_irq = 0x%08x, expected 0x%08x | %s | %s\n",
+						tNum, opcode, base_addr, r13RegBank[2], R_irq_final[0], CPSRtoString(), decodedStr.c_str());
+				}
+			}
+			if (r14RegBank[2] != R_irq_final[1])
+			{
+				testPassed = false;
+				if (failuresShown < maxFailuresToShow)
+				{
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r14_irq = 0x%08x, expected 0x%08x | %s | %s\n",
+						tNum, opcode, base_addr, r14RegBank[2], R_irq_final[1], CPSRtoString(), decodedStr.c_str());
+				}
+			}
+
+			// Check Supervisor
+			if (r13RegBank[3] != R_svc_final[0])
+			{
+				testPassed = false;
+				if (failuresShown < maxFailuresToShow)
+				{
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r13_svc = 0x%08x, expected 0x%08x | %s | %s\n",
+						tNum, opcode, base_addr, r13RegBank[3], R_svc_final[0], CPSRtoString(), decodedStr.c_str());
+				}
+			}
+			if (r14RegBank[3] != R_svc_final[1])
+			{
+				testPassed = false;
+				if (failuresShown < maxFailuresToShow)
+				{
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r14_svc = 0x%08x, expected 0x%08x | %s | %s\n",
+						tNum, opcode, base_addr, r14RegBank[3], R_svc_final[1], CPSRtoString(), decodedStr.c_str());
+				}
+			}
+
+			// Check Abort
+			if (r13RegBank[4] != R_abt_final[0])
+			{
+				testPassed = false;
+				if (failuresShown < maxFailuresToShow)
+				{
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r13_abt = 0x%08x, expected 0x%08x | %s | %s\n",
+						tNum, opcode, base_addr, r13RegBank[4], R_abt_final[0], CPSRtoString(), decodedStr.c_str());
+				}
+			}
+			if (r14RegBank[4] != R_abt_final[1])
+			{
+				testPassed = false;
+				if (failuresShown < maxFailuresToShow)
+				{
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r14_abt = 0x%08x, expected 0x%08x | %s | %s\n",
+						tNum, opcode, base_addr, r14RegBank[4], R_abt_final[1], CPSRtoString(), decodedStr.c_str());
+				}
+			}
+
+			// Check Undefined
+			if (r13RegBank[5] != R_und_final[0])
+			{
+				testPassed = false;
+				if (failuresShown < maxFailuresToShow)
+				{
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r13_und = 0x%08x, expected 0x%08x | %s | %s\n",
+						tNum, opcode, base_addr, r13RegBank[5], R_und_final[0], CPSRtoString(), decodedStr.c_str());
+				}
+			}
+			if (r14RegBank[5] != R_und_final[1])
+			{
+				testPassed = false;
+				if (failuresShown < maxFailuresToShow)
+				{
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r14_und = 0x%08x, expected 0x%08x | %s | %s\n",
+						tNum, opcode, base_addr, r14RegBank[5], R_und_final[1], CPSRtoString(), decodedStr.c_str());
 				}
 			}
 
