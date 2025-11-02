@@ -319,6 +319,8 @@ public:
 
 	// bank system so when we swap modes, we can store old modes inhere 
 	uint32_t r8FIQ[5];   // 8 9 10 11 12 registers stored for just fiq
+	uint32_t r8User[5]; // used for swaping back from fiq
+
 	uint32_t r13RegBank[6];  // individual SP for everone except usr/sys which share
 	uint32_t r14RegBank[6]; // individual LR for everone except usr/sys which share
 	uint32_t spsrBank[5]; // individual LR for everone except usr/sys have 0

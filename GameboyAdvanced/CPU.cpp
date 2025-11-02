@@ -490,6 +490,14 @@ void CPU::bankRegisters(mode mode)// save reg val to bank
 		r8FIQ[3] = reg[11];
 		r8FIQ[4] = reg[12];
 	}
+	else
+	{
+		r8User[0] = reg[8];
+		r8User[1] = reg[9];
+		r8User[2] = reg[10];
+		r8User[3] = reg[11];
+		r8User[4] = reg[12];
+	}
 
 }
 void CPU::unbankRegisters(mode mode)  // load reg vals from bank
@@ -506,6 +514,14 @@ void CPU::unbankRegisters(mode mode)  // load reg vals from bank
 		reg[10] = r8FIQ[2];
 		reg[11] = r8FIQ[3];
 		reg[12] = r8FIQ[4];
+	}
+	else
+	{
+		reg[8] = r8User[0];
+		reg[9] = r8User[1];
+		reg[10] = r8User[2];
+		reg[11] = r8User[3];
+		reg[12] = r8User[4];
 	}
 }
 
@@ -3155,7 +3171,7 @@ void CPU::runThumbTests()
 		// LOADS
 		////////////
 
-		if (tNum >= 0 )// jtest
+		if (tNum == 7 )// jtest
 		{
 			reset();
 
@@ -3186,6 +3202,7 @@ void CPU::runThumbTests()
 			r13RegBank[5] = R_und_init[0];
 			r14RegBank[5] = R_und_init[1];
 
+			curMode = mode::System;
 			switchMode(CPSRbitToMode(CPSR & 0x1F));
 
 			///DECODE / EXECUTE
