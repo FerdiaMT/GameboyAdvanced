@@ -11,7 +11,7 @@ namespace Vector // use these for jumping
 {
 	constexpr uint32_t Reset = 0x00000000;
 	constexpr uint32_t Undefined = 0x00000004;
-	constexpr uint32_t SWI = 0x00000008;
+	constexpr uint32_t SWI = 0x00000010;//0x00000008;
 	constexpr uint32_t PrefetchAbort = 0x0000000C;
 	constexpr uint32_t DataAbort = 0x00000010;
 	constexpr uint32_t Reserved = 0x00000014;
@@ -564,7 +564,7 @@ void CPU::enterException(CPU::mode newMode, uint32_t vectorAddr, uint32_t return
 	lr = returnAddr;
 	pc = vectorAddr;
 
-
+	lr += 2;
 }
 void CPU::returnFromException()
 {
@@ -2686,8 +2686,9 @@ inline int CPU::opT_BL_SUFFIX(thumbInstr instr)
 inline int CPU::opT_SWI(thumbInstr instr)
 {
 
-	printf("SWI #%d: r0=%08X r1=%08X r2=%08X\n", instr.imm, reg[0], reg[1], reg[2]); // debugging logger
+	//printf("SWI #%d: r0=%08X r1=%08X r2=%08X\n", instr.imm, reg[0], reg[1], reg[2]); // debugging logger
 	enterException(mode::Supervisor, Vector::SWI, pc - 4);
+	pc -= 2;
 	return 3;
 }
 
@@ -3191,7 +3192,7 @@ std::string CPU::thumbToStr(CPU::thumbInstr& instr)
 void CPU::runThumbTests()
 {
 	//ignore most he load stuff for now
-	const char* str = "thumb_ldrsh_ldrsb_reg_offset.json.bin";
+	const char* str = "thumb_swi.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -3302,7 +3303,7 @@ void CPU::runThumbTests()
 		////////////
 
 		//43 and 49
-		if (tNum >= 0)// jtest
+		if (tNum >0)// jtest
 		{
 			reset();
 
