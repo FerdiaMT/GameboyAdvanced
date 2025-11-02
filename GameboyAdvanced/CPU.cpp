@@ -2505,6 +2505,15 @@ inline int CPU::opT_ADD_SP_IMM(thumbInstr instr)
 
 inline int CPU::opT_PUSH(thumbInstr instr)
 {
+
+	if (instr.imm == 0) // nothing in reg list
+	{
+		sp -= 4;
+		write32(sp, reg[15]);
+		sp -= 0x3C;
+		return 1;
+	}
+
 	for (int i = 15; i >= 0; i--)
 	{
 		if (instr.imm & (1 << i))
@@ -2518,6 +2527,14 @@ inline int CPU::opT_PUSH(thumbInstr instr)
 
 inline int CPU::opT_POP(thumbInstr instr)
 {
+
+	if (instr.imm == 0)
+	{
+		reg[15] = (read32(sp) ) + 2;  
+		sp += 0x40; 
+		return 1;
+	}
+
 	for (int i = 0; i < 16; i++)
 	{
 		if (instr.imm & (1 << i))
@@ -2525,7 +2542,7 @@ inline int CPU::opT_POP(thumbInstr instr)
 			reg[i] = read32(sp);
 			sp += 4;
 
-			if (i == 15) reg[15] = reg[15] & ~1; // Clear bit 0 for THUMB mode
+			if (i == 15) reg[15] = (reg[15]+2)&~1; // Clear bit 0 for THUMB mode
 		}
 	}
 	return 1 + countSetBits(instr.imm);
@@ -3171,7 +3188,7 @@ void CPU::runThumbTests()
 		// LOADS
 		////////////
 
-		if (tNum == 7 )// jtest
+		if (tNum >0 )// jtest
 		{
 			reset();
 
