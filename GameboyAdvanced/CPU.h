@@ -17,11 +17,11 @@ public:
 		AND, EOR, SUB, RSB, ADD, ADC, SBC, RSC,
 		TST, TEQ, CMP, CMN, ORR, MOV, BIC, MVN,
 
-		MRS,MSR, // both used for PSR transfer
+		MRS, MSR, // both used for PSR transfer
 
 		// Load/Store
 		LDR, STR, // SINGLE DATA TRANSFER
-		LDRH , STRH, LDRSB, LDRSH, // halfword and signed data transfer
+		LDRH, STRH, LDRSB, LDRSH, // halfword and signed data transfer
 		LDM, STM,
 
 		// Branch
@@ -35,7 +35,7 @@ public:
 
 		//coprocessor
 
-		CDP,LDC,STC,MRC,MCR,
+		CDP, LDC, STC, MRC, MCR,
 
 		//general break
 		UNKNOWN,
@@ -43,7 +43,7 @@ public:
 		UNASSIGNED, // this is only given at the start
 		CONDITIONALSKIP, // this is only given on conditionalFail
 		SINGLEDATATRANSFERUNDEFINED, //theres a single instruction in decode thats the same as executeSingleDataTransfer, but tells is if bit 4 is set, it becomes undefined
-		DECODEFAIL , // if it reaches the end of the decoding list and never gets anything it returns this
+		DECODEFAIL, // if it reaches the end of the decoding list and never gets anything it returns this
 		//should be some realistically to tell me why it failed
 
 		COUNT // this is just so i have a way of counting how much enums i have in case of future new enum declared
@@ -113,7 +113,7 @@ public:
 		THUMB_BL_PREFIX,
 		THUMB_BL_SUFFIX,
 		THUMB_SWI,
-		THUMB_UNDEFINED, 
+		THUMB_UNDEFINED,
 
 
 
@@ -123,21 +123,26 @@ public:
 
 	enum class armOperation
 	{
-		ARM_AND,
-		ARM_EOR,
+		ARM_ADD,
 		ARM_SUB,
 		ARM_RSB,
-		ARM_ADD,
 		ARM_ADC,
 		ARM_SBC,
 		ARM_RSC,
+
+
+		ARM_AND,
+		ARM_EOR,
+		ARM_ORR,
+		ARM_BIC,
+
+
 		ARM_TST,
 		ARM_TEQ,
 		ARM_CMP,
 		ARM_CMN,
-		ARM_ORR,
+
 		ARM_MOV,
-		ARM_BIC,
 		ARM_MVN,
 
 		ARM_MUL,
@@ -180,7 +185,7 @@ public:
 
 		COUNT
 	};
-	
+
 	struct thumbInstr
 	{
 		thumbOperation type;
@@ -226,7 +231,7 @@ public:
 		uint8_t shift_reg;     // reg containing shift amount
 		bool shift_by_reg;     // true if shift amount in register
 
-		
+
 		uint16_t reg_list;// reg list (for load multiple etc)
 	};
 
@@ -234,63 +239,63 @@ public:
 
 public: // FUNCTION ARRAYS
 
-	using OpAFunction = int (CPU::*)(armInstr); 
+	using OpAFunction = int (CPU::*)(armInstr);
 	OpAFunction opA_functions[static_cast<int>(Operation::COUNT)];
 
 	using OpTFunction = int (CPU::*)(thumbInstr);
 	OpTFunction opT_functions[static_cast<int>(thumbOperation::COUNT)];
 
 public:
-		
-		Bus* bus;
-		CPU(Bus*);
-		void reset();
 
-		void initializeOpFunctions(); // this is for initing the list of enums to funcs
-		
-		uint16_t curOpCycles; // this is defaulted to 0 every time
-		int cycleTotal; // this is how we find out how many cycles have passed
+	Bus* bus;
+	CPU(Bus*);
+	void reset();
 
-		uint32_t tick();
-		//Operation decode(uint32_t passedIns);
-		armInstr decodeArm(uint32_t instr);
-		int armExecute(armInstr instr);
+	void initializeOpFunctions(); // this is for initing the list of enums to funcs
 
-		uint32_t reg[16];
+	uint16_t curOpCycles; // this is defaulted to 0 every time
+	int cycleTotal; // this is how we find out how many cycles have passed
 
-		uint32_t& sp; // stack pointer ~ points to 13
-		uint32_t& lr; // link register ~ points to 14
-		uint32_t& pc; //~points to 14
+	uint32_t tick();
+	//Operation decode(uint32_t passedIns);
+	armInstr decodeArm(uint32_t instr);
+	int armExecute(armInstr instr);
 
-		// instruction to take
-		uint32_t instruction;
-		//decoded operation
-		Operation curOP;
-		
-		//current program status registers
-		union
+	uint32_t reg[16];
+
+	uint32_t& sp; // stack pointer ~ points to 13
+	uint32_t& lr; // link register ~ points to 14
+	uint32_t& pc; //~points to 14
+
+	// instruction to take
+	uint32_t instruction;
+	//decoded operation
+	Operation curOP;
+
+	//current program status registers
+	union
+	{
+		struct
 		{
-			struct
-			{
-				uint32_t M0 : 1;
-				uint32_t M1 : 1;
-				uint32_t M2 : 1;
-				uint32_t M3 : 1;
-				uint32_t M4 : 1;
-				uint32_t T : 1;
-				uint32_t F : 1;
-				uint32_t I : 1;
+			uint32_t M0 : 1;
+			uint32_t M1 : 1;
+			uint32_t M2 : 1;
+			uint32_t M3 : 1;
+			uint32_t M4 : 1;
+			uint32_t T : 1;
+			uint32_t F : 1;
+			uint32_t I : 1;
 
-				uint32_t RESERVED : 20;
-				uint32_t V : 1;
-				uint32_t C : 1;
-				uint32_t Z : 1;
-				uint32_t N : 1;
-			};
-			uint32_t CPSR;
+			uint32_t RESERVED : 20;
+			uint32_t V : 1;
+			uint32_t C : 1;
+			uint32_t Z : 1;
+			uint32_t N : 1;
 		};
+		uint32_t CPSR;
+	};
 
-		//SPSR
+	//SPSR
 
 
 
@@ -301,7 +306,7 @@ public:
 	uint32_t ThumbToARM(uint16_t thumbInstr, uint32_t pc, uint16_t nextThumbInstr);
 	inline bool checkConditional(uint8_t cond) const;
 
-	
+
 	const inline uint8_t pcOffset();
 
 	uint8_t read8(uint32_t addr, bool bReadOnly = false);
@@ -329,9 +334,9 @@ public:
 
 
 
-	mode curMode= mode::Supervisor; // curMode should default to Supervisor
+	mode curMode = mode::Supervisor; // curMode should default to Supervisor
 
-	
+
 
 	bool isPrivilegedMode(); // used to quickly tell were not in user mode
 	uint8_t getModeIndex(CPU::mode mode); // used for register saving
@@ -506,114 +511,114 @@ public:
 	inline int opA_MCR(armInstr instr);
 	inline int opA_UNDEFINED(armInstr instr);
 
-	public: // helper for data rpocessing
+public: // helper for data rpocessing
 
-		inline void writeALUResult(uint8_t rdI, uint32_t result, bool s);
+	inline void writeALUResult(uint8_t rdI, uint32_t result, bool s);
 
-		// new arm ops
-		inline uint32_t getArmOp2(armInstr instr, bool* carryOut);
-		inline uint32_t getArmOffset(armInstr instr);
+	// new arm ops
+	inline uint32_t getArmOp2(armInstr instr, bool* carryOut);
+	inline uint32_t getArmOffset(armInstr instr);
 
-		const inline uint8_t DPgetRn();
-		const inline uint8_t DPgetRd();
-		const inline uint8_t DPgetRs();
-		const inline uint8_t DPgetRm();
+	const inline uint8_t DPgetRn();
+	const inline uint8_t DPgetRd();
+	const inline uint8_t DPgetRs();
+	const inline uint8_t DPgetRm();
 
-		const inline uint8_t DPgetShift();
+	const inline uint8_t DPgetShift();
 
-		const inline uint8_t DPgetImmed();
-		const inline uint8_t DPgetRotate();
+	const inline uint8_t DPgetImmed();
+	const inline uint8_t DPgetRotate();
 
-		const inline uint8_t DPgetShiftAmount(uint8_t shift);
+	const inline uint8_t DPgetShiftAmount(uint8_t shift);
 
-		const inline bool DPs();
-		const inline bool DPi();
+	const inline bool DPs();
+	const inline bool DPi();
 
-		inline uint32_t DPgetOp2(bool* carryFlag);
+	inline uint32_t DPgetOp2(bool* carryFlag);
 
-		// cycle calculation helpers
+	// cycle calculation helpers
 
-		inline int dataProcessingCycleCalculator();
+	inline int dataProcessingCycleCalculator();
 
-		// shift helpers
+	// shift helpers
 
-		inline uint32_t DPshiftLSL(uint32_t value, uint8_t shift_amount, bool* carry_out);
-		inline uint32_t DPshiftLSR(uint32_t value, uint8_t shift_amount, bool* carry_out);
-		inline uint32_t DPshiftASR(uint32_t value, uint8_t shift_amount, bool* carry_out);
-		inline uint32_t DPshiftROR(uint32_t value, uint8_t shift_amount, bool* carry_out);
+	inline uint32_t DPshiftLSL(uint32_t value, uint8_t shift_amount, bool* carry_out);
+	inline uint32_t DPshiftLSR(uint32_t value, uint8_t shift_amount, bool* carry_out);
+	inline uint32_t DPshiftASR(uint32_t value, uint8_t shift_amount, bool* carry_out);
+	inline uint32_t DPshiftROR(uint32_t value, uint8_t shift_amount, bool* carry_out);
 
-		//shift for memory
-		inline uint32_t SDapplyShift(uint32_t rmVal, uint8_t type, uint8_t amount); // singledata apply shift
+	//shift for memory
+	inline uint32_t SDapplyShift(uint32_t rmVal, uint8_t type, uint8_t amount); // singledata apply shift
 
-		//flag related helper
+	//flag related helper
 
-		inline void setFlagNZC(uint32_t res, bool isCarry); // no addition or subtraction
-		inline void setFlagsAdd(uint32_t res, uint32_t op1, uint32_t op2);// ADD CHECK
-		inline void setFlagsSub(uint32_t res, uint32_t op1, uint32_t op2); // SUB CHECK
-		inline void setNZ(uint32_t res); // TEST CHECK
+	inline void setFlagNZC(uint32_t res, bool isCarry); // no addition or subtraction
+	inline void setFlagsAdd(uint32_t res, uint32_t op1, uint32_t op2);// ADD CHECK
+	inline void setFlagsSub(uint32_t res, uint32_t op1, uint32_t op2); // SUB CHECK
+	inline void setNZ(uint32_t res); // TEST CHECK
 
-		//debugger help
+	//debugger help
 
-		std::string thumbToStr(CPU::thumbInstr& instr);
-		std::string armToStr(CPU::armInstr& instr);
+	std::string thumbToStr(CPU::thumbInstr& instr);
+	std::string armToStr(CPU::armInstr& instr);
 
-		const char* opcodeToString(Operation op)
+	const char* opcodeToString(Operation op)
+	{
+		switch (op)
 		{
-			switch (op)
-			{
-			case Operation::AND:  return  "AND  ";
-			case Operation::EOR:  return  "EOR  ";
-			case Operation::SUB:  return  "SUB  ";
-			case Operation::RSB:  return  "RSB  ";
-			case Operation::ADD:  return  "ADD  ";
-			case Operation::ADC:  return  "ADC  ";
-			case Operation::SBC:  return  "SBC  ";
-			case Operation::RSC:  return  "RSC  ";
-			case Operation::TST:  return  "TST  ";
-			case Operation::TEQ:  return  "TEQ  ";
-			case Operation::CMP:  return  "CMP  ";
-			case Operation::CMN:  return  "CMN  ";
-			case Operation::ORR:  return  "ORR  ";
-			case Operation::MOV:  return  "MOV  ";
-			case Operation::BIC:  return  "BIC  ";
-			case Operation::MVN:  return  "MVN  ";
-			case Operation::MRS:  return  "MRS  ";
-			case Operation::MSR:  return  "MSR  ";
-			case Operation::LDR:  return  "LDR  ";
-			case Operation::STR:  return  "STR  ";
-			case Operation::LDRH: return  "LDRH ";
-			case Operation::STRH: return  "STRH ";
-			case Operation::LDRSB: return "LDRSB";
-			case Operation::LDRSH: return "LDRSH";
-			case Operation::LDM:  return  "LDM  ";
-			case Operation::STM:  return  "STM  ";
-			case Operation::B:    return  "B    ";
-			case Operation::BL:   return  "BL   ";
-			case Operation::BX:   return  "BX   ";
-			case Operation::MUL:  return  "MUL  ";
-			case Operation::MLA:  return  "MLA  ";
-			case Operation::UMULL: return "UMULL";
-			case Operation::UMLAL: return "UMLAL";
-			case Operation::SMULL: return "SMULL";
-			case Operation::SMLAL: return "SMLAL";
-			case Operation::SWP:  return  "SWP  ";
-			case Operation::SWPB: return  "SWPB ";
-			case Operation::SWI:  return  "SWI  ";
-			case Operation::CDP:  return  "CDP  ";
-			case Operation::LDC:  return  "LDC  ";
-			case Operation::STC:  return  "STC  ";
-			case Operation::MRC:  return  "MRC  ";
-			case Operation::MCR:  return  "MCR  ";
-			case Operation::UNKNOWN:return"UNKWN";
-			case Operation::UNASSIGNED: return "UNSND";
-			case Operation::CONDITIONALSKIP: return "CNDSP";
-			case Operation::SINGLEDATATRANSFERUNDEFINED: return "SDTUND";
-			case Operation::DECODEFAIL: return "DCDFL";
-			default: return "OPINVL";
-			}
+		case Operation::AND:  return  "AND  ";
+		case Operation::EOR:  return  "EOR  ";
+		case Operation::SUB:  return  "SUB  ";
+		case Operation::RSB:  return  "RSB  ";
+		case Operation::ADD:  return  "ADD  ";
+		case Operation::ADC:  return  "ADC  ";
+		case Operation::SBC:  return  "SBC  ";
+		case Operation::RSC:  return  "RSC  ";
+		case Operation::TST:  return  "TST  ";
+		case Operation::TEQ:  return  "TEQ  ";
+		case Operation::CMP:  return  "CMP  ";
+		case Operation::CMN:  return  "CMN  ";
+		case Operation::ORR:  return  "ORR  ";
+		case Operation::MOV:  return  "MOV  ";
+		case Operation::BIC:  return  "BIC  ";
+		case Operation::MVN:  return  "MVN  ";
+		case Operation::MRS:  return  "MRS  ";
+		case Operation::MSR:  return  "MSR  ";
+		case Operation::LDR:  return  "LDR  ";
+		case Operation::STR:  return  "STR  ";
+		case Operation::LDRH: return  "LDRH ";
+		case Operation::STRH: return  "STRH ";
+		case Operation::LDRSB: return "LDRSB";
+		case Operation::LDRSH: return "LDRSH";
+		case Operation::LDM:  return  "LDM  ";
+		case Operation::STM:  return  "STM  ";
+		case Operation::B:    return  "B    ";
+		case Operation::BL:   return  "BL   ";
+		case Operation::BX:   return  "BX   ";
+		case Operation::MUL:  return  "MUL  ";
+		case Operation::MLA:  return  "MLA  ";
+		case Operation::UMULL: return "UMULL";
+		case Operation::UMLAL: return "UMLAL";
+		case Operation::SMULL: return "SMULL";
+		case Operation::SMLAL: return "SMLAL";
+		case Operation::SWP:  return  "SWP  ";
+		case Operation::SWPB: return  "SWPB ";
+		case Operation::SWI:  return  "SWI  ";
+		case Operation::CDP:  return  "CDP  ";
+		case Operation::LDC:  return  "LDC  ";
+		case Operation::STC:  return  "STC  ";
+		case Operation::MRC:  return  "MRC  ";
+		case Operation::MCR:  return  "MCR  ";
+		case Operation::UNKNOWN:return"UNKWN";
+		case Operation::UNASSIGNED: return "UNSND";
+		case Operation::CONDITIONALSKIP: return "CNDSP";
+		case Operation::SINGLEDATATRANSFERUNDEFINED: return "SDTUND";
+		case Operation::DECODEFAIL: return "DCDFL";
+		default: return "OPINVL";
 		}
+	}
 
-		void runThumbTests();
-		void runThumbTestsEXTRADEBUG();
+	void runThumbTests();
+	void runThumbTestsEXTRADEBUG();
 };
 

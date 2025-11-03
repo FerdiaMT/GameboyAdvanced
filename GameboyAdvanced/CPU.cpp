@@ -871,6 +871,8 @@ inline int CPU::dataProcessingCycleCalculator()
 inline int CPU::opA_BX(armInstr instr)
 {
 
+
+
 	if (!checkConditional(instr.cond)) {
 		pc += 4;
 		return 1;  // TODO check this later 
@@ -881,13 +883,19 @@ inline int CPU::opA_BX(armInstr instr)
 	if (newAddr & 0b1) // 1 = THUMB
 	{
 		T = 1;
-		pc = ((newAddr + 4) & 0xFFFFFFFC);// & 0xFFFFFFFE)+4; //clears bit for valid 2 jumping
+		pc = ((newAddr) & 0xFFFFFFFE);// & 0xFFFFFFFE)+4; //clears bit for valid 2 jumping
 	}
 	else // 0 = arm
 	{
 		T = 0;
-		pc = (   (newAddr + 4) & 0xFFFFFFFC);// &0xFFFFFFFC) + 4; // sets it to a valid num for +4 jumping 
+		pc = ((newAddr+4) &0xFFFFFFFE);// &0xFFFFFFFC) + 4; // sets it to a valid num for +4 jumping 
 	}
+
+	if (instr.rm == 15) // check, this is ambigously defined, it says "undefined" in docs but seems to make it increment an extra 4
+	{
+		pc += 4;
+	}
+
 
 	return 3; // constant
 }
@@ -975,23 +983,33 @@ inline uint32_t CPU::getArmOp2(armInstr instr, bool* carryOut)
 
 inline int CPU::opA_AND(armInstr instr)
 {
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	bool isCarry = C;
 
 	uint32_t res = reg[instr.rn] & getArmOp2(instr, &isCarry);
 
-	if (instr.S) { setFlagNZC(res, isCarry); }
+	if (instr.rn == 15 || instr.rd == 15) res += 4;
 
+	if (instr.S) { setFlagNZC(res, isCarry); }
+	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
 
 inline int CPU::opA_ORR(armInstr instr)
 {
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	bool isCarry = C;
 
-	uint32_t res = reg[instr.rn] | getArmOp2(instr, &isCarry);
+	uint32_t res = ((reg[instr.rn] | getArmOp2(instr, &isCarry)) ); // seems to be a random +4 on certain cases
 
 	if (instr.S) { setFlagNZC(res, isCarry); }
+	pc += 4;
+
+	if (instr.rn == 15) // check, this is ambigously defined, it says "undefined" in docs but seems to make it increment an extra 4
+	{
+		res += 4;
+	}
 
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -999,12 +1017,13 @@ inline int CPU::opA_ORR(armInstr instr)
 
 inline int CPU::opA_EOR(armInstr instr)
 {
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	bool isCarry = C;
 
 	uint32_t res = reg[instr.rn] ^ getArmOp2(instr, &isCarry);
 
 	if (instr.S) { setFlagNZC(res, isCarry); }
-
+	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
@@ -1013,48 +1032,60 @@ inline int CPU::opA_EOR(armInstr instr)
 
 inline int CPU::opA_ADD(armInstr instr)
 {
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	uint32_t op1 = reg[instr.rn];
 	uint32_t op2 = getArmOp2(instr, nullptr);
 	uint32_t res = op1 + op2;
 
-	if (instr.S && instr.rd != 15) { setFlagsAdd(res, op1, op2); }
+	if (instr.rn == 15 || instr.rd == 15) res += 4;
 
+	if (instr.S && instr.rd != 15) { setFlagsAdd(res, op1, op2); }
+	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
 
 inline int CPU::opA_SUB(armInstr instr)
 {
+	if (!checkConditional(instr.cond)){pc += 4; return 1;}
 	uint32_t op1 = reg[instr.rn];
 	uint32_t op2 = getArmOp2(instr, nullptr);
 	uint32_t res = op1 - op2;
 
-	if (instr.S && instr.rd != 15) { setFlagsSub(res, op1, op2); }
+	if (instr.rd == 15) res += 4;
 
+	if (instr.S && instr.rd != 15) { setFlagsSub(res, op1, op2); }
+	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
 
 inline int CPU::opA_ADC(armInstr instr)
 {
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	uint32_t op1 = reg[instr.rn];
 	uint32_t op2 = getArmOp2(instr, nullptr) + (uint32_t)C;
 	uint32_t res = op1 + op2;
 
-	if (instr.S && instr.rd != 15) { setFlagsAdd(res, op1, op2); }
+	if ((instr.rd == 15) || (instr.rn == 15)) res += 4;
 
+	if (instr.S && instr.rd != 15) { setFlagsAdd(res, op1, op2); }
+	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
 
 inline int CPU::opA_SBC(armInstr instr)
 {
+	if (!checkConditional(instr.cond)){ pc += 4; return 1; }
 	uint32_t op1 = reg[instr.rn];
 	uint32_t op2 = getArmOp2(instr, nullptr) - (uint32_t)C;
-	uint32_t res = op1 - op2;
+	uint32_t res = op1 - op2-1;
+
+	if (instr.rn == 15 || instr.rd == 15) res += 4;
 
 	if (instr.S && instr.rd != 15) { setFlagsSub(res, op1, op2); }
-
+	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
@@ -1063,24 +1094,28 @@ inline int CPU::opA_SBC(armInstr instr)
 
 inline int CPU::opA_RSB(armInstr instr)
 {
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	uint32_t op1 = reg[instr.rn];
 	uint32_t op2 = getArmOp2(instr, nullptr);
 	uint32_t res = op2 - op1;
 
-	if (instr.S && instr.rd != 15) { setFlagsSub(res, op2, op1); }
+	if(instr.rd == 15)res += 4;
 
+	if (instr.S && instr.rd != 15) { setFlagsSub(res, op2, op1); }
+	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
 
 inline int CPU::opA_RSC(armInstr instr)
 {
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	uint32_t op1 = reg[instr.rn];
 	uint32_t op2 = getArmOp2(instr, nullptr) - (uint32_t)(!C);
 	uint32_t res = op2 - op1;
 
 	if (instr.S && instr.rd != 15) { setFlagsSub(res, op2, op1); }
-
+	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
@@ -1089,45 +1124,51 @@ inline int CPU::opA_RSC(armInstr instr)
 
 inline int CPU::opA_TST(armInstr instr)
 {
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	bool isCarry = C;
 
 	uint32_t res = reg[instr.rn] & getArmOp2(instr, &isCarry);
 
 	if (instr.S && instr.rd != 15) { setFlagNZC(res, isCarry); }
-
+	pc += 4;
 	return dataProcessingCycleCalculator();
 }
 
 inline int CPU::opA_TEQ(armInstr instr)
 {
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	bool isCarry = C;
 
 	uint32_t res = reg[instr.rn] ^ getArmOp2(instr, &isCarry);
 
 	if (instr.S && instr.rd != 15) { setFlagNZC(res, isCarry); }
-
+	pc += 4;
 	return dataProcessingCycleCalculator();
 }
 
 inline int CPU::opA_CMP(armInstr instr)
 {
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	uint32_t op1 = reg[instr.rn];
 	uint32_t op2 = getArmOp2(instr, nullptr);
 	uint32_t res = op1 - op2;
 
 	if (instr.S && instr.rd != 15) { setFlagsSub(res, op1, op2); }
 
+	pc += 4;
+
 	return dataProcessingCycleCalculator();
 }
 
 inline int CPU::opA_CMN(armInstr instr)
 {
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	uint32_t op1 = reg[instr.rn];
 	uint32_t op2 = getArmOp2(instr, nullptr);
 	uint32_t res = op1 + op2;
 
 	if (instr.S && instr.rd != 15) { setFlagsAdd(res, op1, op2); }
-
+	pc += 4;
 	return dataProcessingCycleCalculator();
 }
 
@@ -1135,35 +1176,40 @@ inline int CPU::opA_CMN(armInstr instr)
 
 inline int CPU::opA_MOV(armInstr instr)
 {
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	bool isCarry = C;
 
 	uint32_t res = getArmOp2(instr, &isCarry);
 
-	if (instr.S && instr.rd != 15) { setFlagNZC(res, isCarry); }
+	if (instr.rd == 15) res += 4;
 
+	if (instr.S && instr.rd != 15) { setFlagNZC(res, isCarry); }
+	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
 
 inline int CPU::opA_MVN(armInstr instr)
 {
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	bool isCarry = C;
 
 	uint32_t res = ~(getArmOp2(instr, &isCarry));
 
 	if (instr.S && instr.rd != 15) { setFlagNZC(res, isCarry); }
-
+	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
 
 inline int CPU::opA_BIC(armInstr instr)
 {
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	bool isCarry = C;
 	uint32_t res = reg[instr.rn] & ~(getArmOp2(instr, &isCarry));
 
 	if (instr.S && instr.rd != 15) { setFlagNZC(res, isCarry); }
-
+	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
@@ -3551,6 +3597,25 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 	switch (instr.type)
 	{
 		// Data Processing - Arithmetic
+		// Here are the enums in order
+		//	ARM_AND,
+		//	ARM_SUB,
+		//	ARM_RSB,
+		// 	ARM_ADC,
+		//	ARM_SBC,
+		//	ARM_RSC,
+		// 
+		//	ARM_ADD,
+		//	ARM_TST,
+		//	ARM_TEQ,
+		//	ARM_CMP,
+		// 	ARM_EOR,
+		//	ARM_CMN,
+		//	ARM_ORR,
+		//	ARM_MOV,
+		//	ARM_BIC,
+		//	ARM_MVN,
+
 	case armOperation::ARM_ADD:
 	case armOperation::ARM_SUB:
 	case armOperation::ARM_RSB:
@@ -3561,6 +3626,12 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 		const char* ops[] = { "add", "sub", "rsb", "adc", "sbc", "rsc" };
 		const char* syms[] = { "+", "-", "- (rev)", "+ C", "- !C", "- !C (rev)" };
 		int idx = (int)instr.type - (int)armOperation::ARM_ADD;
+
+		if (idx < 0) {
+			printf("IDX IS NOT RECOGNIZED, comes out as %d instead, armOp is %0X\n", idx, instr.type);
+
+			idx = 0;
+		}
 
 		ss << addCond(ops[idx]) << (instr.S ? "s" : "") << "     ";
 		ss << regStr(instr.rd) << ", " << regStr(instr.rn);
@@ -3927,11 +3998,12 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 	return ss.str();
 }
 //TESTS TO FIX
+// arm cdp
 
 void CPU::runThumbTests() //also runs arm
 {
 	//ignore most he load stuff for now
-	const char* str = "arm_b_bl.json.bin";
+	const char* str = "arm_data_proc_immediate.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -4044,7 +4116,8 @@ void CPU::runThumbTests() //also runs arm
 		////////////
 
 		//43 and 49
-		if (tNum >= 0)// jtest TESTNG //4
+		armInstr decoded = decodeArm(opcode);
+		if (tNum >0 && (decoded.type == armOperation::ARM_ADC) )// jtest TESTNG // or 20   ON ARM 
 		{
 			reset();
 
@@ -4084,7 +4157,7 @@ void CPU::runThumbTests() //also runs arm
 
 
 			
-			armInstr decoded = decodeArm(opcode);
+			//armInstr decoded = decodeArm(opcode);
 			std::string decodedStr = armToStr(decoded);
 			curOpCycles = armExecute(decoded);
 			pc += 4; 
