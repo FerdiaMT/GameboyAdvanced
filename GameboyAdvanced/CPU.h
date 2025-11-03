@@ -113,7 +113,10 @@ public:
 		THUMB_BL_PREFIX,
 		THUMB_BL_SUFFIX,
 		THUMB_SWI,
-		THUMB_UNDEFINED,
+		THUMB_UNDEFINED, 
+
+
+
 
 		COUNT,
 	};
@@ -174,7 +177,8 @@ public:
 		ARM_MCR,
 
 		ARM_UNDEFINED,
-		ARM_COUNT
+
+		COUNT
 	};
 	
 	struct thumbInstr
@@ -193,10 +197,45 @@ public:
 		bool h2;         // hi register f2
 	};
 
-public:
+	struct armInstr
+	{
+		armOperation type;
 
-	using OpFunction = int (CPU::*)(void); // arm function array
-	OpFunction op_functions[static_cast<int>(Operation::COUNT)];
+		uint8_t rd;
+		uint8_t rn;
+		uint8_t rs;
+		uint8_t rm;
+
+		uint32_t imm;
+		uint8_t rotate;
+
+		uint8_t cond;
+
+		bool S;          // set condition codes
+		bool L;          // 1 is load, 0 is store
+		bool W;          // write back
+		bool P;          // 1 is pre index, 0 is post
+		bool U;          // 1 is add offs, 0 is sub
+		bool B;          // 1 for byte, 0 for word
+		bool H;          // is halfword or byte
+		bool I;          // immed operand
+
+		// shift info
+		uint8_t shift_type;    // 00=LSL, 01=LSR, 10=ASR, 11=ROR
+		uint8_t shift_amount;  // immed shift amount (0-31)
+		uint8_t shift_reg;     // reg containing shift amount
+		bool shift_by_reg;     // true if shift amount in register
+
+		
+		uint16_t reg_list;// reg list (for load multiple etc)
+	};
+
+	armInstr curArmInstr;
+
+public: // FUNCTION ARRAYS
+
+	using OpAFunction = int (CPU::*)(armInstr); 
+	OpAFunction opA_functions[static_cast<int>(Operation::COUNT)];
 
 	using OpTFunction = int (CPU::*)(thumbInstr);
 	OpTFunction opT_functions[static_cast<int>(thumbOperation::COUNT)];
@@ -209,13 +248,13 @@ public:
 
 		void initializeOpFunctions(); // this is for initing the list of enums to funcs
 		
-
 		uint16_t curOpCycles; // this is defaulted to 0 every time
 		int cycleTotal; // this is how we find out how many cycles have passed
 
 		uint32_t tick();
-		Operation decode(uint32_t passedIns);
-		int execute();
+		//Operation decode(uint32_t passedIns);
+		armInstr decodeArm(uint32_t instr);
+		int armExecute(armInstr instr);
 
 		uint32_t reg[16];
 
@@ -423,66 +462,57 @@ public:
 	//							EVERY ARM FUNC					    //
 	//////////////////////////////////////////////////////////////////
 
-	inline int op_AND();
-	inline int op_EOR();
-	inline int op_SUB();
-	inline int op_RSB();
-	inline int op_ADD();
-	inline int op_ADC();
-	inline int op_SBC();
-	inline int op_RSC();
-	inline int op_TST();
-	inline int op_TEQ();
-	inline int op_CMP();
-	inline int op_CMN();
-	inline int op_ORR();
-	inline int op_MOV();
-	inline int op_BIC();
-	inline int op_MVN();
-
-	inline int op_MRS();
-	inline int op_MSR();
-
-	inline int op_LDR();
-	inline int op_STR();
-	inline int op_LDM();
-	inline int op_STM();
-
-	inline int op_B();
-	inline int op_BL();
-	inline int op_BX();
-
-	inline int op_MUL();
-	inline int op_MLA();
-	inline int op_UMULL();
-	inline int op_UMLAL();
-	inline int op_SMULL();
-	inline int op_SMLAL();
-
-	inline int op_LDRH();
-	inline int op_STRH();
-	inline int op_LDRSB();
-	inline int op_LDRSH();
-
-	inline int op_SWP();
-	inline int op_SWPB();
-	inline int op_SWI();
-
-	inline int op_LDC();
-	inline int op_STC();
-	inline int op_CDP();
-	inline int op_MRC();
-	inline int op_MCR();
-
-	inline int op_UNKNOWN();
-	inline int op_UNASSIGNED();
-	inline int op_CONDITIONALSKIP();
-	inline int op_SINGLEDATATRANSFERUNDEFINED();
-	inline int op_DECODEFAIL();
+	inline int opA_AND(armInstr instr);
+	inline int opA_EOR(armInstr instr);
+	inline int opA_SUB(armInstr instr);
+	inline int opA_RSB(armInstr instr);
+	inline int opA_ADD(armInstr instr);
+	inline int opA_ADC(armInstr instr);
+	inline int opA_SBC(armInstr instr);
+	inline int opA_RSC(armInstr instr);
+	inline int opA_TST(armInstr instr);
+	inline int opA_TEQ(armInstr instr);
+	inline int opA_CMP(armInstr instr);
+	inline int opA_CMN(armInstr instr);
+	inline int opA_ORR(armInstr instr);
+	inline int opA_MOV(armInstr instr);
+	inline int opA_BIC(armInstr instr);
+	inline int opA_MVN(armInstr instr);
+	inline int opA_MRS(armInstr instr);
+	inline int opA_MSR(armInstr instr);
+	inline int opA_LDR(armInstr instr);
+	inline int opA_STR(armInstr instr);
+	inline int opA_LDRH(armInstr instr);
+	inline int opA_STRH(armInstr instr);
+	inline int opA_LDRSB(armInstr instr);
+	inline int opA_LDRSH(armInstr instr);
+	inline int opA_LDM(armInstr instr);
+	inline int opA_STM(armInstr instr);
+	inline int opA_B(armInstr instr);
+	inline int opA_BL(armInstr instr);
+	inline int opA_BX(armInstr instr);
+	inline int opA_MUL(armInstr instr);
+	inline int opA_MLA(armInstr instr);
+	inline int opA_UMULL(armInstr instr);
+	inline int opA_UMLAL(armInstr instr);
+	inline int opA_SMULL(armInstr instr);
+	inline int opA_SMLAL(armInstr instr);
+	inline int opA_SWP(armInstr instr);
+	inline int opA_SWI(armInstr instr);
+	inline int opA_CDP(armInstr instr);
+	inline int opA_LDC(armInstr instr);
+	inline int opA_STC(armInstr instr);
+	inline int opA_MRC(armInstr instr);
+	inline int opA_MCR(armInstr instr);
+	inline int opA_UNDEFINED(armInstr instr);
 
 	public: // helper for data rpocessing
 
 		inline void writeALUResult(uint8_t rdI, uint32_t result, bool s);
+
+		// new arm ops
+		inline uint32_t getArmOp2(armInstr instr, bool* carryOut);
+		inline uint32_t getArmOffset(armInstr instr);
 
 		const inline uint8_t DPgetRn();
 		const inline uint8_t DPgetRd();
@@ -525,6 +555,7 @@ public:
 		//debugger help
 
 		std::string thumbToStr(CPU::thumbInstr& instr);
+		std::string armToStr(CPU::armInstr& instr);
 
 		const char* opcodeToString(Operation op)
 		{

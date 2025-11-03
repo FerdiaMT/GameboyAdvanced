@@ -11,7 +11,7 @@
 //const char* rom = "thumb.gba";
 const char* rom = "gba_bios.bin";
 
-GBA::GBA(): cpu(&bus) , debuggerCPU(&cpu)
+GBA::GBA(): cpu(&bus) //, debuggerCPU(&cpu)
 {
 	if (!bus.loadROM(rom, 0x00000000))
 	{

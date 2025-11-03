@@ -10,7 +10,7 @@ public:
 
 	Bus bus;
 	CPU cpu;
-	DebuggerCPU debuggerCPU;
+	//DebuggerCPU debuggerCPU;
 
 	GBA();
 

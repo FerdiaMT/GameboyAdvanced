@@ -49,22 +49,21 @@ uint32_t CPU::tick()
 	if (!T) // if arm mode
 	{
 		instruction = read32(pc);
+		curArmInstr = decodeArm(instruction);
 		pc += 4;
-
-		curOP = decode(instruction);
 
 		printf("MODE:%s ,PC: 0x%08X, Instruction: 0x%08X, Flags: %s , R12: %08X ,Opcode: %s, \n",
 			"A",
 			pc - pcOffset(), instruction, CPSRtoString(), reg[12], opcodeToString(curOP));
 
-		curOpCycles = execute();
+		curOpCycles = armExecute(curArmInstr);
 
 	}
 	else // if thumb mode
 	{
 		uint16_t thumbCode = read16(pc);
-		pc += 2;
 		curThumbInstr = decodeThumb(thumbCode);
+		pc += 2;
 
 		printf("MODE:%s ,PC: 0x%08X, Instruction: 0x%04X    , Flags: %08X , R12: %s ,Opcode: %s  \n",
 			"T",
@@ -83,84 +82,70 @@ uint32_t CPU::tick()
 
 void CPU::initializeOpFunctions()
 {
-	for (int i = 0; i < static_cast<int>(Operation::COUNT); i++)
+	for (int i = 0; i < static_cast<int>(armOperation::COUNT); i++)
 	{
-		op_functions[i] = nullptr;
+		opA_functions[i] = nullptr;
 	}
 
 	// DATA 
-	op_functions[static_cast<int>(Operation::AND)] = &CPU::op_AND;
-	op_functions[static_cast<int>(Operation::EOR)] = &CPU::op_EOR;
-	op_functions[static_cast<int>(Operation::SUB)] = &CPU::op_SUB;
-	op_functions[static_cast<int>(Operation::RSB)] = &CPU::op_RSB;
-	op_functions[static_cast<int>(Operation::ADD)] = &CPU::op_ADD;
-	op_functions[static_cast<int>(Operation::ADC)] = &CPU::op_ADC;
-	op_functions[static_cast<int>(Operation::SBC)] = &CPU::op_SBC;
-	op_functions[static_cast<int>(Operation::RSC)] = &CPU::op_RSC;
-	op_functions[static_cast<int>(Operation::TST)] = &CPU::op_TST;
-	op_functions[static_cast<int>(Operation::TEQ)] = &CPU::op_TEQ;
-	op_functions[static_cast<int>(Operation::CMP)] = &CPU::op_CMP;
-	op_functions[static_cast<int>(Operation::CMN)] = &CPU::op_CMN;
-	op_functions[static_cast<int>(Operation::ORR)] = &CPU::op_ORR;
-	op_functions[static_cast<int>(Operation::MOV)] = &CPU::op_MOV;
-	op_functions[static_cast<int>(Operation::BIC)] = &CPU::op_BIC;
-	op_functions[static_cast<int>(Operation::MVN)] = &CPU::op_MVN;
+	opA_functions[static_cast<int>(armOperation::ARM_AND)] = &CPU::opA_AND;
+	opA_functions[static_cast<int>(armOperation::ARM_EOR)] = &CPU::opA_EOR;
+	opA_functions[static_cast<int>(armOperation::ARM_SUB)] = &CPU::opA_SUB;
+	opA_functions[static_cast<int>(armOperation::ARM_RSB)] = &CPU::opA_RSB;
+	opA_functions[static_cast<int>(armOperation::ARM_ADD)] = &CPU::opA_ADD;
+	opA_functions[static_cast<int>(armOperation::ARM_ADC)] = &CPU::opA_ADC;
+	opA_functions[static_cast<int>(armOperation::ARM_SBC)] = &CPU::opA_SBC;
+	opA_functions[static_cast<int>(armOperation::ARM_RSC)] = &CPU::opA_RSC;
+	opA_functions[static_cast<int>(armOperation::ARM_TST)] = &CPU::opA_TST;
+	opA_functions[static_cast<int>(armOperation::ARM_TEQ)] = &CPU::opA_TEQ;
+	opA_functions[static_cast<int>(armOperation::ARM_CMP)] = &CPU::opA_CMP;
+	opA_functions[static_cast<int>(armOperation::ARM_CMN)] = &CPU::opA_CMN;
+	opA_functions[static_cast<int>(armOperation::ARM_ORR)] = &CPU::opA_ORR;
+	opA_functions[static_cast<int>(armOperation::ARM_MOV)] = &CPU::opA_MOV;
+	opA_functions[static_cast<int>(armOperation::ARM_BIC)] = &CPU::opA_BIC;
+	opA_functions[static_cast<int>(armOperation::ARM_MVN)] = &CPU::opA_MVN;
 
-	//SPR TRANSFER
-	op_functions[static_cast<int>(Operation::MRS)] = &CPU::op_MRS;
-	op_functions[static_cast<int>(Operation::MSR)] = &CPU::op_MSR;
+	// PSR Transfer
+	opA_functions[static_cast<int>(armOperation::ARM_MRS)] = &CPU::opA_MRS;
+	opA_functions[static_cast<int>(armOperation::ARM_MSR)] = &CPU::opA_MSR;
 
-	// LOAD
-	op_functions[static_cast<int>(Operation::LDR)] = &CPU::op_LDR;
-	op_functions[static_cast<int>(Operation::STR)] = &CPU::op_STR;
-	op_functions[static_cast<int>(Operation::LDRH)] = &CPU::op_LDRH;
-	op_functions[static_cast<int>(Operation::STRH)] = &CPU::op_STRH;
-	op_functions[static_cast<int>(Operation::LDRSB)] = &CPU::op_LDRSB;
-	op_functions[static_cast<int>(Operation::LDRSH)] = &CPU::op_LDRSH;
-	op_functions[static_cast<int>(Operation::LDM)] = &CPU::op_LDM;
-	op_functions[static_cast<int>(Operation::STM)] = &CPU::op_STM;
+	// Load/Store
+	opA_functions[static_cast<int>(armOperation::ARM_LDR)] = &CPU::opA_LDR;
+	opA_functions[static_cast<int>(armOperation::ARM_STR)] = &CPU::opA_STR;
+	opA_functions[static_cast<int>(armOperation::ARM_LDRH)] = &CPU::opA_LDRH;
+	opA_functions[static_cast<int>(armOperation::ARM_STRH)] = &CPU::opA_STRH;
+	opA_functions[static_cast<int>(armOperation::ARM_LDRSB)] = &CPU::opA_LDRSB;
+	opA_functions[static_cast<int>(armOperation::ARM_LDRSH)] = &CPU::opA_LDRSH;
+	opA_functions[static_cast<int>(armOperation::ARM_LDM)] = &CPU::opA_LDM;
+	opA_functions[static_cast<int>(armOperation::ARM_STM)] = &CPU::opA_STM;
 
-	// BRANCH
-	op_functions[static_cast<int>(Operation::B)] = &CPU::op_B;
-	op_functions[static_cast<int>(Operation::BL)] = &CPU::op_BL;
-	op_functions[static_cast<int>(Operation::BX)] = &CPU::op_BX;
+	// Branch
+	opA_functions[static_cast<int>(armOperation::ARM_B)] = &CPU::opA_B;
+	opA_functions[static_cast<int>(armOperation::ARM_BL)] = &CPU::opA_BL;
+	opA_functions[static_cast<int>(armOperation::ARM_BX)] = &CPU::opA_BX;
 
-	// MULT
-	op_functions[static_cast<int>(Operation::MUL)] = &CPU::op_MUL;
-	op_functions[static_cast<int>(Operation::MLA)] = &CPU::op_MLA;
-	op_functions[static_cast<int>(Operation::UMULL)] = &CPU::op_UMULL;
-	op_functions[static_cast<int>(Operation::UMLAL)] = &CPU::op_UMLAL;
-	op_functions[static_cast<int>(Operation::SMULL)] = &CPU::op_SMULL;
-	op_functions[static_cast<int>(Operation::SMLAL)] = &CPU::op_SMLAL;
+	// Multiply
+	opA_functions[static_cast<int>(armOperation::ARM_MUL)] = &CPU::opA_MUL;
+	opA_functions[static_cast<int>(armOperation::ARM_MLA)] = &CPU::opA_MLA;
+	opA_functions[static_cast<int>(armOperation::ARM_UMULL)] = &CPU::opA_UMULL;
+	opA_functions[static_cast<int>(armOperation::ARM_UMLAL)] = &CPU::opA_UMLAL;
+	opA_functions[static_cast<int>(armOperation::ARM_SMULL)] = &CPU::opA_SMULL;
+	opA_functions[static_cast<int>(armOperation::ARM_SMLAL)] = &CPU::opA_SMLAL;
 
-	// HALDWORD
-	op_functions[static_cast<int>(Operation::LDR)] = &CPU::op_LDR;
-	op_functions[static_cast<int>(Operation::STR)] = &CPU::op_STR;
-	op_functions[static_cast<int>(Operation::LDRH)] = &CPU::op_LDRH;
-	op_functions[static_cast<int>(Operation::STRH)] = &CPU::op_STRH;
-	op_functions[static_cast<int>(Operation::LDRSB)] = &CPU::op_LDRSB;
-	op_functions[static_cast<int>(Operation::LDRSH)] = &CPU::op_LDRSH;
-	op_functions[static_cast<int>(Operation::LDM)] = &CPU::op_LDM;
-	op_functions[static_cast<int>(Operation::STM)] = &CPU::op_STM;
+	// Special
+	opA_functions[static_cast<int>(armOperation::ARM_SWP)] = &CPU::opA_SWP;
+	opA_functions[static_cast<int>(armOperation::ARM_SWI)] = &CPU::opA_SWI;
 
-	// SPECIAL
-	op_functions[static_cast<int>(Operation::SWP)] = &CPU::op_SWP;
-	op_functions[static_cast<int>(Operation::SWPB)] = &CPU::op_SWPB;
-	op_functions[static_cast<int>(Operation::SWI)] = &CPU::op_SWI;
+	// Coprocessor
+	opA_functions[static_cast<int>(armOperation::ARM_CDP)] = &CPU::opA_CDP;
+	opA_functions[static_cast<int>(armOperation::ARM_LDC)] = &CPU::opA_LDC;
+	opA_functions[static_cast<int>(armOperation::ARM_STC)] = &CPU::opA_STC;
+	opA_functions[static_cast<int>(armOperation::ARM_MRC)] = &CPU::opA_MRC;
+	opA_functions[static_cast<int>(armOperation::ARM_MCR)] = &CPU::opA_MCR;
 
-	// COPROCESSOR
-	op_functions[static_cast<int>(Operation::LDC)] = &CPU::op_LDC;
-	op_functions[static_cast<int>(Operation::STC)] = &CPU::op_STC;
-	op_functions[static_cast<int>(Operation::CDP)] = &CPU::op_CDP;
-	op_functions[static_cast<int>(Operation::MRC)] = &CPU::op_MRC;
-	op_functions[static_cast<int>(Operation::MCR)] = &CPU::op_MCR;
+	// Undefined
+	opA_functions[static_cast<int>(armOperation::ARM_UNDEFINED)] = &CPU::opA_UNDEFINED;
 
-	// ERRORS
-	op_functions[static_cast<int>(Operation::UNKNOWN)] = &CPU::op_UNKNOWN;
-	op_functions[static_cast<int>(Operation::UNASSIGNED)] = &CPU::op_UNASSIGNED;
-	op_functions[static_cast<int>(Operation::CONDITIONALSKIP)] = &CPU::op_CONDITIONALSKIP;
-	op_functions[static_cast<int>(Operation::SINGLEDATATRANSFERUNDEFINED)] = &CPU::op_SINGLEDATATRANSFERUNDEFINED;
-	op_functions[static_cast<int>(Operation::DECODEFAIL)] = &CPU::op_DECODEFAIL;
 
 
 	///////////////////////////////////////////////////////////////////////
@@ -233,163 +218,154 @@ void CPU::initializeOpFunctions()
 }
 
 
-CPU::Operation CPU::decode(uint32_t passedIns)
+//CPU::Operation CPU::decode(uint32_t passedIns)
+//{
+//
+//	uint8_t conditional = (passedIns >> 28) & 0xF;
+//	if (!checkConditional(conditional)) return CPU::Operation::CONDITIONALSKIP;
+//
+//	// so now we get bit 27,26 and 25 to tell us what passedIns to execute
+//	switch ((passedIns >> 25) & 0x7)
+//	{
+//	case(0b000):
+//	{
+//		// a few odd cases here
+//		if ((passedIns & 0x0FFFFFF0) == 0x12FFF10) return CPU::Operation::BX;
+//		else if ((passedIns & 0x0FB00FF0) == 0x01000090) return CPU::Operation::SWP;
+//		else if ((passedIns & 0x0F8000F0) == 0x00800090) // multiplyLong, can be long or accumalate
+//		{
+//			// can also be signed or unsigned
+//			switch ((passedIns >> 21) & 0b11)
+//			{
+//			case(0b00): return CPU::Operation::UMULL;
+//			case(0b01): return CPU::Operation::UMLAL;
+//			case(0b10): return CPU::Operation::SMULL;
+//			case(0b11): return CPU::Operation::SMLAL;
+//			}
+//		}
+//		else if ((passedIns & 0x0FC000F0) == 0x00000090)
+//		{
+//			if ((passedIns >> 21) & 0b1) return CPU::Operation::MLA;
+//			return CPU::Operation::MUL;
+//		}
+//		else if ((passedIns & 0x0E000090) == 0x00000090) // HalfwordTransfer
+//		{
+//			uint8_t SH = (passedIns >> 4) & 0b11;
+//
+//			if (SH == 0) return CPU::Operation::SWP;
+//
+//			SH = (((passedIns >> 18) & 100) | SH) & 0x7;
+//
+//			switch (SH)
+//			{
+//			case(0b001): return CPU::Operation::STRH;
+//			case(0b101): return CPU::Operation::LDRH;
+//			case(0b110): return CPU::Operation::LDRSB;
+//			case(0b111): return CPU::Operation::LDRSH;
+//			default:printf("ERROR IN HALFWORD TRANSFER DECODING, GOT SH %d", SH);
+//			}
+//
+//		}
+//		else if ((passedIns & 0x0FBF0FFF) == 0x010F0000) return CPU::Operation::MRS;
+//		else if ((passedIns & 0x0FB0FFF0) == 0x0120F000 || (passedIns & 0x0FB0F000) == 0x0320F000)return CPU::Operation::MSR;
+//		else
+//		{
+//			// DATA TRANSFER
+//			uint8_t op = (passedIns >> 21) & 0xF;
+//
+//			//before we return anything, we should 
+//
+//			switch (op)
+//			{
+//			case(0b0000): return CPU::Operation::AND;break;
+//			case(0b0001): return CPU::Operation::EOR;break;
+//			case(0b0010): return CPU::Operation::SUB;break;
+//			case(0b0011): return CPU::Operation::RSB;break;
+//			case(0b0100): return CPU::Operation::ADD;break;
+//			case(0b0101): return CPU::Operation::ADC;break;
+//			case(0b0110): return CPU::Operation::SBC;break;
+//			case(0b0111): return CPU::Operation::RSC;break;
+//			case(0b1000): return CPU::Operation::TST;break;
+//			case(0b1001): return CPU::Operation::TEQ;break;
+//			case(0b1010): return CPU::Operation::CMP;break;
+//			case(0b1011): return CPU::Operation::CMN;break;
+//			case(0b1100): return CPU::Operation::ORR;break;
+//			case(0b1101): return CPU::Operation::MOV;break;
+//			case(0b1110): return CPU::Operation::BIC;break;
+//			case(0b1111): return CPU::Operation::MVN;break;
+//			}
+//		}
+//	}break;
+//
+//	case(0b001): // this must be transfer with immediate mode on
+//	{
+//		if ((passedIns & 0x0FBF0FFF) == 0x010F0000) return CPU::Operation::MRS;
+//		else if ((passedIns & 0x0FB0FFF0) == 0x0120F000 || (passedIns & 0x0FB0F000) == 0x0320F000)return CPU::Operation::MSR;
+//		else
+//		{
+//			switch ((passedIns >> 21) & 0xF)
+//			{
+//			case(0b0000): return CPU::Operation::AND;break;
+//			case(0b0001): return CPU::Operation::EOR;break;
+//			case(0b0010): return CPU::Operation::SUB;break;
+//			case(0b0011): return CPU::Operation::RSB;break;
+//			case(0b0100): return CPU::Operation::ADD;break;
+//			case(0b0101): return CPU::Operation::ADC;break;
+//			case(0b0110): return CPU::Operation::SBC;break;
+//			case(0b0111): return CPU::Operation::RSC;break;
+//			case(0b1000): return CPU::Operation::TST;break;
+//			case(0b1001): return CPU::Operation::TEQ;break;
+//			case(0b1010): return CPU::Operation::CMP;break;
+//			case(0b1011): return CPU::Operation::CMN;break;
+//			case(0b1100): return CPU::Operation::ORR;break;
+//			case(0b1101): return CPU::Operation::MOV;break;
+//			case(0b1110): return CPU::Operation::BIC;break;
+//			case(0b1111): return CPU::Operation::MVN;break;
+//			}
+//		}
+//
+//	}
+//
+//
+//	case(0b011): {
+//		if (!((passedIns >> 4) & 0b1))
+//		{
+//			//SINGLE DATA TRANSFER
+//			if ((passedIns >> 20) & 0b1) return CPU::Operation::LDR;
+//			return CPU::Operation::STR;
+//		}
+//		else { return CPU::Operation::SINGLEDATATRANSFERUNDEFINED; }; break;
+//	}
+//	case(0b010): if ((passedIns >> 20) & 0b1) { return CPU::Operation::LDR; }
+//			   else { return CPU::Operation::STR; }break; // SINGLE DATA TRANSFER (AGAIN)
+//	case(0b100): if ((passedIns >> 20) & 0b1) { return CPU::Operation::LDM; }
+//			   else { return CPU::Operation::STM; }break; //BLOCK DATA TRANSFER
+//	case(0b101): if ((passedIns >> 24) & 0b1) { return CPU::Operation::BL; }
+//			   else { return CPU::Operation::B; }break;
+//	case(0b110): if ((passedIns >> 24) & 0b1) { return CPU::Operation::LDC; }
+//			   else { return CPU::Operation::STC; }break; // COPROCESSOR DATA TRANSFER
+//
+//
+//	case(0b111):
+//	{
+//		if ((passedIns >> 24) & 0b1) return CPU::Operation::SWI;
+//		else if (!((passedIns >> 4) & 0b1)) return CPU::Operation::CDP;
+//		else // coprocessor register transfer , MRC , MCR
+//		{
+//			if ((passedIns >> 20) & 0b1) { return CPU::Operation::MRC; }
+//			else { return CPU::Operation::MCR; }break;
+//		}
+//	}break;
+//
+//	}
+//
+//	return CPU::Operation::DECODEFAIL;
+//
+//}
+
+int CPU::armExecute(armInstr instr)
 {
-
-	uint8_t conditional = (passedIns >> 28) & 0xF;
-	if (!checkConditional(conditional)) return CPU::Operation::CONDITIONALSKIP;
-
-	// so now we get bit 27,26 and 25 to tell us what passedIns to execute
-	switch ((passedIns >> 25) & 0x7)
-	{
-	case(0b000):
-	{
-		// a few odd cases here
-		if ((passedIns & 0x0FFFFFF0) == 0x12FFF10) return CPU::Operation::BX;
-		else if ((passedIns & 0x0FB00FF0) == 0x01000090) return CPU::Operation::SWP;
-		else if ((passedIns & 0x0F8000F0) == 0x00800090) // multiplyLong, can be long or accumalate
-		{
-			// can also be signed or unsigned
-			switch ((passedIns >> 21) & 0b11)
-			{
-			case(0b00): return CPU::Operation::UMULL;
-			case(0b01): return CPU::Operation::UMLAL;
-			case(0b10): return CPU::Operation::SMULL;
-			case(0b11): return CPU::Operation::SMLAL;
-			}
-		}
-		else if ((passedIns & 0x0FC000F0) == 0x00000090)
-		{
-			if ((passedIns >> 21) & 0b1) return CPU::Operation::MLA;
-			return CPU::Operation::MUL;
-		}
-		else if ((passedIns & 0x0E000090) == 0x00000090) // HalfwordTransfer
-		{
-			uint8_t SH = (passedIns >> 4) & 0b11;
-
-			if (SH == 0) return CPU::Operation::SWP;
-
-			SH = (((passedIns >> 18) & 100) | SH) & 0x7;
-
-			switch (SH)
-			{
-			case(0b001): return CPU::Operation::STRH;
-			case(0b101): return CPU::Operation::LDRH;
-			case(0b110): return CPU::Operation::LDRSB;
-			case(0b111): return CPU::Operation::LDRSH;
-			default:printf("ERROR IN HALFWORD TRANSFER DECODING, GOT SH %d", SH);
-			}
-
-		}
-		else if ((passedIns & 0x0FBF0FFF) == 0x010F0000) return CPU::Operation::MRS;
-		else if ((passedIns & 0x0FB0FFF0) == 0x0120F000 || (passedIns & 0x0FB0F000) == 0x0320F000)return CPU::Operation::MSR;
-		else
-		{
-			// DATA TRANSFER
-			uint8_t op = (passedIns >> 21) & 0xF;
-
-			//before we return anything, we should 
-
-			switch (op)
-			{
-			case(0b0000): return CPU::Operation::AND;break;
-			case(0b0001): return CPU::Operation::EOR;break;
-			case(0b0010): return CPU::Operation::SUB;break;
-			case(0b0011): return CPU::Operation::RSB;break;
-			case(0b0100): return CPU::Operation::ADD;break;
-			case(0b0101): return CPU::Operation::ADC;break;
-			case(0b0110): return CPU::Operation::SBC;break;
-			case(0b0111): return CPU::Operation::RSC;break;
-			case(0b1000): return CPU::Operation::TST;break;
-			case(0b1001): return CPU::Operation::TEQ;break;
-			case(0b1010): return CPU::Operation::CMP;break;
-			case(0b1011): return CPU::Operation::CMN;break;
-			case(0b1100): return CPU::Operation::ORR;break;
-			case(0b1101): return CPU::Operation::MOV;break;
-			case(0b1110): return CPU::Operation::BIC;break;
-			case(0b1111): return CPU::Operation::MVN;break;
-			}
-		}
-	}break;
-
-	case(0b001): // this must be transfer with immediate mode on
-	{
-		if ((passedIns & 0x0FBF0FFF) == 0x010F0000) return CPU::Operation::MRS;
-		else if ((passedIns & 0x0FB0FFF0) == 0x0120F000 || (passedIns & 0x0FB0F000) == 0x0320F000)return CPU::Operation::MSR;
-		else
-		{
-			switch ((passedIns >> 21) & 0xF)
-			{
-			case(0b0000): return CPU::Operation::AND;break;
-			case(0b0001): return CPU::Operation::EOR;break;
-			case(0b0010): return CPU::Operation::SUB;break;
-			case(0b0011): return CPU::Operation::RSB;break;
-			case(0b0100): return CPU::Operation::ADD;break;
-			case(0b0101): return CPU::Operation::ADC;break;
-			case(0b0110): return CPU::Operation::SBC;break;
-			case(0b0111): return CPU::Operation::RSC;break;
-			case(0b1000): return CPU::Operation::TST;break;
-			case(0b1001): return CPU::Operation::TEQ;break;
-			case(0b1010): return CPU::Operation::CMP;break;
-			case(0b1011): return CPU::Operation::CMN;break;
-			case(0b1100): return CPU::Operation::ORR;break;
-			case(0b1101): return CPU::Operation::MOV;break;
-			case(0b1110): return CPU::Operation::BIC;break;
-			case(0b1111): return CPU::Operation::MVN;break;
-			}
-		}
-
-	}
-
-
-	case(0b011): {
-		if (!((passedIns >> 4) & 0b1))
-		{
-			//SINGLE DATA TRANSFER
-			if ((passedIns >> 20) & 0b1) return CPU::Operation::LDR;
-			return CPU::Operation::STR;
-		}
-		else { return CPU::Operation::SINGLEDATATRANSFERUNDEFINED; }; break;
-	}
-	case(0b010): if ((passedIns >> 20) & 0b1) { return CPU::Operation::LDR; }
-			   else { return CPU::Operation::STR; }break; // SINGLE DATA TRANSFER (AGAIN)
-	case(0b100): if ((passedIns >> 20) & 0b1) { return CPU::Operation::LDM; }
-			   else { return CPU::Operation::STM; }break; //BLOCK DATA TRANSFER
-	case(0b101): if ((passedIns >> 24) & 0b1) { return CPU::Operation::BL; }
-			   else { return CPU::Operation::B; }break;
-	case(0b110): if ((passedIns >> 24) & 0b1) { return CPU::Operation::LDC; }
-			   else { return CPU::Operation::STC; }break; // COPROCESSOR DATA TRANSFER
-
-
-	case(0b111):
-	{
-		if ((passedIns >> 24) & 0b1) return CPU::Operation::SWI;
-		else if (!((passedIns >> 4) & 0b1)) return CPU::Operation::CDP;
-		else // coprocessor register transfer , MRC , MCR
-		{
-			if ((passedIns >> 20) & 0b1) { return CPU::Operation::MRC; }
-			else { return CPU::Operation::MCR; }break;
-		}
-	}break;
-
-	}
-
-	return CPU::Operation::DECODEFAIL;
-
-}
-
-int CPU::execute()
-{
-	int op_index = static_cast<int>(curOP);
-
-	if (op_functions[op_index] == nullptr)
-	{
-		printf("NO FUNCTION MAPPED TO INDEX %d\n", op_index);
-		return 1;
-	}
-
-	return(this->*op_functions[op_index])();
-
+	return (this->*opA_functions[static_cast<int>(instr.type)])(instr);
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -660,6 +636,36 @@ const inline uint8_t CPU::pcOffset()
 
 //HELPER FUNCTIONS FOR DATA PROCESSING
 
+inline uint32_t SDOffset(bool u, uint32_t newAddr, uint32_t offset)
+{
+	if (u) newAddr += offset;
+	else newAddr -= offset;
+	return newAddr;
+}
+
+inline int numOfRegisters(uint16_t registerList)
+{
+	int numRegs = 0;
+	for (int i = 0; i < 16; i++)
+	{
+		if (registerList & (1 << i)) numRegs++;
+	}
+
+	return numRegs;
+}
+
+inline uint32_t CPU::SDapplyShift(uint32_t rmVal, uint8_t type, uint8_t amount) // singledata apply shift
+{
+	switch (type) // use bits 1 and 2 of shift
+	{
+	case 0b00: return DPshiftLSL(rmVal, amount, nullptr); break; // LSL
+	case 0b01: return DPshiftLSR(rmVal, amount, nullptr); break; // LSR
+	case 0b10: return DPshiftASR(rmVal, amount, nullptr); break; // ASR
+	case 0b11: return DPshiftROR(rmVal, amount, nullptr); break; // ROR
+	}
+}
+
+
 
 
 const inline uint8_t CPU::DPgetRn() { return (instruction >> 16) & 0xF; }
@@ -854,16 +860,15 @@ inline int CPU::dataProcessingCycleCalculator()
 	return cycles;
 }
 
-
 //////////////////////////////////////////////////////////////////////////
-//				              OPERATIONS								//
+//				              ARM OPERATIONS							//
 //////////////////////////////////////////////////////////////////////////
 //				             BRANCH EXCHANGE				            //
 //////////////////////////////////////////////////////////////////////////
 
-inline int CPU::op_BX()
+inline int CPU::opA_BX(armInstr instr)
 {
-	uint32_t newAddr = reg[instruction & 0xF];
+	uint32_t newAddr = reg[instr.rm];
 
 	if (newAddr & 0b1) // 1 = THUMB
 	{
@@ -880,268 +885,310 @@ inline int CPU::op_BX()
 }
 
 //////////////////////////////////////////////////////////////////////////
-//				              OPERATIONS								//
+//				              ARM OPERATIONS							//
 //////////////////////////////////////////////////////////////////////////
 //				             BRANCH / BRANCH LINK			            //
 //////////////////////////////////////////////////////////////////////////
 
-inline int CPU::op_B()
+inline int CPU::opA_B(armInstr instr)
 {
-	int32_t offset = (instruction & 0xFFFFFF);
-	// FFFFFF
-	if (offset & 0x800000) offset |= 0xFF000000;
-
-	pc = pc + (offset << 2) + 4;
+	pc = pc + instr.imm + 4;
 	return 3;
 }
 
-inline int CPU::op_BL() //TODO, make sure this is using correct logic to decide if B or BL
+inline int CPU::opA_BL(armInstr instr)
 {
-	lr = pc + pcOffset(); // this adds 2 in thumb, 4 in ARM
+	lr = pc + 4; // ARM always uses 4
 
-	int32_t offset = (instruction & 0xFFFFFF);
-	// FFFFFF
-	if (offset & 0x800000) offset |= 0xFF000000;
-
-	pc = static_cast<int32_t>(pc) + static_cast<int32_t>(offset << 2);
+	pc = static_cast<int32_t>(pc) + static_cast<int32_t>(instr.imm);
 	return 3;
 }
 
 //////////////////////////////////////////////////////////////////////////
-//				              OPERATIONS								//
+//				              ARM OPERATIONS							//
 //////////////////////////////////////////////////////////////////////////
 //				              DATA PROCESSING							//
 //////////////////////////////////////////////////////////////////////////
 
+// Helper function to get operand 2 with shift applied
+inline uint32_t CPU::getArmOp2(armInstr instr, bool* carryOut)
+{
+	if (instr.I) // Immediate with rotation
+	{
+		uint32_t value = instr.imm;
+		uint8_t rotation = instr.rotate * 2;
 
+		if (rotation != 0)
+		{
+			value = (value >> rotation) | (value << (32 - rotation));
+			if (carryOut) *carryOut = (value >> 31) & 1;
+		}
 
-// FIRST 8 BINARYS
-// AND, ORR, EOR, SUB, RSB, ADD, ADC, SBC, RSC, , BIC
+		return value;
+	}
+	else // Register with shift
+	{
+		uint32_t rmVal = reg[instr.rm];
+		uint8_t shiftAmount;
+
+		if (instr.shift_by_reg)
+		{
+			shiftAmount = reg[instr.shift_reg] & 0xFF;
+		}
+		else
+		{
+			shiftAmount = instr.shift_amount;
+		}
+
+		switch (instr.shift_type)
+		{
+		case 0b00: return DPshiftLSL(rmVal, shiftAmount, carryOut);
+		case 0b01: return DPshiftLSR(rmVal, shiftAmount, carryOut);
+		case 0b10: return DPshiftASR(rmVal, shiftAmount, carryOut);
+		case 0b11: return DPshiftROR(rmVal, shiftAmount, carryOut);
+		}
+	}
+
+	return 0;
+}
+
 // BIT OPERATIONS // AND, ORR EOR
 
-inline int CPU::op_AND()
+inline int CPU::opA_AND(armInstr instr)
 {
 	bool isCarry = C;
 
-	uint32_t res = reg[DPgetRn()] & DPgetOp2(&isCarry);
+	uint32_t res = reg[instr.rn] & getArmOp2(instr, &isCarry);
 
-	if (DPs()) { setFlagNZC(res, isCarry); }
+	if (instr.S) { setFlagNZC(res, isCarry); }
 
-	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
+	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
 
-inline int CPU::op_ORR()
+inline int CPU::opA_ORR(armInstr instr)
 {
 	bool isCarry = C;
 
-	uint32_t res = reg[DPgetRn()] & DPgetOp2(&isCarry);
+	uint32_t res = reg[instr.rn] | getArmOp2(instr, &isCarry);
 
+	if (instr.S) { setFlagNZC(res, isCarry); }
 
-	if (DPs()) { setFlagNZC(res, isCarry); }
-
-	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
+	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
 
-inline int CPU::op_EOR()
+inline int CPU::opA_EOR(armInstr instr)
 {
 	bool isCarry = C;
 
-	uint32_t res = reg[DPgetRn()] ^ DPgetOp2(&isCarry);
+	uint32_t res = reg[instr.rn] ^ getArmOp2(instr, &isCarry);
 
+	if (instr.S) { setFlagNZC(res, isCarry); }
 
-	if (DPs()) { setFlagNZC(res, isCarry); }
-	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
+	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
 
-// ADD, SUB, ADDC, SUBC
+// ADD, SUB, ADC, SBC
 
-inline int CPU::op_ADD()
+inline int CPU::opA_ADD(armInstr instr)
 {
-	uint32_t op1 = reg[DPgetRn()];
-	uint32_t op2 = DPgetOp2(nullptr);
+	uint32_t op1 = reg[instr.rn];
+	uint32_t op2 = getArmOp2(instr, nullptr);
 	uint32_t res = op1 + op2;
 
+	if (instr.S && instr.rd != 15) { setFlagsAdd(res, op1, op2); }
 
-	if (DPs() && DPgetRd() != 15) { setFlagsAdd(res, op1, op2); }
-	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
+	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
-inline int CPU::op_SUB()
+
+inline int CPU::opA_SUB(armInstr instr)
 {
-	uint32_t op1 = reg[DPgetRn()];
-	uint32_t op2 = DPgetOp2(nullptr);
+	uint32_t op1 = reg[instr.rn];
+	uint32_t op2 = getArmOp2(instr, nullptr);
 	uint32_t res = op1 - op2;
 
+	if (instr.S && instr.rd != 15) { setFlagsSub(res, op1, op2); }
 
-	if (DPs() && DPgetRd() != 15) { setFlagsSub(res, op1, op2); }
-	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
+	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
-inline int CPU::op_ADC()
+
+inline int CPU::opA_ADC(armInstr instr)
 {
-	uint32_t op1 = reg[DPgetRn()];
-	uint32_t op2 = DPgetOp2(nullptr) + (uint32_t)C;
+	uint32_t op1 = reg[instr.rn];
+	uint32_t op2 = getArmOp2(instr, nullptr) + (uint32_t)C;
 	uint32_t res = op1 + op2;
 
+	if (instr.S && instr.rd != 15) { setFlagsAdd(res, op1, op2); }
 
-	if (DPs() && DPgetRd() != 15) { setFlagsAdd(res, op1, op2); }
-	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
+	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
-inline int CPU::op_SBC()
+
+inline int CPU::opA_SBC(armInstr instr)
 {
-	uint32_t op1 = reg[DPgetRn()];
-	uint32_t op2 = DPgetOp2(nullptr) - (uint32_t)C;
+	uint32_t op1 = reg[instr.rn];
+	uint32_t op2 = getArmOp2(instr, nullptr) - (uint32_t)C;
 	uint32_t res = op1 - op2;
 
+	if (instr.S && instr.rd != 15) { setFlagsSub(res, op1, op2); }
 
-	if (DPs() && DPgetRd() != 15) { setFlagsSub(res, op1, op2); }
-	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
+	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
 
 // reverse subtract, reverse subtract with carry
 
-inline int CPU::op_RSB()
+inline int CPU::opA_RSB(armInstr instr)
 {
-	uint32_t op1 = reg[DPgetRn()];
-	uint32_t op2 = DPgetOp2(nullptr);
+	uint32_t op1 = reg[instr.rn];
+	uint32_t op2 = getArmOp2(instr, nullptr);
 	uint32_t res = op2 - op1;
 
+	if (instr.S && instr.rd != 15) { setFlagsSub(res, op2, op1); }
 
-	if (DPs() && DPgetRd() != 15) { setFlagsSub(res, op1, op2); }
-	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
+	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
-inline int CPU::op_RSC()
+
+inline int CPU::opA_RSC(armInstr instr)
 {
-	uint32_t op1 = reg[DPgetRn()];
-	uint32_t op2 = DPgetOp2(nullptr) - (uint32_t)(!C);
+	uint32_t op1 = reg[instr.rn];
+	uint32_t op2 = getArmOp2(instr, nullptr) - (uint32_t)(!C);
 	uint32_t res = op2 - op1;
 
+	if (instr.S && instr.rd != 15) { setFlagsSub(res, op2, op1); }
 
-	if (DPs() && DPgetRd() != 15) { setFlagsSub(res, op1, op2); }
-	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
+	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
 
 // test ops, for writing to flag
 
-inline int CPU::op_TST() // AND , but we dont write the val in
+inline int CPU::opA_TST(armInstr instr)
 {
 	bool isCarry = C;
 
-	uint32_t res = reg[DPgetRn()] & DPgetOp2(&isCarry);
+	uint32_t res = reg[instr.rn] & getArmOp2(instr, &isCarry);
 
-	if (DPs() && DPgetRd() != 15) { setFlagNZC(res, isCarry); }
+	if (instr.S && instr.rd != 15) { setFlagNZC(res, isCarry); }
 
 	return dataProcessingCycleCalculator();
 }
-inline int CPU::op_TEQ() // XOR , but we dont write the val in
+
+inline int CPU::opA_TEQ(armInstr instr)
 {
 	bool isCarry = C;
 
-	uint32_t res = reg[DPgetRn()] ^ DPgetOp2(&isCarry);
+	uint32_t res = reg[instr.rn] ^ getArmOp2(instr, &isCarry);
 
-	if (DPs() && DPgetRd() != 15) { setFlagNZC(res, isCarry); }
+	if (instr.S && instr.rd != 15) { setFlagNZC(res, isCarry); }
 
 	return dataProcessingCycleCalculator();
 }
-inline int CPU::op_CMP() // SUB , but we dont write the val in
+
+inline int CPU::opA_CMP(armInstr instr)
 {
-	uint32_t op1 = reg[DPgetRn()];
-	uint32_t op2 = DPgetOp2(nullptr);
+	uint32_t op1 = reg[instr.rn];
+	uint32_t op2 = getArmOp2(instr, nullptr);
 	uint32_t res = op1 - op2;
 
+	if (instr.S && instr.rd != 15) { setFlagsSub(res, op1, op2); }
 
-	if (DPs() && DPgetRd() != 15) { setFlagsSub(res, op1, op2); }
-	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
 	return dataProcessingCycleCalculator();
 }
-inline int CPU::op_CMN() // ADD , but we dont write the val in
+
+inline int CPU::opA_CMN(armInstr instr)
 {
-	uint32_t op1 = reg[DPgetRn()];
-	uint32_t op2 = DPgetOp2(nullptr);
+	uint32_t op1 = reg[instr.rn];
+	uint32_t op2 = getArmOp2(instr, nullptr);
 	uint32_t res = op1 + op2;
 
+	if (instr.S && instr.rd != 15) { setFlagsAdd(res, op1, op2); }
 
-	if (DPs() && DPgetRd() != 15) { setFlagsAdd(res, op1, op2); }
-	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
 	return dataProcessingCycleCalculator();
 }
+
 // ops for writing 
-inline int CPU::op_MOV()
+
+inline int CPU::opA_MOV(armInstr instr)
 {
 	bool isCarry = C;
 
-	uint32_t res = DPgetOp2(&isCarry);
+	uint32_t res = getArmOp2(instr, &isCarry);
 
+	if (instr.S && instr.rd != 15) { setFlagNZC(res, isCarry); }
 
-	if (DPs() && DPgetRd() != 15) { setFlagNZC(res, isCarry); }
-	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
-	return dataProcessingCycleCalculator();
-}
-inline int CPU::op_MVN()
-{
-	bool isCarry = C;
-
-	uint32_t res = ~(DPgetOp2(&isCarry));
-
-
-	if (DPs() && DPgetRd() != 15) { setFlagNZC(res, isCarry); }
-	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
+	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
 
-inline int CPU::op_BIC()
+inline int CPU::opA_MVN(armInstr instr)
 {
 	bool isCarry = C;
-	uint32_t res = reg[DPgetRn()] & ~(DPgetOp2(&isCarry));
 
-	if (DPs() && DPgetRd() != 15) { setFlagNZC(res, isCarry); }
-	writeALUResult(DPgetRd(), res, DPs()); // destination, result val , dps
+	uint32_t res = ~(getArmOp2(instr, &isCarry));
+
+	if (instr.S && instr.rd != 15) { setFlagNZC(res, isCarry); }
+
+	writeALUResult(instr.rd, res, instr.S);
+	return dataProcessingCycleCalculator();
+}
+
+inline int CPU::opA_BIC(armInstr instr)
+{
+	bool isCarry = C;
+	uint32_t res = reg[instr.rn] & ~(getArmOp2(instr, &isCarry));
+
+	if (instr.S && instr.rd != 15) { setFlagNZC(res, isCarry); }
+
+	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
 
 //////////////////////////////////////////////////////////////////////////
-//				              OPERATIONS								//
+//				              ARM OPERATIONS							//
 //////////////////////////////////////////////////////////////////////////
 //				      PSR TRANSFER (USED BY DATAOPS) 					//
 //////////////////////////////////////////////////////////////////////////
 
-
-inline int CPU::op_MRS() // move psr to register
+inline int CPU::opA_MRS(armInstr instr)
 {
-	if ((instruction >> 22) & 0b1) // if true , read the spsr
+	if (instr.B) // if true, read the spsr
 	{
-		reg[(instruction >> 12) & 0xF] = getSPSR();
+		reg[instr.rd] = getSPSR();
 	}
-	else // if false , read the cpsr
+	else // if false, read the cpsr
 	{
-		reg[(instruction >> 12) & 0xF] = CPSR;
+		reg[instr.rd] = CPSR;
 	}
 
 	return 1;
 }
-inline int CPU::op_MSR() // move into psr
-{
 
-	uint32_t value = reg[instruction & 0xF];//default on reg mode
-	if ((instruction >> 25) & 0b1) // imediate mode
+inline int CPU::opA_MSR(armInstr instr)
+{
+	uint32_t value;
+
+	if (instr.I) // immediate mode
 	{
-		uint8_t imm = instruction & 0xFF;
-		uint8_t rotate = ((instruction >> 8) & 0xF) * 2;
+		uint8_t imm = instr.imm;
+		uint8_t rotate = instr.rotate * 2;
 		value = (imm >> rotate) | (imm << (32 - rotate));
+	}
+	else // register mode
+	{
+		value = reg[instr.rm];
 	}
 
 	uint32_t mask = 0;
-	if ((instruction >> 19) & 0b1) mask |= 0xFF000000;    //  if we should include flag
-	if ((instruction >> 16) & 0b1) mask |= 0x000000FF;  // if we should include control
+	if ((instruction >> 19) & 0b1) mask |= 0xFF000000;    // if we should include flag
+	if ((instruction >> 16) & 0b1) mask |= 0x000000FF;    // if we should include control
 
-	if ((instruction >> 22) & 0b1) // write to SPSR
+	if (instr.B) // write to SPSR
 	{
 		setSPSR((getSPSR() & ~mask) | (value & mask));
 	}
@@ -1153,29 +1200,27 @@ inline int CPU::op_MSR() // move into psr
 	return 1;
 }
 
-
 //////////////////////////////////////////////////////////////////////////
-//				              OPERATIONS								//
+//				              ARM OPERATIONS							//
 //////////////////////////////////////////////////////////////////////////
 //				      MULTIPLY and MULT-ACC              				//
 //////////////////////////////////////////////////////////////////////////
 
-inline int CPU::op_MUL()
+inline int CPU::opA_MUL(armInstr instr)
 {
-	uint8_t rm = reg[instruction & 0xF];
-	uint8_t rs = reg[(instruction >> 8) & 0xF];
-	uint8_t rdI = (instruction >> 16) & 0xF;
+	uint32_t rm = reg[instr.rm];
+	uint32_t rs = reg[instr.rs];
 
 	uint32_t res = (static_cast<uint64_t>(rm) * static_cast<uint64_t>(rs)) & 0xFFFFFFFF;
-	reg[rdI] = res;
+	reg[instr.rd] = res;
 
-	if ((instruction >> 20) & 0b1) // set flags
+	if (instr.S) // set flags
 	{
 		N = (res >> 31) & 0b1;
 		Z = (res == 0);
 	}
 
-	//shortcutting the booths algo here
+	// shortcutting the booths algo here
 	uint8_t m = 0;
 	if ((rs & 0xFFFFFF00) == 0 || (rs & 0xFFFFFF00) == 0xFFFFFF00) m = 1;
 	else if ((rs & 0xFFFF0000) == 0 || (rs & 0xFFFF0000) == 0xFFFF0000) m = 2;
@@ -1184,17 +1229,17 @@ inline int CPU::op_MUL()
 
 	return m + 2;
 }
-inline int CPU::op_MLA()
+
+inline int CPU::opA_MLA(armInstr instr)
 {
-	uint8_t rm = reg[instruction & 0xF];
-	uint8_t rs = reg[(instruction >> 8) & 0xF];
-	uint8_t rn = reg[(instruction >> 12) & 0xF];
-	uint8_t rdI = (instruction >> 16 & 0xF);
+	uint32_t rm = reg[instr.rm];
+	uint32_t rs = reg[instr.rs];
+	uint32_t rn = reg[instr.rn];
 
 	uint32_t res = rm * rs + rn;
-	reg[rdI] = res;
+	reg[instr.rd] = res;
 
-	if ((instruction >> 20) & 0b1) // set flags
+	if (instr.S) // set flags
 	{
 		N = (res >> 31) & 0b1;
 		Z = (res == 0);
@@ -1210,305 +1255,259 @@ inline int CPU::op_MLA()
 }
 
 //////////////////////////////////////////////////////////////////////////
-//				              OPERATIONS								//
+//				              ARM OPERATIONS							//
 //////////////////////////////////////////////////////////////////////////
 //				      MULTIPLY LONG and MULT-ACC  LONG s/u        		//
 //////////////////////////////////////////////////////////////////////////
 
+inline int CPU::opA_UMULL(armInstr instr)
+{
+	return 1;
+}
 
-inline int CPU::op_UMULL()
+inline int CPU::opA_UMLAL(armInstr instr)
 {
 	return 1;
 }
-inline int CPU::op_UMLAL()
+
+inline int CPU::opA_SMULL(armInstr instr)
 {
 	return 1;
 }
-inline int CPU::op_SMULL()
-{
-	return 1;
-}
-inline int CPU::op_SMLAL()
+
+inline int CPU::opA_SMLAL(armInstr instr)
 {
 	return 1;
 }
 
 //////////////////////////////////////////////////////////////////////////
-//				              OPERATIONS								//
+//				              ARM OPERATIONS							//
 //////////////////////////////////////////////////////////////////////////
 //				          SINGLE DATA TRANSFER      					//
 //////////////////////////////////////////////////////////////////////////
 
-inline uint32_t CPU::SDapplyShift(uint32_t rmVal, uint8_t type, uint8_t amount) // singledata apply shift
+inline uint32_t CPU::getArmOffset(armInstr instr)
 {
-	switch ((type))//use bits 1 and 2 of shift
+	if (!instr.I) // Immediate offset
 	{
-	case 0b00: return DPshiftLSL(rmVal, amount, nullptr);break; // LSL
-	case 0b01: return DPshiftLSR(rmVal, amount, nullptr);break; // LSR
-	case 0b10: return DPshiftASR(rmVal, amount, nullptr);break;// ASR
-	case 0b11: return DPshiftROR(rmVal, amount, nullptr);break; // ROR
+		return instr.imm;
 	}
-
+	else // Register with shift
+	{
+		uint32_t rmVal = reg[instr.rm];
+		return SDapplyShift(rmVal, instr.shift_type, instr.shift_amount);
+	}
 }
 
-inline uint32_t SDOffset(bool u, uint32_t newAddr, uint32_t offset)
+inline int CPU::opA_LDR(armInstr instr)
 {
-	if (u) newAddr += offset; else newAddr -= offset;
-	return newAddr;
-}
+	uint32_t newAddr = reg[instr.rn];
+	uint32_t offset = getArmOffset(instr);
 
-inline int CPU::op_LDR()
-{
-
-	uint8_t rdI = (instruction >> 12) & 0xF;
-	uint8_t rnI = (instruction >> 16) & 0xF;
-
-	bool w = ((instruction >> 21) & 0b1); // if true , write address into base
-	bool b = ((instruction >> 22) & 0b1); // if trye transfer byte, otherwise word
-	bool u = ((instruction >> 23) & 0b1); //if true, add ofset to base , otheriwse subtract
-	bool p = ((instruction >> 24) & 0b1); // if true , add prefix before transfer ,otherwise after
-	bool i = ((instruction >> 25) & 0b1); // if true, use reg rm shift, otherwise keep 12 bit unsigned block
-
-	uint32_t newAddr = reg[rnI];
-
-	uint32_t offset = instruction & 0x0FFF;
-	if (i) // use reg and rm shift
+	if (instr.P) 
 	{
-		offset = SDapplyShift(reg[(instruction & 0xF)], ((instruction >> 5) & 0x3), ((instruction >> 7) & 0x1F));
+		newAddr = SDOffset(instr.U, newAddr, offset);
 	}
-
-
-
-	if (p) newAddr = SDOffset(u, newAddr, offset);
 
 	uint32_t readVal;
-	if (b) readVal = read8(newAddr);
-	else
+	if (instr.B) // Byte
+	{
+		readVal = read8(newAddr);
+	}
+	else // Word
 	{
 		uint32_t data = read32(newAddr & ~3);
 		uint8_t rotation = (newAddr & 3) * 8;
 		readVal = (data >> rotation) | (data << (32 - rotation));
 	}
 
-	if (!p) newAddr = SDOffset(u, newAddr, offset);
-	//TODO , alingment masking for pc perhaps
-
-	if (!p || w) reg[rnI] = newAddr;
-
-	reg[rdI] = readVal;
-
-	return 3;
-
-}
-
-inline int CPU::op_STR()
-{
-	uint8_t rdI = (instruction >> 12) & 0xF;
-	uint8_t rnI = (instruction >> 16) & 0xF;
-
-	bool w = ((instruction >> 21) & 0b1); // if true , write address into base
-	bool b = ((instruction >> 22) & 0b1); // if trye transfer byte, otherwise word
-	bool u = ((instruction >> 23) & 0b1); //if true, add ofset to base , otheriwse subtract
-	bool p = ((instruction >> 24) & 0b1); // if true , add prefix before transfer ,otherwise after
-	bool i = ((instruction >> 25) & 0b1); // if true, use reg rm shift, otherwise keep 12 bit unsigned block
-
-	uint32_t newAddr = reg[rnI];
-	uint32_t offset = instruction & 0x0FFF;
-	if (i) // use reg and rm shift
+	if (!instr.P) // Post
 	{
-		offset = SDapplyShift(reg[(instruction & 0xF)], ((instruction >> 5) & 0x3), ((instruction >> 7) & 0x1F));
+		newAddr = SDOffset(instr.U, newAddr, offset);
 	}
 
-	if (p) newAddr = SDOffset(u, newAddr, offset);
+	if (!instr.P || instr.W)
+	{
+		reg[instr.rn] = newAddr;
+	}
 
-	uint32_t valToStore = reg[rdI];
-	if (rdI == 15) valToStore += pcOffset();
+	reg[instr.rd] = readVal;
 
-	if (b) write8(newAddr, valToStore & 0xFF);
-	else write32(newAddr & ~3, valToStore);
+	return 3;
+}
 
-	if (!p) newAddr = SDOffset(u, newAddr, offset);
-	//TODO , alingment masking for pc perhaps
-	if (!p || w) reg[rnI] = newAddr;
+inline int CPU::opA_STR(armInstr instr)
+{
+	uint32_t newAddr = reg[instr.rn];
+	uint32_t offset = getArmOffset(instr);
+
+	if (instr.P) // Pre
+	{
+		newAddr = SDOffset(instr.U, newAddr, offset);
+	}
+
+	uint32_t valToStore = reg[instr.rd];
+	if (instr.rd == 15) valToStore += 4;
+
+	if (instr.B) // Byte
+	{
+		write8(newAddr, valToStore & 0xFF);
+	}
+	else // Word
+	{
+		write32(newAddr & ~3, valToStore);
+	}
+
+	if (!instr.P) // Post
+	{
+		newAddr = SDOffset(instr.U, newAddr, offset);
+	}
+
+	if (!instr.P || instr.W)
+	{
+		reg[instr.rn] = newAddr;
+	}
+
 	return 2;
 }
 
-inline int CPU::op_LDRH() // unsigned halfword
+inline int CPU::opA_LDRH(armInstr instr)
 {
-	uint8_t rmI = (instruction) & 0xF;
-	uint8_t rdI = (instruction >> 12) & 0xF;
-	uint8_t rnI = (instruction >> 16) & 0xF;
+	uint32_t offset = instr.I ? instr.imm : reg[instr.rm];
+	uint32_t newAddr = reg[instr.rn];
 
-	bool w = ((instruction >> 21) & 0b1); // if true , write address into base
-	bool u = ((instruction >> 23) & 0b1); //if true, add ofset to base , otheriwse subtract
-	bool p = ((instruction >> 24) & 0b1); // if true , add prefix before transfer ,otherwise after
-
-	uint32_t offset = reg[rmI];
-	uint32_t newAddr = reg[rnI];
-
-	if (p) newAddr = SDOffset(u, newAddr, offset);
+	if (instr.P) newAddr = SDOffset(instr.U, newAddr, offset);
 
 	uint32_t readVal = read16(newAddr);
 
-	if (!p) newAddr = SDOffset(u, newAddr, offset);
+	if (!instr.P) newAddr = SDOffset(instr.U, newAddr, offset);
 
-	if (!p || w)
+	if (!instr.P || instr.W)
 	{
-		reg[rnI] = newAddr;
+		reg[instr.rn] = newAddr;
 	}
-	reg[rdI] = readVal;
+
+	reg[instr.rd] = readVal;
 
 	return 3;
 }
-inline int CPU::op_STRH() // store unsigned halfword
+
+inline int CPU::opA_STRH(armInstr instr)
 {
-	uint8_t rmI = (instruction) & 0xF;
-	uint8_t rdI = (instruction >> 12) & 0xF;
-	uint8_t rnI = (instruction >> 16) & 0xF;
+	uint32_t offset = instr.I ? instr.imm : reg[instr.rm];
+	uint32_t newAddr = reg[instr.rn];
 
-	bool w = ((instruction >> 21) & 0b1); // if true , write address into base
-	bool u = ((instruction >> 23) & 0b1); //if true, add ofset to base , otheriwse subtract
-	bool p = ((instruction >> 24) & 0b1); // if true , add prefix before transfer ,otherwise after
+	if (instr.P) newAddr = SDOffset(instr.U, newAddr, offset);
 
-	uint32_t offset = reg[rmI];
-	uint32_t newAddr = reg[rnI];
+	uint32_t valToStore = reg[instr.rd];
+	if (instr.rd == 15) valToStore += 4;
 
-	if (p) newAddr = SDOffset(u, newAddr, offset);
-
-	uint32_t valToStore = reg[rdI];
-	if (rdI == 15) valToStore += pcOffset();
 	write16(newAddr, valToStore & 0xFFFF);
 
-	if (!p) newAddr = SDOffset(u, newAddr, offset);
+	if (!instr.P) newAddr = SDOffset(instr.U, newAddr, offset);
 
-	if (!p || w)
+	if (!instr.P || instr.W)
 	{
-		reg[rnI] = newAddr;
+		reg[instr.rn] = newAddr;
 	}
 
 	return 2;
 }
-inline int CPU::op_LDRSB() //load signed byte
+
+inline int CPU::opA_LDRSB(armInstr instr)
 {
-	uint8_t rmI = (instruction) & 0xF;
-	uint8_t rdI = (instruction >> 12) & 0xF;
-	uint8_t rnI = (instruction >> 16) & 0xF;
+	uint32_t offset = instr.I ? instr.imm : reg[instr.rm];
+	uint32_t newAddr = reg[instr.rn];
 
-	bool w = ((instruction >> 21) & 0b1); // if true , write address into base
-	bool u = ((instruction >> 23) & 0b1); //if true, add ofset to base , otheriwse subtract
-	bool p = ((instruction >> 24) & 0b1); // if true , add prefix before transfer ,otherwise after
-
-	uint32_t offset = reg[rmI];
-	uint32_t newAddr = reg[rnI];
-
-	if (p) newAddr = SDOffset(u, newAddr, offset);
+	if (instr.P) newAddr = SDOffset(instr.U, newAddr, offset);
 
 	int8_t byteVal = read8(newAddr);
 	uint32_t readVal = static_cast<int32_t>(byteVal);
 
-	if (!p) newAddr = SDOffset(u, newAddr, offset);
+	if (!instr.P) newAddr = SDOffset(instr.U, newAddr, offset);
 
-	if (!p || w)
+	if (!instr.P || instr.W)
 	{
-		reg[rnI] = newAddr;
+		reg[instr.rn] = newAddr;
 	}
-	reg[rdI] = readVal;
+
+	reg[instr.rd] = readVal;
 
 	return 3;
 }
-inline int CPU::op_LDRSH() //load signed halfword
+
+inline int CPU::opA_LDRSH(armInstr instr)
 {
-	uint8_t rmI = (instruction) & 0xF;
-	uint8_t rdI = (instruction >> 12) & 0xF;
-	uint8_t rnI = (instruction >> 16) & 0xF;
+	uint32_t offset = instr.I ? instr.imm : reg[instr.rm];
+	uint32_t newAddr = reg[instr.rn];
 
-	bool w = ((instruction >> 21) & 0b1); // if true , write address into base
-	bool u = ((instruction >> 23) & 0b1); //if true, add ofset to base , otheriwse subtract
-	bool p = ((instruction >> 24) & 0b1); // if true , add prefix before transfer ,otherwise after
+	if (instr.P) newAddr = SDOffset(instr.U, newAddr, offset);
 
-	uint32_t offset = reg[rmI];
-	uint32_t newAddr = reg[rnI];
-
-	if (p) newAddr = SDOffset(u, newAddr, offset);
-
-	int8_t HWVal = read16(newAddr);
+	int16_t HWVal = read16(newAddr);
 	uint32_t readVal = static_cast<int32_t>(HWVal);
 
-	if (!p) newAddr = SDOffset(u, newAddr, offset);
+	if (!instr.P) newAddr = SDOffset(instr.U, newAddr, offset);
 
-	if (!p || w)
+	if (!instr.P || instr.W)
 	{
-		reg[rnI] = newAddr;
+		reg[instr.rn] = newAddr;
 	}
-	reg[rdI] = readVal;
+
+	reg[instr.rd] = readVal;
 
 	return 3;
 }
 
 //////////////////////////////////////////////////////////////////////////
-//				              OPERATIONS								//
+//				              ARM OPERATIONS							//
 //////////////////////////////////////////////////////////////////////////
 //				          LOAD / STORE MULTIPLE      					//
 //////////////////////////////////////////////////////////////////////////
 
-inline int numOfRegisters(uint16_t registerList)
+inline int CPU::opA_LDM(armInstr instr)
 {
-	int numRegs = 0;
-	for (int i = 0; i < 16; i++)
-	{
-		if (registerList & (1 << i)) numRegs++;
-	}
+	uint16_t registerList = instr.reg_list;
 
-	return numRegs;
-}
-
-inline int CPU::op_LDM()
-{
-	uint16_t registerList = instruction & 0xFFFF;
-	uint8_t rnI = (instruction >> 16) & 0xF;
-	bool w = (instruction >> 21) & 0b1;
-	bool s = (instruction >> 22) & 0b1; // 1 ~ load PSR / force user mode, else dont
-	bool u = (instruction >> 23) & 0b1;
-	bool p = (instruction >> 24) & 0b1;
-
-	// so if a bit is set in registerList, it is transfered
 	int numRegs = numOfRegisters(registerList);
 	if (numRegs == 0) return 1; // nothing to transfer
 
-	uint32_t startAddr = reg[rnI];
+	uint32_t startAddr = reg[instr.rn];
 
-	if (!u) startAddr -= (numRegs * 4); //if down bit, subtract now
+	if (!instr.U) startAddr -= (numRegs * 4); // if down bit, subtract now
 
 	bool loadPC = (registerList >> 15) & 0b1; // save if were gonna load into pc
-	bool useUserReg = s && !loadPC; // if s is set, we gotta use user reg EXCEPT FOR v
-	bool restoreCPSR = s && loadPC; // we must restore CPSR instead if pc is also target
+	bool useUserReg = instr.S && !loadPC; // if S is set, we gotta use user reg EXCEPT FOR PC
+	bool restoreCPSR = instr.S && loadPC; // we must restore CPSR instead if pc is also target
 
 	uint32_t addr = startAddr; // use this for incrementing through list
 	for (uint8_t i = 0; i < 16; i++)
 	{
-		if ((registerList >> i) & 0b0) continue; // skip if not set
+		if (!((registerList >> i) & 0b1)) continue; // skip if not set
 
-		if (p) addr += 4; // pre adress increment
+		if (instr.P) addr += 4; // pre address increment
 
 		uint32_t val = read32(addr & ~3);
 
-		if (!useUserReg) reg[i] = val;
-		else // if useUserReg true (s and not PC) we store into user modes r13 and r14 instead of our own
+		if (!useUserReg)
+		{
+			reg[i] = val;
+		}
+		else // if useUserReg true (S and not PC) we store into user modes r13 and r14 instead of our own
 		{
 			if (i == 13) r13RegBank[getModeIndex(mode::User)] = val;
 			else if (i == 14) r14RegBank[getModeIndex(mode::User)] = val;
-			else reg[i] = val; // if its not 13 or 14
+			else reg[i] = val; // if it's not 13 or 14
 		}
 
-		if (!p) addr += 4; // post adress increment
+		if (!instr.P) addr += 4; // post address increment
 	}
 
-	if (w) // if writeback is true
+	if (instr.W) // if writeback is true
 	{
-		if (!((registerList << rnI) & 0b1) || rnI != 15) // cant write back if both are true
+		if (!((registerList >> instr.rn) & 0b1) || instr.rn != 15) // cant write back if both are true
 		{
-			if (u) reg[rnI] = startAddr + (numRegs * 4);
-			else reg[rnI] = startAddr; // decrements already been done at this stage
+			if (instr.U) reg[instr.rn] = startAddr + (numRegs * 4);
+			else reg[instr.rn] = startAddr; // decrements already been done at this stage
 		}
 	}
 
@@ -1529,22 +1528,17 @@ inline int CPU::op_LDM()
 	}
 
 	return 2 + numRegs;
-
 }
-inline int CPU::op_STM()
+
+inline int CPU::opA_STM(armInstr instr)
 {
-	uint16_t registerList = instruction & 0xFFFF;
-	uint8_t rnI = (instruction >> 16) & 0xF;
-	bool w = (instruction >> 21) & 0b1;
-	bool s = (instruction >> 22) & 0b1;  // 1 ~ load PSR / force user mode, else dont
-	bool u = (instruction >> 23) & 0b1;
-	bool p = (instruction >> 24) & 0b1;
+	uint16_t registerList = instr.reg_list;
 
 	int numRegs = numOfRegisters(registerList);
 	if (numRegs == 0) return 1;
 
-	uint32_t startAddr = reg[rnI];
-	if (!u) startAddr -= (numRegs * 4);  // if down bit, subtract now
+	uint32_t startAddr = reg[instr.rn];
+	if (!instr.U) startAddr -= (numRegs * 4);  // if down bit, subtract now
 
 	bool storePC = (registerList >> 15) & 0b1;  // check if storing PC
 
@@ -1553,10 +1547,10 @@ inline int CPU::op_STM()
 	{
 		if (!((registerList >> i) & 0b1)) continue;
 
-		if (p) addr += 4;  // pre increment
+		if (instr.P) addr += 4;  // pre increment
 
 		uint32_t val;
-		if (!s || i < 8 || i == 15)
+		if (!instr.S || i < 8 || i == 15)
 		{
 			// standard use
 			val = reg[i];
@@ -1564,7 +1558,7 @@ inline int CPU::op_STM()
 		}
 		else
 		{
-			// if s , user mode regs
+			// if S, user mode regs
 			if (i >= 13 && i <= 14)
 			{
 				val = (i == 13) ? r13RegBank[getModeIndex(mode::User)] : r14RegBank[getModeIndex(mode::User)];
@@ -1572,7 +1566,7 @@ inline int CPU::op_STM()
 			else if (i >= 8 && i <= 12)
 			{
 				// otherwise only fiq has banking
-				if (curMode == mode::FIQ) val = r8FIQ[i - 8]; // this may cause bugs
+				if (curMode == mode::FIQ) val = r8FIQ[i - 8];
 				else val = reg[i];
 			}
 			else
@@ -1583,51 +1577,48 @@ inline int CPU::op_STM()
 
 		write32(addr & ~3, val);
 
-		if (!p) addr += 4;  // post addr increment
+		if (!instr.P) addr += 4;  // post addr increment
 	}
 
-	if (w)  // write back
+	if (instr.W)  // write back
 	{
-		if (!((registerList >> rnI) & 0b1))
+		if (!((registerList >> instr.rn) & 0b1))
 		{
-			if (u) reg[rnI] = startAddr + (numRegs * 4);
-			else reg[rnI] = startAddr;
+			if (instr.U) reg[instr.rn] = startAddr + (numRegs * 4);
+			else reg[instr.rn] = startAddr;
 		}
 	}
 
 	return 2 + numRegs;
 }
 
-
-inline int CPU::op_SWI()
+inline int CPU::opA_SWI(armInstr instr)
 {
-	printf("SWI #%d: r0=%08X r1=%08X r2=%08X\n", (instruction & 0xFFFFFF), reg[0], reg[1], reg[2]); // debugging logger
+	printf("SWI #%d: r0=%08X r1=%08X r2=%08X\n", instr.imm, reg[0], reg[1], reg[2]); // debugging logger
 
 	enterException(mode::Supervisor, Vector::SWI, pc - 4);
 
 	return 3;
 }
 
-inline int CPU::op_SWP() { return 1; }
-
-inline int CPU::op_SWPB() { return 1; }
-
-inline int CPU::op_LDC() { return 1; }
-inline int CPU::op_STC() { return 1; }
-inline int CPU::op_CDP() { return 1; }
-inline int CPU::op_MRC() { return 1; }
-inline int CPU::op_MCR() { return 1; }
-
-inline int CPU::op_DECODEFAIL()
+inline int CPU::opA_SWP(armInstr instr)
 {
-	printf("Undefined instruction: %08X at PC=%08X\n", instruction, pc - 4);
+	return 1;
+}
+
+inline int CPU::opA_LDC(armInstr instr) { return 1; }
+inline int CPU::opA_STC(armInstr instr) { return 1; }
+inline int CPU::opA_CDP(armInstr instr) { return 1; }
+inline int CPU::opA_MRC(armInstr instr) { return 1; }
+inline int CPU::opA_MCR(armInstr instr) { return 1; }
+
+inline int CPU::opA_UNDEFINED(armInstr instr)
+{
+	printf("Undefined instruction at PC=%08X\n", pc - 4);
 	enterException(mode::Undefined, Vector::Undefined, pc - 4);
 	return 1;
 }
-inline int CPU::op_UNKNOWN() { return 1; }
-inline int CPU::op_UNASSIGNED() { return 1; }
-inline int CPU::op_CONDITIONALSKIP() { return 1; }
-inline int CPU::op_SINGLEDATATRANSFERUNDEFINED() { return 1; }
+
 
 
 
@@ -1655,8 +1646,6 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 	decodedInstr.type = thumbOperation::THUMB_UNDEFINED;
 
 	//decodedInstr = debugDecodedInstr();
-
-
 	switch ((instr >> 13) & 0b111)
 	{
 	case(0b000): // either move shift register , or add/subtract
@@ -1937,6 +1926,341 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 	}break;
 	}
 
+	return decodedInstr;
+}
+
+CPU::armInstr CPU::decodeArm(uint32_t instr) // this returns a thumbInstr struct
+{
+	armInstr decodedInstr = {}; // creates empty struct for us to fill
+	decodedInstr.type = armOperation::ARM_UNDEFINED;
+
+	decodedInstr.cond = (instr >> 28) & 0xF;
+
+	switch ((instr >> 25) & 0x7)
+	{
+	case 0b000:  // Data processing, multiply, misc
+	{
+		// Branch and Exchange: xxxx 0001 0010 1111 1111 1111 0001 xxxx
+		if ((instr & 0x0FFFFFF0) == 0x012FFF10)
+		{
+			decodedInstr.type = armOperation::ARM_BX;
+			decodedInstr.rm = instr & 0xF;
+			return decodedInstr;
+		}
+
+		// Swap: xxxx 0001 0B00 nnnn dddd 0000 1001 mmmm
+		if ((instr & 0x0FB00FF0) == 0x01000090)
+		{
+			decodedInstr.type = armOperation::ARM_SWP;
+			decodedInstr.B = (instr >> 22) & 1;
+			decodedInstr.rn = (instr >> 16) & 0xF;
+			decodedInstr.rd = (instr >> 12) & 0xF;
+			decodedInstr.rm = instr & 0xF;
+			return decodedInstr;
+		}
+		// Multiply Long: xxxx 0000 1UAS dddd nnnn ssss 1001 mmmm
+		if ((instr & 0x0F8000F0) == 0x00800090)
+		{
+			uint8_t op = (instr >> 21) & 0x3;
+			switch (op)
+			{
+			case 0b00: decodedInstr.type = armOperation::ARM_UMULL; break;
+			case 0b01: decodedInstr.type = armOperation::ARM_UMLAL; break;
+			case 0b10: decodedInstr.type = armOperation::ARM_SMULL; break;
+			case 0b11: decodedInstr.type = armOperation::ARM_SMLAL; break;
+			}
+			decodedInstr.S = (instr >> 20) & 1;
+			decodedInstr.rd = (instr >> 16) & 0xF;  // RdHi
+			decodedInstr.rn = (instr >> 12) & 0xF;  // RdLo
+			decodedInstr.rs = (instr >> 8) & 0xF;
+			decodedInstr.rm = instr & 0xF;
+			return decodedInstr;
+		}
+		// Multiply: xxxx 0000 00AS dddd nnnn ssss 1001 mmmm
+		if ((instr & 0x0FC000F0) == 0x00000090)
+		{
+			decodedInstr.type = ((instr >> 21) & 1) ? armOperation::ARM_MLA : armOperation::ARM_MUL;
+			decodedInstr.S = (instr >> 20) & 1;
+			decodedInstr.rd = (instr >> 16) & 0xF;
+			decodedInstr.rn = (instr >> 12) & 0xF;  // Accumulate register for MLA
+			decodedInstr.rs = (instr >> 8) & 0xF;
+			decodedInstr.rm = instr & 0xF;
+			return decodedInstr;
+		}
+		// Halfword Transfer: xxxx 000P U0WL nnnn dddd oooo 1SH1 mmmm
+		if ((instr & 0x0E000090) == 0x00000090)
+		{
+			uint8_t SH = (instr >> 5) & 0x3;
+			decodedInstr.L = (instr >> 20) & 1;
+
+			if (decodedInstr.L) 
+			{
+				if (SH == 0b01) decodedInstr.type = armOperation::ARM_LDRH;
+				else if (SH == 0b10) decodedInstr.type = armOperation::ARM_LDRSB;
+				else if (SH == 0b11) decodedInstr.type = armOperation::ARM_LDRSH;
+				else decodedInstr.type = armOperation::ARM_UNDEFINED;
+			}
+			else  
+			{
+				if (SH == 0b01) decodedInstr.type = armOperation::ARM_STRH;
+				else decodedInstr.type = armOperation::ARM_UNDEFINED;
+			}
+
+			decodedInstr.P = (instr >> 24) & 1;
+			decodedInstr.U = (instr >> 23) & 1;
+			decodedInstr.W = (instr >> 21) & 1;
+			decodedInstr.rn = (instr >> 16) & 0xF;
+			decodedInstr.rd = (instr >> 12) & 0xF;
+			decodedInstr.rm = instr & 0xF;
+
+			if ((instr >> 22) & 1)  // Immed
+			{
+				decodedInstr.imm = ((instr >> 4) & 0xF0) | (instr & 0xF);
+				decodedInstr.I = true;
+			}
+			else  // Reg offset
+			{
+				decodedInstr.I = false;
+			}
+
+			return decodedInstr;
+		}
+
+		// MRS: xxxx 0001 0R00 1111 dddd 0000 0000 0000
+		if ((instr & 0x0FBF0FFF) == 0x010F0000)
+		{
+			decodedInstr.type = armOperation::ARM_MRS;
+			decodedInstr.rd = (instr >> 12) & 0xF;
+			decodedInstr.B = (instr >> 22) & 1;  // Use B flag to indicate SPSR vs CPSR
+			return decodedInstr;
+		}
+
+		// MSR: xxxx 0001 0R10 1001 1111 0000 0000 mmmm (register)
+		//      xxxx 0011 0R10 1000 1111 rrrr iiii iiii (immediate)
+		if ((instr & 0x0FB0FFF0) == 0x0120F000 || (instr & 0x0FB0F000) == 0x0320F000)
+		{
+			decodedInstr.type = armOperation::ARM_MSR;
+			decodedInstr.B = (instr >> 22) & 1;  // SPSR vs CPSR
+			if ((instr >> 25) & 1)  // Immediate
+			{
+				decodedInstr.I = true;
+				decodedInstr.imm = instr & 0xFF;
+				decodedInstr.rotate = (instr >> 8) & 0xF;
+			}
+			else 
+			{
+				decodedInstr.I = false;
+				decodedInstr.rm = instr & 0xF;
+			}
+			return decodedInstr;
+		}
+
+		// Data Processing: xxxx 000a aaaa Snnn nddd diii iiii iiii (register)
+		//                  xxxx 001a aaaa Snnn nddd drrrr iiii iiii (immediate)
+		decodedInstr.S = (instr >> 20) & 1;
+		decodedInstr.rn = (instr >> 16) & 0xF;
+		decodedInstr.rd = (instr >> 12) & 0xF;
+
+		uint8_t opcode = (instr >> 21) & 0xF;
+		switch (opcode)
+		{
+		case 0x0: decodedInstr.type = armOperation::ARM_AND; break;
+		case 0x1: decodedInstr.type = armOperation::ARM_EOR; break;
+		case 0x2: decodedInstr.type = armOperation::ARM_SUB; break;
+		case 0x3: decodedInstr.type = armOperation::ARM_RSB; break;
+		case 0x4: decodedInstr.type = armOperation::ARM_ADD; break;
+		case 0x5: decodedInstr.type = armOperation::ARM_ADC; break;
+		case 0x6: decodedInstr.type = armOperation::ARM_SBC; break;
+		case 0x7: decodedInstr.type = armOperation::ARM_RSC; break;
+		case 0x8: decodedInstr.type = armOperation::ARM_TST; break;
+		case 0x9: decodedInstr.type = armOperation::ARM_TEQ; break;
+		case 0xA: decodedInstr.type = armOperation::ARM_CMP; break;
+		case 0xB: decodedInstr.type = armOperation::ARM_CMN; break;
+		case 0xC: decodedInstr.type = armOperation::ARM_ORR; break;
+		case 0xD: decodedInstr.type = armOperation::ARM_MOV; break;
+		case 0xE: decodedInstr.type = armOperation::ARM_BIC; break;
+		case 0xF: decodedInstr.type = armOperation::ARM_MVN; break;
+		}
+
+		if ((instr >> 25) & 1)
+		{
+			decodedInstr.I = true;
+			decodedInstr.imm = instr & 0xFF;
+			decodedInstr.rotate = (instr >> 8) & 0xF;
+		}
+		else
+		{
+			decodedInstr.I = false;
+			decodedInstr.rm = instr & 0xF;
+			decodedInstr.shift_type = (instr >> 5) & 0x3;
+
+			if ((instr >> 4) & 1)  // Shift by register
+			{
+				decodedInstr.shift_by_reg = true;
+				decodedInstr.shift_reg = (instr >> 8) & 0xF;
+			}
+			else  // Shift by immediate
+			{
+				decodedInstr.shift_by_reg = false;
+				decodedInstr.shift_amount = (instr >> 7) & 0x1F;
+			}
+		}
+
+		return decodedInstr;
+	}
+
+	case 0b001:  
+	{
+		if ((instr & 0x0FBF0FFF) == 0x010F0000)
+		{
+			decodedInstr.type = armOperation::ARM_MRS;
+			decodedInstr.rd = (instr >> 12) & 0xF;
+			decodedInstr.B = (instr >> 22) & 1;
+			return decodedInstr;
+		}
+
+		if ((instr & 0x0FB0F000) == 0x0320F000)
+		{
+			decodedInstr.type = armOperation::ARM_MSR;
+			decodedInstr.B = (instr >> 22) & 1;
+			decodedInstr.I = true;
+			decodedInstr.imm = instr & 0xFF;
+			decodedInstr.rotate = (instr >> 8) & 0xF;
+			return decodedInstr;
+		}
+
+		decodedInstr.I = true;
+		decodedInstr.S = (instr >> 20) & 1;
+		decodedInstr.rn = (instr >> 16) & 0xF;
+		decodedInstr.rd = (instr >> 12) & 0xF;
+		decodedInstr.imm = instr & 0xFF;
+		decodedInstr.rotate = (instr >> 8) & 0xF;
+
+		uint8_t opcode = (instr >> 21) & 0xF;
+		switch (opcode)
+		{
+		case 0x0: decodedInstr.type = armOperation::ARM_AND; break;
+		case 0x1: decodedInstr.type = armOperation::ARM_EOR; break;
+		case 0x2: decodedInstr.type = armOperation::ARM_SUB; break;
+		case 0x3: decodedInstr.type = armOperation::ARM_RSB; break;
+		case 0x4: decodedInstr.type = armOperation::ARM_ADD; break;
+		case 0x5: decodedInstr.type = armOperation::ARM_ADC; break;
+		case 0x6: decodedInstr.type = armOperation::ARM_SBC; break;
+		case 0x7: decodedInstr.type = armOperation::ARM_RSC; break;
+		case 0x8: decodedInstr.type = armOperation::ARM_TST; break;
+		case 0x9: decodedInstr.type = armOperation::ARM_TEQ; break;
+		case 0xA: decodedInstr.type = armOperation::ARM_CMP; break;
+		case 0xB: decodedInstr.type = armOperation::ARM_CMN; break;
+		case 0xC: decodedInstr.type = armOperation::ARM_ORR; break;
+		case 0xD: decodedInstr.type = armOperation::ARM_MOV; break;
+		case 0xE: decodedInstr.type = armOperation::ARM_BIC; break;
+		case 0xF: decodedInstr.type = armOperation::ARM_MVN; break;
+		}
+
+		return decodedInstr;
+	}
+
+	case 0b010:  // Load/Store immediate offset
+	{
+		decodedInstr.L = (instr >> 20) & 1;
+		decodedInstr.type = decodedInstr.L ? armOperation::ARM_LDR : armOperation::ARM_STR;
+		decodedInstr.I = false;  // Immediate offset
+		decodedInstr.P = (instr >> 24) & 1;
+		decodedInstr.U = (instr >> 23) & 1;
+		decodedInstr.B = (instr >> 22) & 1;
+		decodedInstr.W = (instr >> 21) & 1;
+		decodedInstr.rn = (instr >> 16) & 0xF;
+		decodedInstr.rd = (instr >> 12) & 0xF;
+		decodedInstr.imm = instr & 0xFFF;
+		return decodedInstr;
+	}
+
+	case 0b011:  // Load/Store register offset
+	{
+		if ((instr >> 4) & 1)
+		{
+			decodedInstr.type = armOperation::ARM_UNDEFINED;
+			return decodedInstr;
+		}
+
+		decodedInstr.L = (instr >> 20) & 1;
+		decodedInstr.type = decodedInstr.L ? armOperation::ARM_LDR : armOperation::ARM_STR;
+		decodedInstr.I = true;  // Register offset
+		decodedInstr.P = (instr >> 24) & 1;
+		decodedInstr.U = (instr >> 23) & 1;
+		decodedInstr.B = (instr >> 22) & 1;
+		decodedInstr.W = (instr >> 21) & 1;
+		decodedInstr.rn = (instr >> 16) & 0xF;
+		decodedInstr.rd = (instr >> 12) & 0xF;
+		decodedInstr.rm = instr & 0xF;
+		decodedInstr.shift_type = (instr >> 5) & 0x3;
+		decodedInstr.shift_amount = (instr >> 7) & 0x1F;
+		return decodedInstr;
+	}
+
+	case 0b100:  // Load/Store multiple
+	{
+		decodedInstr.L = (instr >> 20) & 1;
+		decodedInstr.type = decodedInstr.L ? armOperation::ARM_LDM : armOperation::ARM_STM;
+		decodedInstr.P = (instr >> 24) & 1;
+		decodedInstr.U = (instr >> 23) & 1;
+		decodedInstr.S = (instr >> 22) & 1;  // PSR & force user bit
+		decodedInstr.W = (instr >> 21) & 1;
+		decodedInstr.rn = (instr >> 16) & 0xF;
+		decodedInstr.reg_list = instr & 0xFFFF;
+		return decodedInstr;
+	}
+
+	case 0b101:  // Branch and Branch with Link
+	{
+		decodedInstr.L = (instr >> 24) & 1;
+		decodedInstr.type = decodedInstr.L ? armOperation::ARM_BL : armOperation::ARM_B;
+		int32_t offset = instr & 0xFFFFFF;
+		if (offset & 0x800000)  // Sign bit set
+			offset |= 0xFF000000;
+		decodedInstr.imm = offset << 2;  // Shift left by 2
+		return decodedInstr;
+	}
+
+	case 0b110:  // Coprocessor load/store
+	{
+		decodedInstr.L = (instr >> 20) & 1;
+		decodedInstr.type = decodedInstr.L ? armOperation::ARM_LDC : armOperation::ARM_STC;
+		decodedInstr.P = (instr >> 24) & 1;
+		decodedInstr.U = (instr >> 23) & 1;
+		decodedInstr.W = (instr >> 21) & 1;
+		decodedInstr.rn = (instr >> 16) & 0xF;
+		decodedInstr.rd = (instr >> 12) & 0xF;  // CRd
+		decodedInstr.imm = (instr & 0xFF) << 2;
+		return decodedInstr;
+	}
+
+	case 0b111:  // Coprocessor operations and SWI
+	{
+		if ((instr >> 24) & 1)  // SWI
+		{
+			decodedInstr.type = armOperation::ARM_SWI;
+			decodedInstr.imm = instr & 0xFFFFFF;
+			return decodedInstr;
+		}
+		else if ((instr >> 4) & 1)  // Coprocessor register transfer
+		{
+			decodedInstr.L = (instr >> 20) & 1;
+			decodedInstr.type = decodedInstr.L ? armOperation::ARM_MRC : armOperation::ARM_MCR;
+			decodedInstr.rn = (instr >> 16) & 0xF;  // CRn
+			decodedInstr.rd = (instr >> 12) & 0xF;
+			decodedInstr.rm = instr & 0xF;          // CRm
+			return decodedInstr;
+		}
+		else  // Coprocessor data operation
+		{
+			decodedInstr.type = armOperation::ARM_CDP;
+			return decodedInstr;
+		}
+	}
+	}
+
+	decodedInstr.type = armOperation::ARM_UNDEFINED;
 	return decodedInstr;
 }
 
@@ -3165,34 +3489,430 @@ std::string CPU::thumbToStr(CPU::thumbInstr& instr)
 	return ss.str();
 }
 
-// made specially for this 
+std::string CPU::armToStr(CPU::armInstr& instr)
+{
+	std::stringstream ss;
 
-//THUMB TESTS
-//allot more cleared now
-// REMAINING TESTS THAT DONT PASS
-// 
-// thumb_add_sub_sp.json (DONE)
-// thumb_bx (DONE)
-// ldr pc rel  (DONE)
-// 
-// thumb_ldr_str_imm_offset - just store here is broken  (DONE)
-// thumb_ldr_str_reg_offset - just store here is broken  (DONE)
-//  thumb_ldr_str_sp_rel.json - just ldr is broken   (DONE)
-// thumb_ldrb_strb_imm_offset.json // ldrb broken    (DONE)
-// thumb_ldrh_strh_imm_offset.json // ldrh is broken  (DONE)
-// thumb_ldrh_strh_reg_offset //strh is broken  (DONE)
-// 
-// thumb_ldrsb_strb_reg_offset.json //ldr is broken (DONE)
-// thumb_ldrsh_ldrsb_reg_offset.json (DONE)
-// thumb_swi (jump vectors and r14_svc special behaviour)
+	auto regStr = [&](int regNum) -> std::string
+		{
+			std::stringstream rs;
+			if (regNum == 13)
+				rs << "sp[0x" << std::hex << sp << "]" << std::dec;
+			else if (regNum == 14)
+				rs << "lr[0x" << std::hex << lr << "]" << std::dec;
+			else if (regNum == 15)
+				rs << "pc[0x" << std::hex << pc << "]" << std::dec;
+			else
+				rs << "r" << regNum << "[0x" << std::hex << reg[regNum] << "]" << std::dec;
+			return rs.str();
+		};
+
+	auto condStr = [](uint8_t cond) -> const char*
+		{
+			const char* condNames[] = {
+				"eq", "ne", "cs", "cc", "mi", "pl", "vs", "vc",
+				"hi", "ls", "ge", "lt", "gt", "le", "", "nv"
+			};
+			return condNames[cond];
+		};
+
+	auto shiftStr = [](uint8_t type) -> const char*
+		{
+			const char* shifts[] = { "lsl", "lsr", "asr", "ror" };
+			return shifts[type & 3];
+		};
+
+	auto addCond = [&](const char* mnemonic) -> std::string
+		{
+			std::string result = mnemonic;
+			if (instr.cond != 14) result += condStr(instr.cond);
+			return result;
+		};
+
+	switch (instr.type)
+	{
+		// Data Processing - Arithmetic
+	case armOperation::ARM_ADD:
+	case armOperation::ARM_SUB:
+	case armOperation::ARM_RSB:
+	case armOperation::ARM_ADC:
+	case armOperation::ARM_SBC:
+	case armOperation::ARM_RSC:
+	{
+		const char* ops[] = { "add", "sub", "rsb", "adc", "sbc", "rsc" };
+		const char* syms[] = { "+", "-", "- (rev)", "+ C", "- !C", "- !C (rev)" };
+		int idx = (int)instr.type - (int)armOperation::ARM_ADD;
+
+		ss << addCond(ops[idx]) << (instr.S ? "s" : "") << "     ";
+		ss << regStr(instr.rd) << ", " << regStr(instr.rn);
+
+		if (instr.I)
+		{
+			ss << ", #0x" << std::hex << instr.imm << std::dec;
+			if (instr.rotate) ss << " ror #" << (instr.rotate * 2);
+		}
+		else
+		{
+			ss << ", " << regStr(instr.rm);
+			if (instr.shift_amount || instr.shift_by_reg)
+			{
+				ss << ", " << shiftStr(instr.shift_type) << " ";
+				if (instr.shift_by_reg)
+					ss << regStr(instr.shift_reg);
+				else
+					ss << "#" << (int)instr.shift_amount;
+			}
+		}
+
+		ss << "    | " << regStr(instr.rd) << " = " << regStr(instr.rn) << " " << syms[idx];
+		if (instr.I)
+			ss << " #0x" << std::hex << instr.imm << std::dec;
+		else
+			ss << " " << regStr(instr.rm);
+		break;
+	}
 
 
+	case armOperation::ARM_AND:
+	case armOperation::ARM_EOR:
+	case armOperation::ARM_ORR:
+	case armOperation::ARM_BIC:
+	{
+		const char* ops[] = { "and", "eor", "orr", "bic" };
+		const char* syms[] = { "&", "^", "|", "& ~" };
+		int idx = (instr.type == armOperation::ARM_AND) ? 0 :
+			(instr.type == armOperation::ARM_EOR) ? 1 :
+			(instr.type == armOperation::ARM_ORR) ? 2 : 3;
+
+		ss << addCond(ops[idx]) << (instr.S ? "s" : "") << "     ";
+		ss << regStr(instr.rd) << ", " << regStr(instr.rn);
+
+		if (instr.I)
+		{
+			ss << ", #0x" << std::hex << instr.imm << std::dec;
+		}
+		else
+		{
+			ss << ", " << regStr(instr.rm);
+			if (instr.shift_amount || instr.shift_by_reg)
+			{
+				ss << ", " << shiftStr(instr.shift_type) << " ";
+				if (instr.shift_by_reg)
+					ss << regStr(instr.shift_reg);
+				else
+					ss << "#" << (int)instr.shift_amount;
+			}
+		}
+
+		ss << "    | " << regStr(instr.rd) << " = " << regStr(instr.rn) << " " << syms[idx] << " ";
+		if (instr.I)
+			ss << "#0x" << std::hex << instr.imm << std::dec;
+		else
+			ss << regStr(instr.rm);
+		break;
+	}
+	case armOperation::ARM_TST:
+	case armOperation::ARM_TEQ:
+	case armOperation::ARM_CMP:
+	case armOperation::ARM_CMN:
+	{
+		const char* ops[] = { "tst", "teq", "cmp", "cmn" };
+		const char* syms[] = { "&", "^", "-", "+" };
+		int idx = (int)instr.type - (int)armOperation::ARM_TST;
+
+		ss << addCond(ops[idx]) << "     ";
+		ss << regStr(instr.rn);
+
+		if (instr.I)
+		{
+			ss << ", #0x" << std::hex << instr.imm << std::dec;
+		}
+		else
+		{
+			ss << ", " << regStr(instr.rm);
+			if (instr.shift_amount || instr.shift_by_reg)
+			{
+				ss << ", " << shiftStr(instr.shift_type) << " ";
+				if (instr.shift_by_reg)
+					ss << regStr(instr.shift_reg);
+				else
+					ss << "#" << (int)instr.shift_amount;
+			}
+		}
+
+		ss << "    | flags = " << regStr(instr.rn) << " " << syms[idx] << " ";
+		if (instr.I)
+			ss << "#0x" << std::hex << instr.imm << std::dec;
+		else
+			ss << regStr(instr.rm);
+		break;
+	}
 
 
-void CPU::runThumbTests()
+	case armOperation::ARM_MOV:
+	case armOperation::ARM_MVN:
+	{
+		const char* op = (instr.type == armOperation::ARM_MOV) ? "mov" : "mvn";
+		const char* prefix = (instr.type == armOperation::ARM_MVN) ? "~" : "";
+
+		ss << addCond(op) << (instr.S ? "s" : "") << "     ";
+		ss << regStr(instr.rd);
+
+		if (instr.I)
+		{
+			ss << ", #0x" << std::hex << instr.imm << std::dec;
+		}
+		else
+		{
+			ss << ", " << regStr(instr.rm);
+			if (instr.shift_amount || instr.shift_by_reg)
+			{
+				ss << ", " << shiftStr(instr.shift_type) << " ";
+				if (instr.shift_by_reg)
+					ss << regStr(instr.shift_reg);
+				else
+					ss << "#" << (int)instr.shift_amount;
+			}
+		}
+
+		ss << "    | " << regStr(instr.rd) << " = " << prefix;
+		if (instr.I)
+			ss << "#0x" << std::hex << instr.imm << std::dec;
+		else
+			ss << regStr(instr.rm);
+		break;
+	}
+
+	case armOperation::ARM_MUL:
+	ss << addCond("mul") << (instr.S ? "s" : "") << "     ";
+	ss << regStr(instr.rd) << ", " << regStr(instr.rm) << ", " << regStr(instr.rs);
+	ss << "    | " << regStr(instr.rd) << " = " << regStr(instr.rm) << " * " << regStr(instr.rs);
+	break;
+
+	case armOperation::ARM_MLA:
+	ss << addCond("mla") << (instr.S ? "s" : "") << "     ";
+	ss << regStr(instr.rd) << ", " << regStr(instr.rm) << ", " << regStr(instr.rs) << ", " << regStr(instr.rn);
+	ss << "    | " << regStr(instr.rd) << " = " << regStr(instr.rm) << " * " << regStr(instr.rs) << " + " << regStr(instr.rn);
+	break;
+
+	case armOperation::ARM_UMULL:
+	case armOperation::ARM_UMLAL:
+	case armOperation::ARM_SMULL:
+	case armOperation::ARM_SMLAL:
+	{
+		const char* ops[] = { "umull", "umlal", "smull", "smlal" };
+		int idx = (int)instr.type - (int)armOperation::ARM_UMULL;
+
+		ss << addCond(ops[idx]) << (instr.S ? "s" : "") << " ";
+		ss << regStr(instr.rn) << ", " << regStr(instr.rd) << ", " << regStr(instr.rm) << ", " << regStr(instr.rs);
+		ss << "    | " << regStr(instr.rn) << ":" << regStr(instr.rd) << " = " << regStr(instr.rm) << " * " << regStr(instr.rs);
+		break;
+	}
+
+	case armOperation::ARM_LDR:
+	case armOperation::ARM_STR:
+	{
+		const char* op = (instr.type == armOperation::ARM_LDR) ? "ldr" : "str";
+		ss << addCond(op) << (instr.B ? "b" : "") << "     ";
+		ss << regStr(instr.rd) << ", [" << regStr(instr.rn);
+
+		if (instr.P)
+		{
+			ss << ", ";
+			if (!instr.U) ss << "-";
+			if (instr.I)
+			{
+				ss << regStr(instr.rm);
+				if (instr.shift_amount)
+				{
+					ss << ", " << shiftStr(instr.shift_type) << " #" << (int)instr.shift_amount;
+				}
+			}
+			else
+			{
+				ss << "#0x" << std::hex << instr.imm << std::dec;
+			}
+			ss << "]" << (instr.W ? "!" : "");
+		}
+		else
+		{
+			ss << "], ";
+			if (!instr.U) ss << "-";
+			if (instr.I)
+			{
+				ss << regStr(instr.rm);
+			}
+			else
+			{
+				ss << "#0x" << std::hex << instr.imm << std::dec;
+			}
+		}
+
+		if (instr.type == armOperation::ARM_LDR)
+			ss << "    | " << regStr(instr.rd) << " = [" << regStr(instr.rn) << " } offset]";
+		else
+			ss << "    | [" << regStr(instr.rn) << " } offset] = " << regStr(instr.rd);
+		break;
+	}
+
+
+	case armOperation::ARM_LDRH:
+	case armOperation::ARM_STRH:
+	case armOperation::ARM_LDRSB:
+	case armOperation::ARM_LDRSH:
+	{
+		const char* ops[] = { "ldrh", "strh", "ldrsb", "ldrsh" };
+		int idx = (int)instr.type - (int)armOperation::ARM_LDRH;
+
+		ss << addCond(ops[idx]) << "   ";
+		ss << regStr(instr.rd) << ", [" << regStr(instr.rn);
+
+		if (instr.P)
+		{
+			ss << ", ";
+			if (!instr.U) ss << "-";
+			if (instr.I)
+				ss << "#0x" << std::hex << instr.imm << std::dec;
+			else
+				ss << regStr(instr.rm);
+			ss << "]" << (instr.W ? "!" : "");
+		}
+		else
+		{
+			ss << "], ";
+			if (!instr.U) ss << "-";
+			if (instr.I)
+				ss << "#0x" << std::hex << instr.imm << std::dec;
+			else
+				ss << regStr(instr.rm);
+		}
+
+		bool isLoad = (idx == 0 || idx == 2 || idx == 3);
+		if (isLoad)
+			ss << "    | " << regStr(instr.rd) << " = [" << regStr(instr.rn) << " } offset]";
+		else
+			ss << "    | [" << regStr(instr.rn) << " } offset] = " << regStr(instr.rd);
+		break;
+	}
+
+	case armOperation::ARM_LDM:
+	case armOperation::ARM_STM:
+	{
+		const char* op = (instr.type == armOperation::ARM_LDM) ? "ldm" : "stm";
+		const char* mode = "";
+
+
+		if (!instr.P && !instr.U) mode = "da";
+		else if (!instr.P && instr.U) mode = "ia";
+		else if (instr.P && !instr.U) mode = "db";
+		else if (instr.P && instr.U) mode = "ib";
+
+		ss << addCond(op) << mode << "   ";
+		ss << regStr(instr.rn) << (instr.W ? "!" : "") << ", {";
+
+		bool first = true;
+		for (int i = 0; i < 16; i++)
+		{
+			if (instr.reg_list & (1 << i))
+			{
+				if (!first) ss << ", ";
+				ss << regStr(i);
+				first = false;
+			}
+		}
+		ss << "}" << (instr.S ? "^" : "");
+		break;
+	}
+
+	// Branch
+	case armOperation::ARM_B:
+	{
+		uint32_t target = (pc + 8 + instr.imm) & ~3;
+		ss << addCond("b") << "       0x" << std::hex << target << std::dec;
+		ss << "    | pc = 0x" << std::hex << target << std::dec;
+		break;
+	}
+
+	case armOperation::ARM_BL:
+	{
+		uint32_t target = (pc + 8 + instr.imm) & ~3;
+		ss << addCond("bl") << "      0x" << std::hex << target << std::dec;
+		ss << "    | lr = pc+4, pc = 0x" << std::hex << target << std::dec;
+		break;
+	}
+
+	case armOperation::ARM_BX:
+	ss << addCond("bx") << "      " << regStr(instr.rm);
+	ss << "    | pc = " << regStr(instr.rm) << " & ~1, T = bit0";
+	break;
+
+	// PSR Transfer
+	case armOperation::ARM_MRS:
+	ss << addCond("mrs") << "     " << regStr(instr.rd) << ", " << (instr.B ? "spsr" : "cpsr");
+	ss << "    | " << regStr(instr.rd) << " = " << (instr.B ? "spsr" : "cpsr");
+	break;
+
+	case armOperation::ARM_MSR:
+	ss << addCond("msr") << "     " << (instr.B ? "spsr" : "cpsr") << ", ";
+	if (instr.I)
+		ss << "#0x" << std::hex << instr.imm << std::dec;
+	else
+		ss << regStr(instr.rm);
+	ss << "    | " << (instr.B ? "spsr" : "cpsr") << " = ";
+	if (instr.I)
+		ss << "#0x" << std::hex << instr.imm << std::dec;
+	else
+		ss << regStr(instr.rm);
+	break;
+
+	// Special
+	case armOperation::ARM_SWP:
+	ss << addCond("swp") << "     " << regStr(instr.rd) << ", " << regStr(instr.rm) << ", [" << regStr(instr.rn) << "]";
+	ss << "    | " << regStr(instr.rd) << " = [" << regStr(instr.rn) << "], [" << regStr(instr.rn) << "] = " << regStr(instr.rm);
+	break;
+
+	case armOperation::ARM_SWI:
+	ss << addCond("swi") << "     #0x" << std::hex << instr.imm << std::dec;
+	break;
+
+	// Coprocessor
+	case armOperation::ARM_CDP:
+	ss << addCond("cdp") << "     (coprocessor operation)";
+	break;
+
+	case armOperation::ARM_LDC:
+	case armOperation::ARM_STC:
+	{
+		const char* op = (instr.type == armOperation::ARM_LDC) ? "ldc" : "stc";
+		ss << addCond(op) << "     c" << (int)instr.rd << ", [" << regStr(instr.rn) << ", #0x" << std::hex << instr.imm << "]" << std::dec;
+		break;
+	}
+
+	case armOperation::ARM_MRC:
+	case armOperation::ARM_MCR:
+	{
+		const char* op = (instr.type == armOperation::ARM_MRC) ? "mrc" : "mcr";
+		ss << addCond(op) << "     " << regStr(instr.rd);
+		break;
+	}
+
+	case armOperation::ARM_UNDEFINED:
+	ss << "undefined";
+	break;
+
+	default:
+	ss << "unknown";
+	break;
+	}
+
+	return ss.str();
+}
+//TESTS TO FIX
+
+void CPU::runThumbTests() //also runs arm
 {
 	//ignore most he load stuff for now
-	const char* str = "thumb_swi.json.bin";
+	const char* str = "arm_b_bl.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -3292,18 +4012,20 @@ void CPU::runThumbTests()
 		}
 		uint32_t junkArr2[3];
 		fread(&junkArr2, 4, 2, f);
-		uint16_t opcode, padding;
+		uint32_t opcode; //uint16_t opcode; 
+		uint32_t padding;
 		uint32_t base_addr;
-		fread(&opcode, 2, 1, f);
-		fread(&padding, 2, 1, f);
+		fread(&opcode, 4, 1, f);
+		//fread(&padding, 4, 1, f);
 		fread(&base_addr, 4, 1, f);
+
 
 		//////////////
 		// LOADS
 		////////////
 
 		//43 and 49
-		if (tNum >0)// jtest
+		if (tNum <5)// jtest
 		{
 			reset();
 
@@ -3332,27 +4054,34 @@ void CPU::runThumbTests()
 			switchMode(CPSRbitToMode(CPSR & 0x1F));
 
 			///DECODE / EXECUTE
-			thumbInstr decoded = decodeThumb(opcode);
 
-			std::string decodedStr = thumbToStr(decoded);
-
-			thumbExecute(decoded);
-			pc += 2;
+			//THUMB
+			// 
+			//thumbInstr decoded = decodeThumb(opcode);
+			//std::string decodedStr = thumbToStr(decoded);
+			//pc+=2 
+			// 
+			//ARM
+			
+			armInstr decoded = decodeArm(opcode);
+			std::string decodedStr = armToStr(decoded);
+			curOpCycles = armExecute(decoded);
+			pc += 4; //
 
 			// Check results - compare ALL registers including PC
 			bool testPassed = true;
 
 			switchMode(mode::System);
+
 			if ( (CPSR & 0xF000) != (CPSR_final & 0xF000) ) // seems like random mode changes can upset this 
 			{
 				testPassed = false;
 				if (true)//(failuresShown < maxFailuresToShow)
 				{
-					printf("Test %d , opcode 0x%04x, CSPR FAIL: |NZCV| CPSR: %s, CPSR_init: %s, expected CPSR: %s\n , | %s\n",
-						tNum, opcode,  CPSRparser(CPSR).c_str(), CPSRparser(CPSR_init).c_str(), CPSRparser(CPSR_final).c_str(), thumbToStr(decoded).c_str());
+					printf("Test %d , opcode 0x%04x, CSPR FAIL: |NZCV| CPSR: %s, CPSR_init: %s, expected CPSR: %s\n",
+						tNum, opcode,  CPSRparser(CPSR).c_str(), CPSRparser(CPSR_init).c_str(), CPSRparser(CPSR_final).c_str());
 				} // 
 			}
-
 			for (int r = 0; r < 16; r++)
 			{
 				if (reg[r] != R_final[r])
@@ -3360,34 +4089,20 @@ void CPU::runThumbTests()
 					testPassed = false;
 					if (failuresShown < maxFailuresToShow)
 					{
-						//printf("pre lr , R14: %08X \n", R_init[14]);
-						printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r%d = 0x%08x, expected 0x%08x | %s | %s\n", tNum, opcode, base_addr, r, reg[r], R_final[r] , CPSRtoString(), decodedStr.c_str());
+						printf("Test %d FAILED  (Opcode 0x%04x @ 0x%08x): r%d = 0x%08x, expected 0x%08x | %s | %s \n", 
+							       tNum, opcode, base_addr, r, reg[r], R_final[r] , CPSRtoString() , decodedStr.c_str());
 					}
 				}
 			}
-			for (int r = 0; r < 16; r++)
-			{
-				if (reg[r] != R_final[r])
-				{
-					testPassed = false;
-					if (failuresShown < maxFailuresToShow)
-					{
-						printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r%d = 0x%08x, expected 0x%08x | %s | %s\n",
-							tNum, opcode, base_addr, r, reg[r], R_final[r], CPSRtoString(), decodedStr.c_str());
-					}
-				}
-			}
-
-			// Check FIQ 
-			for (int i = 0; i < 5; i++)
+			for (int i = 0; i < 5; i++) 
 			{
 				if (r8FIQ[i] != R_fiq_final[i])
 				{
 					testPassed = false;
 					if (failuresShown < maxFailuresToShow)
 					{
-						printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r%d_fiq = 0x%08x, expected 0x%08x | %s | %s\n",
-							tNum, opcode, base_addr, 8 + i, r8FIQ[i], R_fiq_final[i], CPSRtoString(), decodedStr.c_str());
+						printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r%d_fiq = 0x%08x, expected 0x%08x | %s\n",
+							tNum, opcode, base_addr, 8 + i, r8FIQ[i], R_fiq_final[i], CPSRtoString());
 					}
 				}
 			}
@@ -3396,8 +4111,8 @@ void CPU::runThumbTests()
 				testPassed = false;
 				if (failuresShown < maxFailuresToShow)
 				{
-					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r13_fiq = 0x%08x, expected 0x%08x | %s | %s\n",
-						tNum, opcode, base_addr, r13RegBank[1], R_fiq_final[5], CPSRtoString(), decodedStr.c_str());
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r13_fiq = 0x%08x, expected 0x%08x | %s \n",
+						tNum, opcode, base_addr, r13RegBank[1], R_fiq_final[5], CPSRtoString());
 				}
 			}
 			if (r14RegBank[1] != R_fiq_final[6])
@@ -3405,19 +4120,17 @@ void CPU::runThumbTests()
 				testPassed = false;
 				if (failuresShown < maxFailuresToShow)
 				{
-					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r14_fiq = 0x%08x, expected 0x%08x | %s | %s\n",
-						tNum, opcode, base_addr, r14RegBank[1], R_fiq_final[6], CPSRtoString(), decodedStr.c_str());
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r14_fiq = 0x%08x, expected 0x%08x | %s\n",
+						tNum, opcode, base_addr, r14RegBank[1], R_fiq_final[6], CPSRtoString());
 				}
 			}
-
-			// Check IRQ 
-			if (r13RegBank[2] != R_irq_final[0])
+			if (r13RegBank[2] != R_irq_final[0])// Check IRQ 
 			{
 				testPassed = false;
 				if (failuresShown < maxFailuresToShow)
 				{
-					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r13_irq = 0x%08x, expected 0x%08x | %s | %s\n",
-						tNum, opcode, base_addr, r13RegBank[2], R_irq_final[0], CPSRtoString(), decodedStr.c_str());
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r13_irq = 0x%08x, expected 0x%08x | %s \n",
+						tNum, opcode, base_addr, r13RegBank[2], R_irq_final[0], CPSRtoString());
 				}
 			}
 			if (r14RegBank[2] != R_irq_final[1])
@@ -3425,19 +4138,17 @@ void CPU::runThumbTests()
 				testPassed = false;
 				if (failuresShown < maxFailuresToShow)
 				{
-					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r14_irq = 0x%08x, expected 0x%08x | %s | %s\n",
-						tNum, opcode, base_addr, r14RegBank[2], R_irq_final[1], CPSRtoString(), decodedStr.c_str());
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r14_irq = 0x%08x, expected 0x%08x | %s\n",
+						tNum, opcode, base_addr, r14RegBank[2], R_irq_final[1], CPSRtoString());
 				}
 			}
-
-			// Check Supervisor
-			if (r13RegBank[3] != R_svc_final[0])
+			if (r13RegBank[3] != R_svc_final[0])// Check Supervisor
 			{
 				testPassed = false;
 				if (failuresShown < maxFailuresToShow)
 				{
-					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r13_svc = 0x%08x, expected 0x%08x | %s | %s\n",
-						tNum, opcode, base_addr, r13RegBank[3], R_svc_final[0], CPSRtoString(), decodedStr.c_str());
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r13_svc = 0x%08x, expected 0x%08x | %s\n",
+						tNum, opcode, base_addr, r13RegBank[3], R_svc_final[0], CPSRtoString());
 				}
 			}
 			if (r14RegBank[3] != R_svc_final[1])
@@ -3445,19 +4156,18 @@ void CPU::runThumbTests()
 				testPassed = false;
 				if (failuresShown < maxFailuresToShow)
 				{
-					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r14_svc = 0x%08x, expected 0x%08x | %s | %s\n",
-						tNum, opcode, base_addr, r14RegBank[3], R_svc_final[1], CPSRtoString(), decodedStr.c_str());
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r14_svc = 0x%08x, expected 0x%08x | %s\n",
+						tNum, opcode, base_addr, r14RegBank[3], R_svc_final[1], CPSRtoString());
 				}
 			}
-
 			// Check Abort
 			if (r13RegBank[4] != R_abt_final[0])
 			{
 				testPassed = false;
 				if (failuresShown < maxFailuresToShow)
 				{
-					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r13_abt = 0x%08x, expected 0x%08x | %s | %s\n",
-						tNum, opcode, base_addr, r13RegBank[4], R_abt_final[0], CPSRtoString(), decodedStr.c_str());
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r13_abt = 0x%08x, expected 0x%08x | %s \n",
+						tNum, opcode, base_addr, r13RegBank[4], R_abt_final[0], CPSRtoString());
 				}
 			}
 			if (r14RegBank[4] != R_abt_final[1])
@@ -3465,19 +4175,18 @@ void CPU::runThumbTests()
 				testPassed = false;
 				if (failuresShown < maxFailuresToShow)
 				{
-					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r14_abt = 0x%08x, expected 0x%08x | %s | %s\n",
-						tNum, opcode, base_addr, r14RegBank[4], R_abt_final[1], CPSRtoString(), decodedStr.c_str());
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r14_abt = 0x%08x, expected 0x%08x | %s\n",
+						tNum, opcode, base_addr, r14RegBank[4], R_abt_final[1], CPSRtoString());
 				}
 			}
-
 			// Check Undefined
 			if (r13RegBank[5] != R_und_final[0])
 			{
 				testPassed = false;
 				if (failuresShown < maxFailuresToShow)
 				{
-					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r13_und = 0x%08x, expected 0x%08x | %s | %s\n",
-						tNum, opcode, base_addr, r13RegBank[5], R_und_final[0], CPSRtoString(), decodedStr.c_str());
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r13_und = 0x%08x, expected 0x%08x | %s\n",
+						tNum, opcode, base_addr, r13RegBank[5], R_und_final[0], CPSRtoString());
 				}
 			}
 			if (r14RegBank[5] != R_und_final[1])
@@ -3485,11 +4194,10 @@ void CPU::runThumbTests()
 				testPassed = false;
 				if (failuresShown < maxFailuresToShow)
 				{
-					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r14_und = 0x%08x, expected 0x%08x | %s | %s\n",
-						tNum, opcode, base_addr, r14RegBank[5], R_und_final[1], CPSRtoString(), decodedStr.c_str());
+					printf("Test %d FAILED  (opcode 0x%04x @ 0x%08x): r14_und = 0x%08x, expected 0x%08x | %s \n",
+						tNum, opcode, base_addr, r14RegBank[5], R_und_final[1], CPSRtoString());
 				}
 			}
-
 			if (testPassed)
 				passed++;
 			else
@@ -3503,8 +4211,6 @@ void CPU::runThumbTests()
 					failuresShown++;
 				}
 			}
-
-			// Progress
 			if (tNum > 0 && tNum % 5000 == 0)
 				printf("  Progress: %d/%d... (%d passed, %d failed)\n",
 					tNum, numTests, passed, failed);
@@ -3517,3 +4223,4 @@ void CPU::runThumbTests()
 
 	fclose(f);
 }
+

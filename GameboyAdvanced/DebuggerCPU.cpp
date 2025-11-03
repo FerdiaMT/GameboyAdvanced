@@ -39,10 +39,10 @@ void DebuggerCPU::ThumbLineDecode(uint32_t curAddr)
 void DebuggerCPU::ArmLineDecode(uint32_t curAddr)
 {
 	uint32_t curInstruction = cpu->read32(curAddr); // this is the instruction in hex
-	CPU::Operation curOperation = cpu->decode(curInstruction); // this turns the instruction into the decoded operation
+	CPU::armInstr curOperation = cpu->decodeArm(curInstruction); // this turns the instruction into the decoded operation
 
-	printf("PC: 0x%08X, Instruction: 0x%08X, Opcode: %s\n",
-		curAddr, curInstruction, cpu->opcodeToString(curOperation));
+	printf("PC: 0x%08X, Instruction: 0x%08X\n",
+		curAddr, curInstruction);
 
 
     curAddr += 4;
