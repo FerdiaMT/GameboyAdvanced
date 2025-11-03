@@ -623,6 +623,8 @@ inline bool CPU::checkConditional(uint8_t cond) const
 
 
 
+
+
 /////////////////////////////////////////////
 ///             OPCODE INSTRS()           ///
 /////////////////////////////////////////////
@@ -868,17 +870,23 @@ inline int CPU::dataProcessingCycleCalculator()
 
 inline int CPU::opA_BX(armInstr instr)
 {
+
+	if (!checkConditional(instr.cond)) {
+		pc += 4;
+		return 1;  // TODO check this later 
+	}
+
 	uint32_t newAddr = reg[instr.rm];
 
 	if (newAddr & 0b1) // 1 = THUMB
 	{
 		T = 1;
-		pc = (newAddr + 4) & 0xFFFFFFFE; //clears bit for valid 2 jumping
+		pc = ((newAddr + 4) & 0xFFFFFFFC);// & 0xFFFFFFFE)+4; //clears bit for valid 2 jumping
 	}
 	else // 0 = arm
 	{
 		T = 0;
-		pc = (newAddr + 4) & 0xFFFFFFFC; // sets it to a valid num for +4 jumping 
+		pc = (   (newAddr + 4) & 0xFFFFFFFC);// &0xFFFFFFFC) + 4; // sets it to a valid num for +4 jumping 
 	}
 
 	return 3; // constant
@@ -892,15 +900,26 @@ inline int CPU::opA_BX(armInstr instr)
 
 inline int CPU::opA_B(armInstr instr)
 {
-	pc = pc + instr.imm + 4;
+
+	if (!checkConditional(instr.cond)) {
+		pc += 4;
+		return 1;
+	}
+
+	pc = pc + instr.imm + 4+4;
 	return 3;
 }
 
 inline int CPU::opA_BL(armInstr instr)
 {
-	lr = pc + 4; // ARM always uses 4
+	if (!checkConditional(instr.cond)) {
+		pc += 4;
+		return 1;
+	}
 
-	pc = static_cast<int32_t>(pc) + static_cast<int32_t>(instr.imm);
+	lr = pc; // ARM always uses 4
+
+	pc = static_cast<int32_t>(pc) + static_cast<int32_t>(instr.imm)+8;
 	return 3;
 }
 
@@ -3828,7 +3847,7 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 	case armOperation::ARM_B:
 	{
 		uint32_t target = (pc + 8 + instr.imm) & ~3;
-		ss << addCond("b") << "       0x" << std::hex << target << std::dec;
+		ss << addCond("b ") << "       0x" << std::hex << target << std::dec;
 		ss << "    | pc = 0x" << std::hex << target << std::dec;
 		break;
 	}
@@ -3836,13 +3855,13 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 	case armOperation::ARM_BL:
 	{
 		uint32_t target = (pc + 8 + instr.imm) & ~3;
-		ss << addCond("bl") << "      0x" << std::hex << target << std::dec;
+		ss << addCond("bl ") << "      0x" << std::hex << target << std::dec;
 		ss << "    | lr = pc+4, pc = 0x" << std::hex << target << std::dec;
 		break;
 	}
 
 	case armOperation::ARM_BX:
-	ss << addCond("bx") << "      " << regStr(instr.rm);
+	ss << addCond("bx ") << "      " << regStr(instr.rm);
 	ss << "    | pc = " << regStr(instr.rm) << " & ~1, T = bit0";
 	break;
 
@@ -4025,7 +4044,7 @@ void CPU::runThumbTests() //also runs arm
 		////////////
 
 		//43 and 49
-		if (tNum <5)// jtest
+		if (tNum >= 0)// jtest TESTNG //4
 		{
 			reset();
 
@@ -4062,11 +4081,14 @@ void CPU::runThumbTests() //also runs arm
 			//pc+=2 
 			// 
 			//ARM
+
+
 			
 			armInstr decoded = decodeArm(opcode);
 			std::string decodedStr = armToStr(decoded);
 			curOpCycles = armExecute(decoded);
-			pc += 4; //
+			pc += 4; 
+
 
 			// Check results - compare ALL registers including PC
 			bool testPassed = true;
