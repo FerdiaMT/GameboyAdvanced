@@ -835,11 +835,11 @@ inline void CPU::writeALUResult(uint8_t rdI, uint32_t result, bool s)
 	if (s && rdI == 15)
 	{
 		returnFromException();
-		reg[15] = result & ~3;
+		reg[15] = result; 
 	}
 	else if (rdI == 15)
 	{
-		reg[15] = result & ~3;
+		reg[15] = result; 
 	}
 	else
 	{
@@ -943,7 +943,7 @@ inline uint32_t CPU::getArmOp2(armInstr instr, bool* carryOut)
 	if (instr.I) // Immediate with rotation
 	{
 		uint32_t value = instr.imm;
-		uint8_t rotation = instr.rotate * 2;
+		uint16_t rotation = instr.rotate * 2;
 
 		if (rotation != 0)
 		{
@@ -956,7 +956,7 @@ inline uint32_t CPU::getArmOp2(armInstr instr, bool* carryOut)
 	else // Register with shift
 	{
 		uint32_t rmVal = reg[instr.rm];
-		uint8_t shiftAmount;
+		uint16_t shiftAmount;
 
 		if (instr.shift_by_reg)
 		{
@@ -1035,9 +1035,11 @@ inline int CPU::opA_ADD(armInstr instr)
 	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	uint32_t op1 = reg[instr.rn];
 	uint32_t op2 = getArmOp2(instr, nullptr);
-	uint32_t res = op1 + op2;
+	
 
-	if (instr.rn == 15 || instr.rd == 15) res += 4;
+	if (instr.rn == 15 ) op1 += 4;
+	uint32_t res = op1 + op2;
+	if (instr.rd == 15) res += 4;
 
 	if (instr.S && instr.rd != 15) { setFlagsAdd(res, op1, op2); }
 	pc += 4;
@@ -4117,7 +4119,7 @@ void CPU::runThumbTests() //also runs arm
 
 		//43 and 49
 		armInstr decoded = decodeArm(opcode);
-		if (tNum >0 && (decoded.type == armOperation::ARM_ADC) )// jtest TESTNG // or 20   ON ARM 
+		if (tNum >=0 && (decoded.type == armOperation::ARM_ADD) )// jtest TESTNG // or 20   ON ARM 
 		{
 			reset();
 
