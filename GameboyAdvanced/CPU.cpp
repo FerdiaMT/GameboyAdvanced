@@ -985,10 +985,12 @@ inline int CPU::opA_AND(armInstr instr)
 {
 	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	bool isCarry = C;
+	uint32_t op1 = reg[instr.rn];
+	uint32_t op2 = getArmOp2(instr, &isCarry);
 
-	uint32_t res = reg[instr.rn] & getArmOp2(instr, &isCarry);
-
-	if (instr.rn == 15 || instr.rd == 15) res += 4;
+	if (instr.rn == 15) op1 += 4;
+	uint32_t res = op1 & op2;
+	if (instr.rd == 15) res += 4;
 
 	if (instr.S) { setFlagNZC(res, isCarry); }
 	pc += 4;
@@ -1000,17 +1002,15 @@ inline int CPU::opA_ORR(armInstr instr)
 {
 	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	bool isCarry = C;
+	uint32_t op1 = reg[instr.rn];
+	uint32_t op2 = getArmOp2(instr, &isCarry);
 
-	uint32_t res = ((reg[instr.rn] | getArmOp2(instr, &isCarry)) ); // seems to be a random +4 on certain cases
+	if (instr.rn == 15) op1 += 4;
+	uint32_t res = op1 | op2;
+	if (instr.rd == 15) res += 4;
 
 	if (instr.S) { setFlagNZC(res, isCarry); }
 	pc += 4;
-
-	if (instr.rn == 15) // check, this is ambigously defined, it says "undefined" in docs but seems to make it increment an extra 4
-	{
-		res += 4;
-	}
-
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
@@ -1019,8 +1019,12 @@ inline int CPU::opA_EOR(armInstr instr)
 {
 	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	bool isCarry = C;
+	uint32_t op1 = reg[instr.rn];
+	uint32_t op2 = getArmOp2(instr, &isCarry);
 
-	uint32_t res = reg[instr.rn] ^ getArmOp2(instr, &isCarry);
+	if (instr.rn == 15) op1 += 4;
+	uint32_t res = op1 ^ op2;
+	if (instr.rd == 15) res += 4;
 
 	if (instr.S) { setFlagNZC(res, isCarry); }
 	pc += 4;
@@ -1052,8 +1056,9 @@ inline int CPU::opA_SUB(armInstr instr)
 	if (!checkConditional(instr.cond)){pc += 4; return 1;}
 	uint32_t op1 = reg[instr.rn];
 	uint32_t op2 = getArmOp2(instr, nullptr);
-	uint32_t res = op1 - op2;
 
+	if (instr.rn == 15) op1 += 4;
+	uint32_t res = op1 - op2;
 	if (instr.rd == 15) res += 4;
 
 	if (instr.S && instr.rd != 15) { setFlagsSub(res, op1, op2); }
@@ -1067,9 +1072,10 @@ inline int CPU::opA_ADC(armInstr instr)
 	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	uint32_t op1 = reg[instr.rn];
 	uint32_t op2 = getArmOp2(instr, nullptr) + (uint32_t)C;
-	uint32_t res = op1 + op2;
 
-	if ((instr.rd == 15) || (instr.rn == 15)) res += 4;
+	if (instr.rn == 15) op1 += 4;
+	uint32_t res = op1 ^ op2;
+	if (instr.rd == 15) res += 4;
 
 	if (instr.S && instr.rd != 15) { setFlagsAdd(res, op1, op2); }
 	pc += 4;
@@ -1082,9 +1088,10 @@ inline int CPU::opA_SBC(armInstr instr)
 	if (!checkConditional(instr.cond)){ pc += 4; return 1; }
 	uint32_t op1 = reg[instr.rn];
 	uint32_t op2 = getArmOp2(instr, nullptr) - (uint32_t)C;
-	uint32_t res = op1 - op2-1;
 
-	if (instr.rn == 15 || instr.rd == 15) res += 4;
+	if (instr.rn == 15) op1 += 4;
+	uint32_t res = op1 - op2;
+	if (instr.rd == 15) res += 4;
 
 	if (instr.S && instr.rd != 15) { setFlagsSub(res, op1, op2); }
 	pc += 4;
@@ -1099,9 +1106,10 @@ inline int CPU::opA_RSB(armInstr instr)
 	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	uint32_t op1 = reg[instr.rn];
 	uint32_t op2 = getArmOp2(instr, nullptr);
-	uint32_t res = op2 - op1;
 
-	if(instr.rd == 15)res += 4;
+	if (instr.rn == 15) op1 += 4;
+	uint32_t res = op1 - op2;
+	if (instr.rd == 15) res += 4;
 
 	if (instr.S && instr.rd != 15) { setFlagsSub(res, op2, op1); }
 	pc += 4;
@@ -1114,7 +1122,10 @@ inline int CPU::opA_RSC(armInstr instr)
 	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	uint32_t op1 = reg[instr.rn];
 	uint32_t op2 = getArmOp2(instr, nullptr) - (uint32_t)(!C);
-	uint32_t res = op2 - op1;
+
+	if (instr.rn == 15) op1 += 4;
+	uint32_t res = op1 - op2;
+	if (instr.rd == 15) res += 4;
 
 	if (instr.S && instr.rd != 15) { setFlagsSub(res, op2, op1); }
 	pc += 4;
@@ -1128,8 +1139,12 @@ inline int CPU::opA_TST(armInstr instr)
 {
 	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	bool isCarry = C;
+	uint32_t op1 = reg[instr.rn];
+	uint32_t op2 = getArmOp2(instr, nullptr);
 
-	uint32_t res = reg[instr.rn] & getArmOp2(instr, &isCarry);
+	if (instr.rn == 15) op1 += 4;
+	uint32_t res = op1 & op2;
+	if (instr.rd == 15) res += 4;
 
 	if (instr.S && instr.rd != 15) { setFlagNZC(res, isCarry); }
 	pc += 4;
@@ -1140,8 +1155,12 @@ inline int CPU::opA_TEQ(armInstr instr)
 {
 	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	bool isCarry = C;
+	uint32_t op1 = reg[instr.rn];
+	uint32_t op2 = getArmOp2(instr, nullptr);
 
-	uint32_t res = reg[instr.rn] ^ getArmOp2(instr, &isCarry);
+	if (instr.rn == 15) op1 += 4;
+	uint32_t res = op1 ^ op2;
+	if (instr.rd == 15) res += 4;
 
 	if (instr.S && instr.rd != 15) { setFlagNZC(res, isCarry); }
 	pc += 4;
@@ -1153,7 +1172,10 @@ inline int CPU::opA_CMP(armInstr instr)
 	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	uint32_t op1 = reg[instr.rn];
 	uint32_t op2 = getArmOp2(instr, nullptr);
+
+	if (instr.rn == 15) op1 += 4;
 	uint32_t res = op1 - op2;
+	if (instr.rd == 15) res += 4;
 
 	if (instr.S && instr.rd != 15) { setFlagsSub(res, op1, op2); }
 
@@ -1167,7 +1189,10 @@ inline int CPU::opA_CMN(armInstr instr)
 	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	uint32_t op1 = reg[instr.rn];
 	uint32_t op2 = getArmOp2(instr, nullptr);
+
+	if (instr.rn == 15) op1 += 4;
 	uint32_t res = op1 + op2;
+	if (instr.rd == 15) res += 4;
 
 	if (instr.S && instr.rd != 15) { setFlagsAdd(res, op1, op2); }
 	pc += 4;
@@ -1180,9 +1205,11 @@ inline int CPU::opA_MOV(armInstr instr)
 {
 	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	bool isCarry = C;
+	//uint32_t op1 = reg[instr.rn];
+	uint32_t op2 = getArmOp2(instr, nullptr);
 
-	uint32_t res = getArmOp2(instr, &isCarry);
-
+	//if (instr.rn == 15) op1 += 4;
+	uint32_t res = op2;
 	if (instr.rd == 15) res += 4;
 
 	if (instr.S && instr.rd != 15) { setFlagNZC(res, isCarry); }
@@ -1195,8 +1222,11 @@ inline int CPU::opA_MVN(armInstr instr)
 {
 	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	bool isCarry = C;
+	uint32_t op2 = getArmOp2(instr, nullptr);
 
-	uint32_t res = ~(getArmOp2(instr, &isCarry));
+	//if (instr.rn == 15) op1 += 4;
+	uint32_t res = ~(op2);
+	if (instr.rd == 15) res += 4;
 
 	if (instr.S && instr.rd != 15) { setFlagNZC(res, isCarry); }
 	pc += 4;
@@ -1208,7 +1238,12 @@ inline int CPU::opA_BIC(armInstr instr)
 {
 	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	bool isCarry = C;
-	uint32_t res = reg[instr.rn] & ~(getArmOp2(instr, &isCarry));
+	uint32_t op1 = reg[instr.rn];
+	uint32_t op2 = getArmOp2(instr, nullptr);
+
+	if (instr.rn == 15) op1 += 4;
+	uint32_t res = op1 & ~(op2);
+	if (instr.rd == 15) res += 4;
 
 	if (instr.S && instr.rd != 15) { setFlagNZC(res, isCarry); }
 	pc += 4;
@@ -4119,8 +4154,8 @@ void CPU::runThumbTests() //also runs arm
 
 		//43 and 49
 		armInstr decoded = decodeArm(opcode);
-		if (tNum >=0 && (decoded.type == armOperation::ARM_ADD) )// jtest TESTNG // or 20   ON ARM 
-		{
+		if (tNum >=0 )// jtest TESTNG // or 20   ON ARM 
+		{ //  && (decoded.type == armOperation::ARM_ADD)
 			reset();
 
 			for (int r = 0; r < 16; r++)
