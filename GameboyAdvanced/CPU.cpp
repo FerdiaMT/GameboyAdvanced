@@ -1071,10 +1071,10 @@ inline int CPU::opA_ADC(armInstr instr)
 {
 	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	uint32_t op1 = reg[instr.rn];
-	uint32_t op2 = getArmOp2(instr, nullptr) + (uint32_t)C;
+	uint32_t op2 = getArmOp2(instr, nullptr);
 
 	if (instr.rn == 15) op1 += 4;
-	uint32_t res = op1 ^ op2;
+	uint32_t res = op1 + op2 + C;
 	if (instr.rd == 15) res += 4;
 
 	if (instr.S && instr.rd != 15) { setFlagsAdd(res, op1, op2); }
@@ -1087,10 +1087,10 @@ inline int CPU::opA_SBC(armInstr instr)
 {
 	if (!checkConditional(instr.cond)){ pc += 4; return 1; }
 	uint32_t op1 = reg[instr.rn];
-	uint32_t op2 = getArmOp2(instr, nullptr) - (uint32_t)C;
+	uint32_t op2 = getArmOp2(instr, nullptr);
 
 	if (instr.rn == 15) op1 += 4;
-	uint32_t res = op1 - op2;
+	uint32_t res = op1 - op2 - 1 + C;
 	if (instr.rd == 15) res += 4;
 
 	if (instr.S && instr.rd != 15) { setFlagsSub(res, op1, op2); }
@@ -1108,7 +1108,7 @@ inline int CPU::opA_RSB(armInstr instr)
 	uint32_t op2 = getArmOp2(instr, nullptr);
 
 	if (instr.rn == 15) op1 += 4;
-	uint32_t res = op1 - op2;
+	uint32_t res = op2 -op1 ;
 	if (instr.rd == 15) res += 4;
 
 	if (instr.S && instr.rd != 15) { setFlagsSub(res, op2, op1); }
@@ -1121,10 +1121,10 @@ inline int CPU::opA_RSC(armInstr instr)
 {
 	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	uint32_t op1 = reg[instr.rn];
-	uint32_t op2 = getArmOp2(instr, nullptr) - (uint32_t)(!C);
+	uint32_t op2 = getArmOp2(instr, nullptr);
 
 	if (instr.rn == 15) op1 += 4;
-	uint32_t res = op1 - op2;
+	uint32_t res = op2  - op1 - 1 + C;
 	if (instr.rd == 15) res += 4;
 
 	if (instr.S && instr.rd != 15) { setFlagsSub(res, op2, op1); }
@@ -4155,7 +4155,7 @@ void CPU::runThumbTests() //also runs arm
 		//43 and 49
 		armInstr decoded = decodeArm(opcode);
 		if (tNum >=0 )// jtest TESTNG // or 20   ON ARM 
-		{ //  && (decoded.type == armOperation::ARM_ADD)
+		{ // && (decoded.type == armOperation::ARM_SBC)
 			reset();
 
 			for (int r = 0; r < 16; r++)
