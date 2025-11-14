@@ -265,7 +265,7 @@ public:
 
 	uint32_t& sp; // stack pointer ~ points to 13
 	uint32_t& lr; // link register ~ points to 14
-	uint32_t& pc; //~points to 14
+	uint32_t& pc; // program counter ~ points to 15
 
 	// instruction to take
 	uint32_t instruction;
@@ -549,6 +549,7 @@ public: // helper for data rpocessing
 
 	//shift for memory
 	inline uint32_t SDapplyShift(uint32_t rmVal, uint8_t type, uint8_t amount); // singledata apply shift
+	inline uint32_t applyRegisterShift(uint32_t value, uint8_t shift_type, uint8_t shift_amount, bool* carry_out);
 
 	//flag related helper
 
