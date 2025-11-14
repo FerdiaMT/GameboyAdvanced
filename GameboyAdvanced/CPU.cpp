@@ -1690,7 +1690,6 @@ inline int CPU::opA_LDM(armInstr instr)
 	if (instr.rn == 15)
 	{
 		addr += 4;
-		pc -= 28; // this has to be wrong
 	}
 
 	if (instr.P)
@@ -1704,23 +1703,16 @@ inline int CPU::opA_LDM(armInstr instr)
 		else addr += 4;
 	}
 
-	
-	bool r13r14Write = (instr.rn == 13 || instr.rn ==  14);
-
 
 	for (uint8_t i = 0; i < 16; i++)
 	{
 		if (!((registerList >> i) & 0b1)) continue; // skip if not set
 
-		if (instr.P)
-		{
-			addr += 4; // pre address increment
-		}
+		if (instr.P) addr += 4; // pre address increment
 
-		
 		uint32_t val = read32(addr);
 
-		if (!useUserReg || i == instr.rn  )
+		if (!useUserReg)
 		{
 			reg[i] = val;
 		}
@@ -1728,46 +1720,76 @@ inline int CPU::opA_LDM(armInstr instr)
 		{
 			if (i >= 8 && i <= 12 && (curMode == mode::FIQ))
 			{
-				
 				r8User[i-8] = val; // load the values into user ?
 			}
-
-			else if (i == 13)
+			else if (i == 13 && !(curMode == mode::User || curMode == mode::System))
 			{
-				if (curMode == mode::User || curMode == mode::System)
-				{
-					reg[i] = val;
-				}
-				else
-				{
-					r13RegBank[getModeIndex(mode::User)] = val;
-				}
+				r13RegBank[getModeIndex(mode::User)] = val;
 			}
-			else if (i == 14)
+			else if (i == 14 && !(curMode == mode::User || curMode == mode::System))
 			{
-				if (curMode == mode::User || curMode == mode::System)
-				{
-					reg[i] = val;
-				}
-				else
-				{
-					r14RegBank[getModeIndex(mode::User)] = val;
-				}
+				r14RegBank[getModeIndex(mode::User)] = val;
 			}
 			else reg[i] = val;
 		}
 
-		if (!instr.P)addr += 4;  
+		if (!instr.P)addr += 4;  // post address increment
 	}
 
-	if (instr.W) // if writeback is true
+	if (instr.W)
 	{
-		if (!((registerList >> instr.rn) & 0b1) && instr.rn != 15) // cant write back if both are true
+		
+
+		if (!((registerList >> instr.rn) & 0b1))
 		{
-			if (instr.U) reg[instr.rn] = startAddr + (numRegs * 4);
-			else reg[instr.rn] = startAddr; // decrements already been done at this stage
+			uint32_t writebackValue;
+			if (instr.U)
+				writebackValue = startAddr + (numRegs * 4);
+			else
+				writebackValue = startAddr;
+
+
+			if (instr.rn >= 8 && instr.rn <= 12 && (curMode == mode::FIQ) && useUserReg)
+			{
+				r8User[instr.rn - 8] = writebackValue; 
+			}
+
+			else if (instr.rn == 13 && useUserReg)
+			{
+				if (curMode == mode::User || curMode == mode::System)
+				{
+					reg[13] = writebackValue;
+				}
+				else
+				{
+					r13RegBank[getModeIndex(mode::User)] = writebackValue;
+				}
+			}
+
+			else if (instr.rn == 14 && useUserReg )
+			{
+				if (curMode == mode::User || curMode == mode::System)
+				{
+					reg[14] = writebackValue;
+				}
+				else
+				{
+					r14RegBank[getModeIndex(mode::User)] = writebackValue;
+				}	
+			}
+
+			else if (instr.rn == 15)
+			{	
+				reg[15] = writebackValue+4;
+			}
+
+			else
+			{
+				reg[instr.rn] = writebackValue;
+			}
 		}
 	}
+
 
 	if (loadPC) // if we loaded to pc
 	{
@@ -1783,7 +1805,11 @@ inline int CPU::opA_LDM(armInstr instr)
 			T = false;
 			reg[15]; //&= ~0x3;
 		}
+
+
 	}
+
+
 
 	pc += 4; // increment pc by 4 if used
 
@@ -4298,9 +4324,9 @@ void CPU::runThumbTests() //also runs arm
 		// LOADS
 		////////////
 
-		//58,82 119
+		// 423 529 682 844
 		armInstr decoded = decodeArm(opcode);
-		if (tNum <=500 && (decoded.type == armOperation::ARM_LDM))// jtest TESTNG // or 20   ON ARM 
+		if (tNum >=0 && (decoded.type == armOperation::ARM_LDM))// jtest TESTNG // or 20   ON ARM 
 		{ //
 			reset();
 
