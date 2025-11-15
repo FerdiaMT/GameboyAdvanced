@@ -1787,7 +1787,14 @@ inline int CPU::opA_STM(armInstr instr)
 	}
 	uint16_t registerList = instr.reg_list;
 	int numRegs = numOfRegisters(registerList);
-	if (numRegs == 0) return 1; // nothing to transfer
+
+	if (numRegs == 0)
+	{
+
+		registerList = 0x8000; 
+		numRegs = 16;
+	}
+
 	uint32_t startAddr = reg[instr.rn];
 	if (!instr.U) startAddr -= (numRegs * 4); // if down bit, subtract now
 	bool useUserReg = instr.S; // if S is set, we gotta use user reg
@@ -1833,11 +1840,12 @@ inline int CPU::opA_STM(armInstr instr)
 	}
 	if (instr.W) // writeback to reg
 	{
-		if (!((registerList >> instr.rn) & 0b1))
-		{
+
+			
 			uint32_t writebackValue;
 			if (instr.U) writebackValue = startAddr + (numRegs * 4);
 			else writebackValue = startAddr;
+
 			if (instr.rn >= 8 && instr.rn <= 12 && (curMode == mode::FIQ) && useUserReg)
 			{
 				r8User[instr.rn - 8] = writebackValue;
@@ -1855,7 +1863,6 @@ inline int CPU::opA_STM(armInstr instr)
 				if (instr.rn == 15) reg[15] = writebackValue + 4;
 				else reg[instr.rn] = writebackValue;
 			}
-		}
 	}
 	pc += 4; // increment pc by 4
 	return 2 + numRegs;
@@ -3362,6 +3369,11 @@ uint16_t CPU::read16(uint32_t inputAddr, bool bReadOnly)
 uint32_t CPU::read32(uint32_t inputAddr, bool bReadOnly)
 {
 
+	// FOR WHEN REMOVING TEST HARNESS
+
+	//misalignemnt is for all arm ops except for ldm, stm
+
+
 	uint32_t addr = inputAddr; //;& ~3;
 	for (const auto& transaction : currentTransactions)
 	{
@@ -4307,7 +4319,7 @@ void CPU::runThumbTests() //also runs arm
 
 		// 423 529 682 844
 		armInstr decoded = decodeArm(opcode);
-		if (tNum >=0 && (decoded.type == armOperation::ARM_STM))// jtest TESTNG // or 20   ON ARM 
+		if (tNum >= 0 )// jtest TESTNG // or 20   ON ARM 
 		{ //
 			reset();
 
