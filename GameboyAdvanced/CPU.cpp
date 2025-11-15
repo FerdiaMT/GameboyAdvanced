@@ -1500,14 +1500,18 @@ inline uint32_t CPU::getArmOffset(armInstr instr)
 
 inline int CPU::opA_LDR(armInstr instr)
 {
+	if (!checkConditional(instr.cond))
+	{
+		pc += 4;
+		return 1;
+	}
 	uint32_t newAddr = reg[instr.rn];
+	if (instr.rn == 15) newAddr += 4;
 	uint32_t offset = getArmOffset(instr);
-
-	if (instr.P) 
+	if (instr.P)
 	{
 		newAddr = SDOffset(instr.U, newAddr, offset);
 	}
-
 	uint32_t readVal;
 	if (instr.B) // Byte
 	{
@@ -1515,26 +1519,57 @@ inline int CPU::opA_LDR(armInstr instr)
 	}
 	else // Word
 	{
-		uint32_t data = read32(newAddr & ~3);
-		uint8_t rotation = (newAddr & 3) * 8;
-		readVal = (data >> rotation) | (data << (32 - rotation));
+
+		if (instr.rd == 15)
+		{
+			readVal = read32(newAddr);
+		}
+		else
+		{
+			uint32_t data = read32(newAddr);
+			uint8_t rotation = (newAddr & 3) * 8;
+			readVal = (data >> rotation) | (data << (32 - rotation));
+		}
 	}
 
-	if (!instr.P) // Post
+	if (!instr.P)
 	{
 		newAddr = SDOffset(instr.U, newAddr, offset);
 	}
 
-	if (!instr.P || instr.W)
+	reg[instr.rd] = readVal;
+
+	if ((!instr.P || instr.W) &&  instr.rn != instr.rd)
 	{
 		reg[instr.rn] = newAddr;
+
+		if (!instr.P && instr.rn == 15)
+		{
+			pc += 4;
+		}
 	}
 
-	reg[instr.rd] = readVal;
+	if (instr.rd == 15)
+	{
+		printf("wesrdfthgyhuk\n");
+		//if (instr.S) returnFromException();
+
+		if (reg[15] & 0x1)
+		{
+			T = true;
+			//reg[15] &= ~0x1;
+		}
+		else
+		{
+			T = false;
+			//reg[15] &= ~0x3;
+		}
+	}
+
+	pc += 4;
 
 	return 3;
 }
-
 inline int CPU::opA_STR(armInstr instr)
 {
 	uint32_t newAddr = reg[instr.rn];
@@ -4205,7 +4240,7 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 void CPU::runThumbTests() //also runs arm
 {
 	//ignore most he load stuff for now
-	const char* str = "arm_ldm_stm.json.bin";
+	const char* str = "arm_ldr_str_immediate_offset.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -4317,10 +4352,10 @@ void CPU::runThumbTests() //also runs arm
 		// LOADS
 		////////////
 
-		// 423 529 682 844
+		// 29 36
 		armInstr decoded = decodeArm(opcode);
-		if (tNum >= 0 )// jtest TESTNG // or 20   ON ARM 
-		{ //
+		if ((tNum == 16 || tNum == 131 || tNum == 302) && decoded.type == armOperation::ARM_LDR )// jtest TESTNG // or 20   ON ARM 
+		{ // 
 			reset();
 
 			for (int r = 0; r < 16; r++)
