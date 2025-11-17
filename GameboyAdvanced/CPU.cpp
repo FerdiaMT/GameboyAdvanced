@@ -1505,9 +1505,14 @@ inline int CPU::opA_LDR(armInstr instr)
 		pc += 4;
 		return 1;
 	}
+
+
 	uint32_t newAddr = reg[instr.rn];
+
 	if (instr.rn == 15) newAddr += 4;
+
 	uint32_t offset = getArmOffset(instr);
+
 	if (instr.P)
 	{
 		newAddr = SDOffset(instr.U, newAddr, offset);
@@ -1519,17 +1524,9 @@ inline int CPU::opA_LDR(armInstr instr)
 	}
 	else // Word
 	{
-
-		if (instr.rd == 15)
-		{
-			readVal = read32(newAddr);
-		}
-		else
-		{
-			uint32_t data = read32(newAddr);
-			uint8_t rotation = (newAddr & 3) * 8;
-			readVal = (data >> rotation) | (data << (32 - rotation));
-		}
+		uint32_t data = read32(newAddr);
+		uint8_t rotation = (newAddr & 3) * 8;
+		readVal = (data >> rotation) | (data << (32 - rotation));
 	}
 
 	if (!instr.P)
@@ -1543,7 +1540,7 @@ inline int CPU::opA_LDR(armInstr instr)
 	{
 		reg[instr.rn] = newAddr;
 
-		if (!instr.P && instr.rn == 15)
+		if (instr.rn == 15)
 		{
 			pc += 4;
 		}
@@ -1551,8 +1548,6 @@ inline int CPU::opA_LDR(armInstr instr)
 
 	if (instr.rd == 15)
 	{
-		printf("wesrdfthgyhuk\n");
-		//if (instr.S) returnFromException();
 
 		if (reg[15] & 0x1)
 		{
@@ -4354,8 +4349,8 @@ void CPU::runThumbTests() //also runs arm
 
 		// 29 36
 		armInstr decoded = decodeArm(opcode);
-		if ((tNum == 16 || tNum == 131 || tNum == 302) && decoded.type == armOperation::ARM_LDR )// jtest TESTNG // or 20   ON ARM 
-		{ // 
+		if (tNum  >0 && decoded.type == armOperation::ARM_LDR)// jtest TESTNG // or 20   ON ARM 
+		{ // (tNum == 16 || tNum == 131 || tNum == 302) 
 			reset();
 
 			for (int r = 0; r < 16; r++)
