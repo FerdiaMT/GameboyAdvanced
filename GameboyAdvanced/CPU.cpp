@@ -1565,39 +1565,46 @@ inline int CPU::opA_LDR(armInstr instr)
 
 	return 3;
 }
+
 inline int CPU::opA_STR(armInstr instr)
 {
+	if (!checkConditional(instr.cond))
+	{
+		pc += 4;
+		return 1;
+	}
 	uint32_t newAddr = reg[instr.rn];
+	if (instr.rn == 15) newAddr += 4;
 	uint32_t offset = getArmOffset(instr);
-
-	if (instr.P) // Pre
+	if (instr.P)
 	{
 		newAddr = SDOffset(instr.U, newAddr, offset);
 	}
-
-	uint32_t valToStore = reg[instr.rd];
-	if (instr.rd == 15) valToStore += 4;
-
+	uint32_t writeVal = reg[instr.rd];
+	if (instr.rd == 15) writeVal += 8; // PC stores as PC+12
 	if (instr.B) // Byte
 	{
-		write8(newAddr, valToStore & 0xFF);
+		write8(newAddr, writeVal);
 	}
 	else // Word
 	{
-		write32(newAddr & ~3, valToStore);
+		write32(newAddr, writeVal);
 	}
-
-	if (!instr.P) // Post
+	if (!instr.P)
 	{
 		newAddr = SDOffset(instr.U, newAddr, offset);
 	}
-
-	if (!instr.P || instr.W)
+	if ((!instr.P || instr.W))
 	{
 		reg[instr.rn] = newAddr;
-	}
 
-	return 2;
+		if (instr.rn == 15)
+		{
+			pc += 4;
+		}
+	}
+	pc += 4;
+	return 3;
 }
 
 inline int CPU::opA_LDRH(armInstr instr)
@@ -4349,7 +4356,7 @@ void CPU::runThumbTests() //also runs arm
 
 		// 29 36
 		armInstr decoded = decodeArm(opcode);
-		if (tNum  >0 && decoded.type == armOperation::ARM_LDR)// jtest TESTNG // or 20   ON ARM 
+		if (tNum  >0 )// jtest TESTNG // or 20   ON ARM 
 		{ // (tNum == 16 || tNum == 131 || tNum == 302) 
 			reset();
 
