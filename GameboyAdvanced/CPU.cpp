@@ -1492,26 +1492,30 @@ inline uint32_t CPU::getArmOffset(armInstr instr)
 		return instr.imm;
 	}
 	else // Register with shift
+
 	{
 		uint32_t rmVal = reg[instr.rm];
+
+		if (instr.rm == 15)
+		{
+			rmVal = pc + 4;
+		}
+
 		return SDapplyShift(rmVal, instr.shift_type, instr.shift_amount);
 	}
 }
 
 inline int CPU::opA_LDR(armInstr instr)
 {
+	//rm==15 is the issue
 	if (!checkConditional(instr.cond))
 	{
 		pc += 4;
 		return 1;
 	}
-
-	//std::cout << std::hex << "hello : "<< instr.rm << std::endl;
-
 	uint32_t newAddr = reg[instr.rn];
 
 	if (instr.rn == 15) newAddr = pc+4; // 4 or 8
-
 
 	uint32_t offset = getArmOffset(instr);
 
@@ -1520,6 +1524,8 @@ inline int CPU::opA_LDR(armInstr instr)
 		newAddr = SDOffset(instr.U, newAddr, offset);
 	}
 
+
+
 	uint32_t readVal;
 	if (instr.B) // Byte
 	{
@@ -1527,12 +1533,9 @@ inline int CPU::opA_LDR(armInstr instr)
 	}
 	else // Word
 	{
-
 		uint32_t data = read32(newAddr);
 		uint8_t rotation = (newAddr & 3) * 8;
 		readVal = (data >> rotation) | (data << (32 - rotation));
-
-		
 	}
 
 	if (!instr.P)
@@ -4384,7 +4387,7 @@ void CPU::runIndividualTests()
 		////////////
 
 		armInstr decoded = decodeArm(opcode);
-		if (tNum <2000 && decoded.type == armOperation::ARM_LDR)// jtest TESTNG
+		if (tNum  >= 0)// jtest TESTNG
 			//108 171 225
 		{ 
 			reset();
