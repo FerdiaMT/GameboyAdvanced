@@ -619,7 +619,7 @@ public: // helper for data rpocessing
 		}
 	}
 
-	void runThumbTests();
+	void runIndividualTests();
 	void runThumbTestsEXTRADEBUG();
 };
 

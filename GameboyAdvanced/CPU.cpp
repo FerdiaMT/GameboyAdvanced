@@ -4236,13 +4236,25 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 	return ss.str();
 }
 //TESTS TO FIX
-// arm cdp
+// "arm_cdp.json.bin"						*all fails here, so probably just not implemented
+// "arm_ldr_str_register_offset.json.bin"
+// "arm_ldrh_strh.json.bin"
+// "arm_ldrsb_ldrsh.json.bin"
+// "arm_mcr_mrc.json.bin"					*all fails here, so probably just not implemented
+// "arm_mrs.json.bin"
+// "arm_msr_imm.json.bin"					*all fails here, so probably just not implemented
+// "arm_msr_reg.json.bin"					*all fails here, so probably just not implemented
+// "arm_mul_mla.json.bin"					*all fails here, so probably just not implemented
+// "arm_mull_mlal.json.bin"	
+// "arm_stc_ldc.json.bin"
+// "arm_swi.json.bin"						*all fails here, so probably just not implemented
+// "arm_swp.json.bin"						*all fails here, so probably just not implemented
 
-
-void CPU::runThumbTests() //also runs arm
+void CPU::runIndividualTests() 
+// this function is for running the individual ARM + THUMB single instruction tests, ensuring every single bound is checked	for the most critical instructions
 {
-	//ignore most he load stuff for now
-	const char* str = "arm_ldr_str_immediate_offset.json.bin";
+	//loads the single test file in (each is composed of 5000 individual tests on the one instruction)
+	const char* str = "arm_cdp.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -4264,7 +4276,9 @@ void CPU::runThumbTests() //also runs arm
 	printf("Magic: 0x%08x\n", magic);
 	printf("Number of tests: %d\n\n", numTests);
 
-
+	//load the arrays with the values from the file
+	//there are some junk arrays in here, they serve no purpouse
+	//the author of the tests wanted to include buffers
 	for (int tNum = 0; tNum < numTests; tNum++)
 	{
 		fread(&testSize, 4, 1, f);
@@ -4322,8 +4336,9 @@ void CPU::runThumbTests() //also runs arm
 		uint32_t junkC;
 		fread(&junkC, 4, 1, f);
 
-		// TRANSACTIONS
-
+		// TRANSACTIONS 
+		// The tests load into certain memory instructions
+		// during our testing, if a memory adress not listed here is read, it can be flagged as an error on the memory input address side
 		currentTransactions.clear();
 
 		int transactionCounter = 0;
@@ -4346,7 +4361,6 @@ void CPU::runThumbTests() //also runs arm
 		uint32_t padding;
 		uint32_t base_addr;
 		fread(&opcode, 4, 1, f);
-		//fread(&padding, 4, 1, f);
 		fread(&base_addr, 4, 1, f);
 
 
@@ -4354,10 +4368,9 @@ void CPU::runThumbTests() //also runs arm
 		// LOADS
 		////////////
 
-		// 29 36
 		armInstr decoded = decodeArm(opcode);
-		if (tNum  >0 )// jtest TESTNG // or 20   ON ARM 
-		{ // (tNum == 16 || tNum == 131 || tNum == 302) 
+		if (tNum  >0 )// jtest TESTNG
+		{ 
 			reset();
 
 			for (int r = 0; r < 16; r++)
@@ -4394,8 +4407,6 @@ void CPU::runThumbTests() //also runs arm
 			// 
 			//ARM
 
-
-			
 			//armInstr decoded = decodeArm(opcode);
 			std::string decodedStr = armToStr(decoded);
 			curOpCycles = armExecute(decoded);

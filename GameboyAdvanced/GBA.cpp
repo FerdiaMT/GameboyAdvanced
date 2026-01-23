@@ -23,7 +23,7 @@ GBA::GBA(): cpu(&bus) //, debuggerCPU(&cpu)
 
 	//debuggerCPU.DecodeIns(0x00000000, 0x000120);
 
-	cpu.runThumbTests();
+	cpu.runIndividualTests();
 }
 
 void GBA::tick()
