@@ -1506,10 +1506,12 @@ inline int CPU::opA_LDR(armInstr instr)
 		return 1;
 	}
 
+	//std::cout << std::hex << "hello : "<< instr.rm << std::endl;
 
 	uint32_t newAddr = reg[instr.rn];
 
-	if (instr.rn == 15) newAddr += 4;
+	if (instr.rn == 15) newAddr = pc+4; // 4 or 8
+
 
 	uint32_t offset = getArmOffset(instr);
 
@@ -1517,6 +1519,7 @@ inline int CPU::opA_LDR(armInstr instr)
 	{
 		newAddr = SDOffset(instr.U, newAddr, offset);
 	}
+
 	uint32_t readVal;
 	if (instr.B) // Byte
 	{
@@ -1524,9 +1527,12 @@ inline int CPU::opA_LDR(armInstr instr)
 	}
 	else // Word
 	{
+
 		uint32_t data = read32(newAddr);
 		uint8_t rotation = (newAddr & 3) * 8;
 		readVal = (data >> rotation) | (data << (32 - rotation));
+
+		
 	}
 
 	if (!instr.P)
@@ -1536,15 +1542,16 @@ inline int CPU::opA_LDR(armInstr instr)
 
 	reg[instr.rd] = readVal;
 
-	if ((!instr.P || instr.W) &&  instr.rn != instr.rd)
+	if ((!instr.P || instr.W)  && instr.rn != instr.rd)
 	{
 		reg[instr.rn] = newAddr;
 
 		if (instr.rn == 15)
 		{
-			pc += 4;
+			pc+=4;
 		}
 	}
+
 
 	if (instr.rd == 15)
 	{
@@ -3371,6 +3378,10 @@ uint8_t CPU::read8(uint32_t inputAddr, bool bReadOnly)
 	}
 	printf("read8: No transaction found for addr 0x%08x (aligned 0x%08x), %d transactions available\n",
 		inputAddr, addr, (int)currentTransactions.size());
+	for (const auto& transaction : currentTransactions)
+	{
+		printf("%u , looking for %u \n", transaction.addr, inputAddr);
+	}
 
 	return bus->read8(addr);
 
@@ -3438,6 +3449,10 @@ uint32_t CPU::read32(uint32_t inputAddr, bool bReadOnly)
 	}
 	printf("read32: No transaction found for addr 0x%08x (aligned 0x%08x), %d transactions available\n",
 		inputAddr , addr,(int)currentTransactions.size());
+	for (const auto& transaction : currentTransactions)
+	{
+		printf("%u , looking for %u \n", transaction.addr , inputAddr);
+	}
 
 
 	return bus->read32(inputAddr);
@@ -4254,7 +4269,7 @@ void CPU::runIndividualTests()
 // this function is for running the individual ARM + THUMB single instruction tests, ensuring every single bound is checked	for the most critical instructions
 {
 	//loads the single test file in (each is composed of 5000 individual tests on the one instruction)
-	const char* str = "arm_cdp.json.bin";
+	const char* str = "arm_ldr_str_register_offset.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -4369,7 +4384,8 @@ void CPU::runIndividualTests()
 		////////////
 
 		armInstr decoded = decodeArm(opcode);
-		if (tNum  >0 )// jtest TESTNG
+		if (tNum <2000 && decoded.type == armOperation::ARM_LDR)// jtest TESTNG
+			//108 171 225
 		{ 
 			reset();
 
