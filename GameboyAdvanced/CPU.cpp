@@ -1619,25 +1619,59 @@ inline int CPU::opA_STR(armInstr instr)
 
 inline int CPU::opA_LDRH(armInstr instr)
 {
-	uint32_t offset = instr.I ? instr.imm : reg[instr.rm];
+	if (!checkConditional(instr.cond))
+	{
+		pc += 4;
+		return 1;
+	}
 	uint32_t newAddr = reg[instr.rn];
+	if (instr.rn == 15) newAddr = pc + 4;
 
-	if (instr.P) newAddr = SDOffset(instr.U, newAddr, offset);
+	uint32_t offset = getArmOffset(instr); 
 
-	uint32_t readVal = read16(newAddr);
+	if (instr.P) 
+	{
+		newAddr = SDOffset(instr.U, newAddr, offset);
+	}
 
-	if (!instr.P) newAddr = SDOffset(instr.U, newAddr, offset);
+	uint32_t readVal;
+	if (newAddr & 1)
+	{
+		uint16_t data = read16(newAddr);
+		readVal = (data >> 8) | (data << 8);
+	}
+	else
+	{
+		readVal = read16(newAddr);
+	}
 
-	if (!instr.P || instr.W)
+	if (!instr.P)
+	{
+		newAddr = SDOffset(instr.U, newAddr, offset);
+	}
+
+	if ((!instr.P || instr.W) && instr.rn != instr.rd)
 	{
 		reg[instr.rn] = newAddr;
 	}
 
 	reg[instr.rd] = readVal;
 
+	if (instr.rd == 15)
+	{
+		if (reg[15] & 0x1)
+		{
+			T = true;
+		}
+		else
+		{
+			T = false;
+		}
+	}
+
+	pc += 4;
 	return 3;
 }
-
 inline int CPU::opA_STRH(armInstr instr)
 {
 	uint32_t offset = instr.I ? instr.imm : reg[instr.rm];
@@ -3410,7 +3444,7 @@ uint16_t CPU::read16(uint32_t inputAddr, bool bReadOnly)
 	{
 		return curTestOpTHUMB;
 	}
-	printf("read8: No transaction found for addr 0x%08x (aligned 0x%08x), %d transactions available\n",
+	printf("read16: No transaction found for addr 0x%08x (aligned 0x%08x), %d transactions available\n",
 		inputAddr, addr, (int)currentTransactions.size());
 
 	return bus->read16(inputAddr);
@@ -4255,7 +4289,6 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 }
 //TESTS TO FIX
 // "arm_cdp.json.bin"						*all fails here, so probably just not implemented
-// "arm_ldr_str_register_offset.json.bin"
 // "arm_ldrh_strh.json.bin"
 // "arm_ldrsb_ldrsh.json.bin"
 // "arm_mcr_mrc.json.bin"					*all fails here, so probably just not implemented
@@ -4272,7 +4305,7 @@ void CPU::runIndividualTests()
 // this function is for running the individual ARM + THUMB single instruction tests, ensuring every single bound is checked	for the most critical instructions
 {
 	//loads the single test file in (each is composed of 5000 individual tests on the one instruction)
-	const char* str = "arm_ldr_str_register_offset.json.bin";
+	const char* str = "arm_ldrh_strh.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -4387,7 +4420,7 @@ void CPU::runIndividualTests()
 		////////////
 
 		armInstr decoded = decodeArm(opcode);
-		if (tNum  >= 0)// jtest TESTNG
+		if (tNum  <= 100 && decoded.type == armOperation::ARM_LDRH)// jtest TESTNG
 			//108 171 225
 		{ 
 			reset();
