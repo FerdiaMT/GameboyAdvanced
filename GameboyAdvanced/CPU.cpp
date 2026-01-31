@@ -1635,15 +1635,8 @@ inline int CPU::opA_LDRH(armInstr instr)
 	}
 
 	uint32_t readVal;
-	if (newAddr & 1)
-	{
-		uint16_t data = read16(newAddr);
-		readVal = (data >> 8) | (data << 8);
-	}
-	else
-	{
-		readVal = read16(newAddr);
-	}
+	readVal = read16(newAddr);
+	
 
 	if (!instr.P)
 	{
@@ -3432,12 +3425,12 @@ uint16_t CPU::read16(uint32_t inputAddr, bool bReadOnly)
 		{
 			uint32_t value = transaction.data;
 
-			if (addr & 1)
-			{
-				value = ((value >> 8) | (value << 8)) & 0xFFFF;
-			}
+			//if (addr & 1)
+			//{
+			//	value = ((value >> 8) | (value << 8)) & 0xFFFF;
+			//}
 
-			return (uint16_t)value;
+			return (uint16_t)value & 0xFFFF;
 		}
 	}
 	if (addr == curTestBaseAddr)
@@ -3446,6 +3439,10 @@ uint16_t CPU::read16(uint32_t inputAddr, bool bReadOnly)
 	}
 	printf("read16: No transaction found for addr 0x%08x (aligned 0x%08x), %d transactions available\n",
 		inputAddr, addr, (int)currentTransactions.size());
+	for (const auto& transaction : currentTransactions)
+	{
+		printf("%x , looking for %x \n", transaction.addr, inputAddr);
+	}
 
 	return bus->read16(inputAddr);
 }
