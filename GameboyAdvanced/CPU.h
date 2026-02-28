@@ -233,6 +233,7 @@ public:
 
 
 		uint16_t reg_list;// reg list (for load multiple etc)
+		uint32_t raw; // raw val
 	};
 
 	armInstr curArmInstr;
@@ -300,7 +301,7 @@ public:
 
 
 public:
-
+	uint32_t getHalfWordOffset(armInstr instr);
 	const char* CPSRtoString();
 	std::string CPSRtoStringPASSED(uint32_t base, uint32_t final, uint32_t passed);
 	uint32_t ThumbToARM(uint16_t thumbInstr, uint32_t pc, uint16_t nextThumbInstr);

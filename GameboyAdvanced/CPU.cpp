@@ -493,6 +493,19 @@ const inline uint8_t CPU::pcOffset()
 
 //HELPER FUNCTIONS FOR DATA PROCESSING
 
+inline uint32_t CPU::getHalfWordOffset(armInstr instr)
+{
+	if (instr.I)
+	{
+		uint32_t res = ((instr.raw >> 4) & 0b11110000) | (instr.raw & 0b1111);
+		return res;
+	}
+	else
+	{
+		return instr.imm;
+	}
+}
+
 inline uint32_t SDOffset(bool u, uint32_t newAddr, uint32_t offset)
 {
 	if (u) newAddr += offset;
@@ -1627,7 +1640,7 @@ inline int CPU::opA_LDRH(armInstr instr)
 	uint32_t newAddr = reg[instr.rn];
 	if (instr.rn == 15) newAddr = pc + 4;
 
-	uint32_t offset = getArmOffset(instr); 
+	uint32_t offset = getHalfWordOffset(instr);
 
 	if (instr.P) 
 	{
@@ -2283,7 +2296,7 @@ CPU::armInstr CPU::decodeArm(uint32_t instr) // this returns a thumbInstr struct
 {
 	armInstr decodedInstr = {}; // creates empty struct for us to fill
 	decodedInstr.type = armOperation::ARM_UNDEFINED;
-
+	decodedInstr.raw = instr;
 	decodedInstr.cond = (instr >> 28) & 0xF;
 
 	switch ((instr >> 25) & 0x7)
@@ -4417,7 +4430,7 @@ void CPU::runIndividualTests()
 		////////////
 
 		armInstr decoded = decodeArm(opcode);
-		if (tNum  <= 100 && decoded.type == armOperation::ARM_LDRH)// jtest TESTNG
+		if (tNum  == 14 && decoded.type == armOperation::ARM_LDRH)// jtest TESTNG
 			//108 171 225
 		{ 
 			reset();
