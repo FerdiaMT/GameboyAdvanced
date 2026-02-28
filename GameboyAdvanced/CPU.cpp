@@ -7,6 +7,18 @@
 #include <string>
 #include <sstream>
 
+void binprintf(int v)
+{
+	unsigned int mask = 1 << ((sizeof(int) << 3) - 1);
+	while (mask)
+	{
+		printf("%d", (v & mask ? 1 : 0));
+		mask >>= 1;
+	}
+	printf("\n");
+}
+
+
 namespace Vector // use these for jumping
 {
 	constexpr uint32_t Reset = 0x00000000;
