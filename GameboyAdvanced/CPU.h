@@ -368,7 +368,7 @@ public:
 
 	uint32_t r13RegBank[6];  // individual SP for everone except usr/sys which share
 	uint32_t r14RegBank[6]; // individual LR for everone except usr/sys which share
-	uint32_t spsrBank[5]; // individual LR for everone except usr/sys have 0
+	uint32_t spsrBank[6]; // individual LR for everone except usr/sys have 0 , 0 IS SET TO DEADBEEF
 
 public:
 

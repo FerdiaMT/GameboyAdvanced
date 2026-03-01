@@ -298,7 +298,7 @@ CPU::mode CPU::CPSRbitToMode(uint8_t modeBits)
 	return static_cast<mode>(modeBits & 0x1F);
 }
 
-bool CPU::isPrivilegedMode() // used to quickly tell were not in user mode
+bool CPU::isPrivilegedMode() // readable way to know not in user mode
 {
 	return (curMode != mode::User);
 }
@@ -386,7 +386,7 @@ void CPU::switchMode(mode newMode) // main function used for mode switching, cal
 void CPU::saveIntoSpsr(uint8_t index)
 {
 	if (index == 0) return; // if user or system
-	spsrBank[index - 1] = CPSR;
+	spsrBank[index] = CPSR;
 }
 
 // excpetion handling
@@ -416,7 +416,7 @@ void CPU::returnFromException()
 
 	if (oldModeIndex > 0) // if not user / system
 	{
-		uint32_t savedCPSR = spsrBank[oldModeIndex - 1];
+		uint32_t savedCPSR = spsrBank[oldModeIndex];
 		curMode = CPSRbitToMode(savedCPSR & 0x1F);
 
 		bankRegisters(oldMode);
@@ -428,17 +428,17 @@ void CPU::returnFromException()
 //SPSR helpers
 uint32_t CPU::getSPSR()
 {
-	uint8_t idx = getModeIndex(curMode);
-	if (idx > 0)
+	if (curMode!= mode::User && curMode != mode::System) // if your mode has an SPSR
 	{
-		return spsrBank[idx - 1];
+		uint8_t idx = getModeIndex(curMode);// 1 given to fiq as we find spsrBank from 0
+		return spsrBank[idx];
 	}
 	return CPSR;
 }
 void  CPU::setSPSR(uint32_t value)
 {
 	int idx = getModeIndex(curMode);
-	if (idx > 0) spsrBank[idx - 1] = value;
+	if (idx > 0) spsrBank[idx] = value;
 }
 //CPSR helper
 void CPU::writeCPSR(uint32_t value)
@@ -1389,15 +1389,21 @@ inline int CPU::opA_BIC(armInstr instr)
 
 inline int CPU::opA_MRS(armInstr instr)
 {
-	if (instr.B) // if true, read the spsr
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
+	//MRS (transfer PSR contents to a register)
+
+	pc += 4; // pc count is done before (if spsr cpsr write is done pc it shouldnt +4)
+
+	if (instr.B) // spsr_currentmode
 	{
 		reg[instr.rd] = getSPSR();
 	}
-	else // if false, read the cpsr
+	else // cpsr
 	{
 		reg[instr.rd] = CPSR;
 	}
-
+	
+	
 	return 1;
 }
 
@@ -4486,7 +4492,7 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 //TESTS TO FIX
 
 
-// "arm_mrs.json.bin"						PSR TRANSFER
+// "arm_mrs.json.bin"						PSR TRANSFER X
 // "arm_msr_imm.json.bin"					PSR TRANSFER
 // "arm_msr_reg.json.bin"					PSR TRANSFER
 
@@ -4495,9 +4501,8 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 // "arm_mul_mla.json.bin"					MULTIPLY
 
 // "arm_swi.json.bin"						SOFTWARE INTERRUPT
-// X"arm_swp.json.bin"	X	working on this	SINGLE DATA SWAP 
 
-//// COPROCESSOR ( last)
+//// COPROCESSOR ( last, NOT REQUIRED FOR GBA AND LIKELY IGNORED)
 // "arm_stc_ldc.json.bin"					STORE COPROCESSOR
 // "arm_cdp.json.bin"						COPROCESSOR DATA OPERATION
 // "arm_mcr_mrc.json.bin"					COPROCESSOR REGISTER TRANSFER
@@ -4506,7 +4511,7 @@ void CPU::runIndividualTests()
 // this function is for running the individual ARM + THUMB single instruction tests, ensuring every single bound is checked	for the most critical instructions
 {
 	//loads the single test file in (each is composed of 5000 individual tests on the one instruction)
-	const char* str = "arm_swp.json.bin";
+	const char* str = "arm_mrs.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -4549,18 +4554,22 @@ void CPU::runIndividualTests()
 		fread(R_irq_init, 4, 2, f);
 		uint32_t R_und_init[2];
 		fread(R_und_init, 4, 2, f);
+
 		uint32_t CPSR_init;
 		fread(&CPSR_init, 4, 1, f);
+
 		uint32_t SPSR_init[5];
 		fread(SPSR_init, 4, 5, f);
 		uint32_t pipeline_init[2];
 		fread(pipeline_init, 4, 2, f);
 		uint32_t access_init;
 		fread(&access_init, 4, 1, f);
+
 		uint32_t junkA;
 		fread(&junkA, 4, 1, f);
 		uint32_t junkB;
 		fread(&junkB, 4, 1, f);
+
 		uint32_t R_final[16];
 		fread(R_final, 4, 16, f);
 		uint32_t R_fiq_final[7];
@@ -4575,7 +4584,7 @@ void CPU::runIndividualTests()
 		fread(R_und_final, 4, 2, f);
 		uint32_t CPSR_final;
 		fread(&CPSR_final, 4, 1, f);
-		uint32_t SPSR_final[5];
+		uint32_t SPSR_final[5]; //WARNING: IF EVER COMPARED AGAINST, INDEX 0 IS 0XDEADBEEF, offset is 1 to deal with user mode being 0 and having no SPSR
 		fread(SPSR_final, 4, 5, f);
 		uint32_t pipeline_final[2];
 		fread(pipeline_final, 4, 2, f);
@@ -4621,8 +4630,8 @@ void CPU::runIndividualTests()
 		////////////
 
 		armInstr decoded = decodeArm(opcode);
-		if (tNum >=0)// jtest TESTNG
-			//108 171 225
+		if (tNum > 0 )// jtest TESTNG
+			//12 24 27 28
 		{ 
 			reset();
 
@@ -4631,8 +4640,18 @@ void CPU::runIndividualTests()
 
 			pc = base_addr + 4;
 			CPSR = CPSR_init; //load cspr
-			for (int r = 0; r < 5; r++) // load spsr
-				spsrBank[r] = SPSR_init[r];
+			// THIS IS DONE IN A HORRIBLE WAY
+			// SINCE THE TEST LOADS IT IN A WONKY WAY
+
+			// SPSR registers in this order: fiq, svc, abt, irq, und
+			spsrBank[0] = 0xDEADBEEF;
+			spsrBank[getModeIndex(mode::FIQ)] = SPSR_init[0];
+			spsrBank[getModeIndex(mode::Supervisor)] = SPSR_init[1];
+			spsrBank[getModeIndex(mode::Abort)] = SPSR_init[2];
+			spsrBank[getModeIndex(mode::IRQ)] = SPSR_init[3];
+			spsrBank[getModeIndex(mode::Undefined)] = SPSR_init[4];
+
+			
 			for (int i = 0; i < 5; i++)
 				r8FIQ[i] = R_fiq_init[i];  
 
@@ -4649,7 +4668,6 @@ void CPU::runIndividualTests()
 
 			curMode = mode::System;
 			switchMode(CPSRbitToMode(CPSR & 0x1F));
-
 			///DECODE / EXECUTE
 
 			//THUMB
@@ -4669,6 +4687,7 @@ void CPU::runIndividualTests()
 			// Check results - compare ALL registers including PC
 			bool testPassed = true;
 
+			mode failedOnMode = curMode; // remember mode system failed on 
 			switchMode(mode::System);
 
 			if ( (CPSR & 0xF000) != (CPSR_final & 0xF000) ) // seems like random mode changes can upset this 
@@ -4677,7 +4696,7 @@ void CPU::runIndividualTests()
 				if (true)//(failuresShown < maxFailuresToShow)
 				{
 					printf("Test %d , opcode 0x%04x, CSPR FAIL: |NZCV| CPSR: %s, CPSR_init: %s, expected CPSR: %s\n",
-						tNum, opcode,  CPSRparser(CPSR).c_str(), CPSRparser(CPSR_init).c_str(), CPSRparser(CPSR_final).c_str());
+						tNum, opcode,  CPSRparser(CPSR).c_str(), CPSRparser(CPSR_init).c_str(), CPSRparser(CPSR_final).c_str() );
 				} // 
 			}
 			for (int r = 0; r < 16; r++)
@@ -4686,10 +4705,17 @@ void CPU::runIndividualTests()
 				{
 					testPassed = false;
 					if (failuresShown < maxFailuresToShow)
-					{
-						printf("Test %d FAILED  (Opcode 0x%04x @ 0x%08x): r%d = 0x%08x, expected 0x%08x | %s | %s \n", 
-							       tNum, opcode, base_addr, r, reg[r], R_final[r] , CPSRtoString() , decodedStr.c_str());
+					{ //IRQ = 0x12,Supervisor = 0x13,Abort = 0x17,
+						printf("Test %d FAILED  (Opcode 0x%04x @ 0x%08x): r%d = 0x%08x, expected 0x%08x | %s | %s | | %08x\n", 
+							       tNum, opcode, base_addr, r, reg[r], R_final[r] , CPSRtoString() , decodedStr.c_str(), failedOnMode);
 					}
+					//if (failuresShown < maxFailuresToShow)
+					//{ //IRQ = 0x12,Supervisor = 0x13,Abort = 0x17,
+					//	printf("Test %d FAILED  (Opcode 0x%04x @ 0x%08x): %08x | %s | %s | | %08x\n",
+					//	tNum, opcode, base_addr, r ,CPSRtoString(), decodedStr.c_str(), failedOnMode);
+					//	binprintf(reg[r]);
+					//	binprintf(R_final[r]);
+					//}
 				}
 			}
 			for (int i = 0; i < 5; i++) 
