@@ -1409,13 +1409,15 @@ inline int CPU::opA_MRS(armInstr instr)
 
 inline int CPU::opA_MSR(armInstr instr)
 {
-	uint32_t value;
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 
+	uint32_t value;
 	if (instr.I) // immediate mode
 	{
-		uint8_t imm = instr.imm;
+		uint32_t imm = (uint32_t)instr.imm;
 		uint8_t rotate = instr.rotate * 2;
-		value = (imm >> rotate) | (imm << (32 - rotate));
+		if (rotate == 0) value = imm;
+		else value = (imm >> rotate) | (imm << (32 - rotate));
 	}
 	else // register mode
 	{
@@ -1423,8 +1425,10 @@ inline int CPU::opA_MSR(armInstr instr)
 	}
 
 	uint32_t mask = 0;
-	if ((instruction >> 19) & 0b1) mask |= 0xFF000000;    // if we should include flag
-	if ((instruction >> 16) & 0b1) mask |= 0x000000FF;    // if we should include control
+	if ((instr.raw >> 19) & 1) mask |= 0xFF000000;
+	if ((instr.raw >> 18) & 1) mask |= 0x00FF0000;
+	if ((instr.raw >> 17) & 1) mask |= 0x0000FF00;
+	if ((instr.raw >> 16) & 1) mask |= 0x000000FF;
 
 	if (instr.B) // write to SPSR
 	{
@@ -1432,9 +1436,11 @@ inline int CPU::opA_MSR(armInstr instr)
 	}
 	else // write to CPSR
 	{
+		if (curMode == mode::User) mask &= 0xFF000000;
 		writeCPSR((CPSR & ~mask) | (value & mask));
 	}
 
+	pc += 4;
 	return 1;
 }
 
@@ -4491,8 +4497,6 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 }
 //TESTS TO FIX
 
-
-// "arm_mrs.json.bin"						PSR TRANSFER X
 // "arm_msr_imm.json.bin"					PSR TRANSFER
 // "arm_msr_reg.json.bin"					PSR TRANSFER
 
@@ -4511,7 +4515,7 @@ void CPU::runIndividualTests()
 // this function is for running the individual ARM + THUMB single instruction tests, ensuring every single bound is checked	for the most critical instructions
 {
 	//loads the single test file in (each is composed of 5000 individual tests on the one instruction)
-	const char* str = "arm_mrs.json.bin";
+	const char* str = "arm_msr_imm.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -4630,9 +4634,10 @@ void CPU::runIndividualTests()
 		////////////
 
 		armInstr decoded = decodeArm(opcode);
-		if (tNum > 0 )// jtest TESTNG
+		if (tNum  >=0 )//&& (((decoded.raw >> 12) & 0b1111111111) == 0b1010001111) || (((decoded.raw >> 12) & 0b1111111111) == 0b1010011111) ) // jtest TESTNG 
 			//12 24 27 28
 		{ 
+			//armInstr decoded = decodeArm(opcode);
 			reset();
 
 			for (int r = 0; r < 16; r++)
@@ -4695,9 +4700,10 @@ void CPU::runIndividualTests()
 				testPassed = false;
 				if (true)//(failuresShown < maxFailuresToShow)
 				{
-					printf("Test %d , opcode 0x%04x, CSPR FAIL: |NZCV| CPSR: %s, CPSR_init: %s, expected CPSR: %s\n",
-						tNum, opcode,  CPSRparser(CPSR).c_str(), CPSRparser(CPSR_init).c_str(), CPSRparser(CPSR_final).c_str() );
-				} // 
+					//printf("Test %d , opcode 0x%04x, CSPR FAIL: |NZCV| CPSR: %s, CPSR_init: %s, expected CPSR: %s\n",tNum, opcode,  CPSRparser(CPSR).c_str(), CPSRparser(CPSR_init).c_str(), CPSRparser(CPSR_final).c_str() );
+					printf("Test %d FAILED, opcode:0x%08x  cur:0x%08x , expect:0x%08x , og:0x%08x , mode: %02x\n",
+						tNum, decoded.raw, CPSR, CPSR_final,CPSR_init, failedOnMode);
+				} 
 			}
 			for (int r = 0; r < 16; r++)
 			{
