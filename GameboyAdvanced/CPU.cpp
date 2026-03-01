@@ -509,12 +509,20 @@ inline uint32_t CPU::getHalfWordOffset(armInstr instr)
 {
 	if (instr.I)
 	{
+		//return instr.imm; ( imm is the default defined, for clarity im doing full here
 		uint32_t res = ((instr.raw >> 4) & 0b11110000) | (instr.raw & 0b1111);
 		return res;
 	}
 	else
 	{
-		return instr.imm;
+		// reg offset
+		if (instr.rm == 15)
+		{
+			uint32_t retVal = reg[instr.rm];
+			retVal += 4;
+			return retVal;
+		}
+		return reg[instr.rm];
 	}
 }
 
@@ -1644,6 +1652,7 @@ inline int CPU::opA_STR(armInstr instr)
 
 inline int CPU::opA_LDRH(armInstr instr)
 {
+
 	if (!checkConditional(instr.cond))
 	{
 		pc += 4;
@@ -1659,18 +1668,28 @@ inline int CPU::opA_LDRH(armInstr instr)
 		newAddr = SDOffset(instr.U, newAddr, offset);
 	}
 
-	uint32_t readVal;
-	readVal = read16(newAddr);
-	
+	uint32_t readAddr = newAddr; // address actually used for read
+	uint32_t readVal = read16(newAddr);
 
 	if (!instr.P)
 	{
 		newAddr = SDOffset(instr.U, newAddr, offset);
 	}
-
 	if ((!instr.P || instr.W) && instr.rn != instr.rd)
 	{
 		reg[instr.rn] = newAddr;
+		if (instr.rn == 15)
+		{
+			pc += 4;
+		}
+	}
+
+	uint8_t rotation = (readAddr & 1) ? 16 : 0;
+	if (rotation)
+	{
+		uint8_t lo = readVal & 0xFF;
+		uint8_t hi = (readVal >> 8) & 0xFF;
+		readVal = (lo << 24) | hi;
 	}
 
 	reg[instr.rd] = readVal;
@@ -2304,7 +2323,7 @@ CPU::thumbInstr CPU::decodeThumb(uint16_t instr) // this returns a thumbInstr st
 	return decodedInstr;
 }
 
-CPU::armInstr CPU::decodeArm(uint32_t instr) // this returns a thumbInstr struct
+CPU::armInstr CPU::decodeArm(uint32_t const instr) // this returns a thumbInstr struct
 {
 	armInstr decodedInstr = {}; // creates empty struct for us to fill
 	decodedInstr.type = armOperation::ARM_UNDEFINED;
@@ -2388,7 +2407,7 @@ CPU::armInstr CPU::decodeArm(uint32_t instr) // this returns a thumbInstr struct
 			decodedInstr.rd = (instr >> 12) & 0xF;
 			decodedInstr.rm = instr & 0xF;
 
-			if ((instr >> 22) & 1)  // Immed
+			if (((instr >> 22) & 1) == 1)  // Immed
 			{
 				decodedInstr.imm = ((instr >> 4) & 0xF0) | (instr & 0xF);
 				decodedInstr.I = true;
@@ -4442,7 +4461,7 @@ void CPU::runIndividualTests()
 		////////////
 
 		armInstr decoded = decodeArm(opcode);
-		if (tNum  == 14 && decoded.type == armOperation::ARM_LDRH)// jtest TESTNG
+		if (tNum <= 10000 && decoded.type == armOperation::ARM_LDRH)// jtest TESTNG
 			//108 171 225
 		{ 
 			reset();
