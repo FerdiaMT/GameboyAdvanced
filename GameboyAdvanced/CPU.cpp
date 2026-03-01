@@ -2098,7 +2098,53 @@ inline int CPU::opA_SWI(armInstr instr)
 
 inline int CPU::opA_SWP(armInstr instr)
 {
-	return 1;
+
+	if (!checkConditional(instr.cond))
+	{
+		pc += 4;
+		return 1;
+	}
+
+	// rm - source
+	// rd - dest 
+	// rn - base
+	// B - 1(swap byte) 0(swap word)
+
+	//swap byte
+	if (instr.B)
+	{
+		uint32_t swapAddr = reg[instr.rn];
+		if (instr.rn == 15) swapAddr += 8;
+
+		uint32_t temp = read8(swapAddr) & 0xFF;
+		uint32_t originalData = reg[instr.rm] & 0xFF;
+
+		write8(swapAddr, originalData);
+		reg[instr.rd] = temp;
+	}
+	//swap word
+	else
+	{
+		uint32_t swapAddr = reg[instr.rn];
+		// if the pc is the address, advance it by 4
+		if (instr.rn == 15) swapAddr += 8;
+
+		// must swap sourceVal and destVal content
+		uint32_t temp = read32(swapAddr);
+		uint32_t originalData = reg[instr.rm];
+		
+
+		uint8_t rotation = (swapAddr & 0b11) * 8;
+		temp = (temp >> rotation) | (temp << (32 - rotation));
+		originalData = (originalData << rotation) | (originalData >> (32 - rotation));
+
+		// apply shifting around according to the swapAddr offset
+		write32(swapAddr, originalData);
+		reg[instr.rd] = temp;
+	}
+	//1S + 2N +1I
+	pc += 4;
+	return 4;
 }
 
 inline int CPU::opA_LDC(armInstr instr) { return 1; }
@@ -3630,7 +3676,15 @@ uint32_t CPU::read32(uint32_t inputAddr, bool bReadOnly)
 		inputAddr , addr,(int)currentTransactions.size());
 	for (const auto& transaction : currentTransactions)
 	{
-		printf("%u , looking for %u \n", transaction.addr , inputAddr);
+		if (transaction.kind == 1)
+		{
+			printf("%u , looking for %u \n", transaction.addr, inputAddr);
+		}
+		else
+		{
+			printf("%u , looking for %u NON KIND 1\n", transaction.addr, inputAddr);
+		}
+		
 	}
 
 
@@ -4430,22 +4484,29 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 	return ss.str();
 }
 //TESTS TO FIX
-// "arm_cdp.json.bin"						*all fails here, so probably just not implemented
-// "arm_mcr_mrc.json.bin"					*all fails here, so probably just not implemented
-// "arm_mrs.json.bin"
-// "arm_msr_imm.json.bin"					*all fails here, so probably just not implemented
-// "arm_msr_reg.json.bin"					*all fails here, so probably just not implemented
-// "arm_mul_mla.json.bin"					*all fails here, so probably just not implemented
-// "arm_mull_mlal.json.bin"	
-// "arm_stc_ldc.json.bin"
-// "arm_swi.json.bin"						*all fails here, so probably just not implemented
-// "arm_swp.json.bin"						*all fails here, so probably just not implemented
+
+
+// "arm_mrs.json.bin"						PSR TRANSFER
+// "arm_msr_imm.json.bin"					PSR TRANSFER
+// "arm_msr_reg.json.bin"					PSR TRANSFER
+
+
+// "arm_mull_mlal.json.bin"					MULTIPLY
+// "arm_mul_mla.json.bin"					MULTIPLY
+
+// "arm_swi.json.bin"						SOFTWARE INTERRUPT
+// X"arm_swp.json.bin"	X	working on this	SINGLE DATA SWAP 
+
+//// COPROCESSOR ( last)
+// "arm_stc_ldc.json.bin"					STORE COPROCESSOR
+// "arm_cdp.json.bin"						COPROCESSOR DATA OPERATION
+// "arm_mcr_mrc.json.bin"					COPROCESSOR REGISTER TRANSFER
 
 void CPU::runIndividualTests() 
 // this function is for running the individual ARM + THUMB single instruction tests, ensuring every single bound is checked	for the most critical instructions
 {
 	//loads the single test file in (each is composed of 5000 individual tests on the one instruction)
-	const char* str = "arm_ldrsb_ldrsh.json.bin";
+	const char* str = "arm_swp.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -4560,7 +4621,7 @@ void CPU::runIndividualTests()
 		////////////
 
 		armInstr decoded = decodeArm(opcode);
-		if (tNum > 0  )// jtest TESTNG
+		if (tNum >=0)// jtest TESTNG
 			//108 171 225
 		{ 
 			reset();
