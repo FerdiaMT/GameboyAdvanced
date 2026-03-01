@@ -1709,28 +1709,38 @@ inline int CPU::opA_LDRH(armInstr instr)
 	pc += 4;
 	return 3;
 }
+
 inline int CPU::opA_STRH(armInstr instr)
 {
-	uint32_t offset = instr.I ? instr.imm : reg[instr.rm];
+	if (!checkConditional(instr.cond))
+	{
+		pc += 4;
+		return 2;
+	}
 	uint32_t newAddr = reg[instr.rn];
-
-	if (instr.P) newAddr = SDOffset(instr.U, newAddr, offset);
-
-	uint32_t valToStore = reg[instr.rd];
-	if (instr.rd == 15) valToStore += 4;
-
-	write16(newAddr, valToStore & 0xFFFF);
-
-	if (!instr.P) newAddr = SDOffset(instr.U, newAddr, offset);
-
-	if (!instr.P || instr.W)
+	if (instr.rn == 15) newAddr = pc + 4;
+	uint32_t offset = getHalfWordOffset(instr);
+	if (instr.P)
+	{
+		newAddr = SDOffset(instr.U, newAddr, offset);
+	}
+	uint16_t writeVal = reg[instr.rd] & 0xFFFF;
+	write16(newAddr, writeVal);
+	if (!instr.P)
+	{
+		newAddr = SDOffset(instr.U, newAddr, offset);
+	}
+	if ((!instr.P || instr.W))
 	{
 		reg[instr.rn] = newAddr;
+		if (instr.rn == 15)
+		{
+			pc += 4;
+		}
 	}
-
+	pc += 4;
 	return 2;
 }
-
 inline int CPU::opA_LDRSB(armInstr instr)
 {
 	uint32_t offset = instr.I ? instr.imm : reg[instr.rm];
@@ -4461,7 +4471,7 @@ void CPU::runIndividualTests()
 		////////////
 
 		armInstr decoded = decodeArm(opcode);
-		if (tNum <= 10000 && decoded.type == armOperation::ARM_LDRH)// jtest TESTNG
+		if (tNum >=0 )//&& decoded.type == armOperation::ARM_STRH)// jtest TESTNG
 			//108 171 225
 		{ 
 			reset();
