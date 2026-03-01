@@ -1741,47 +1741,138 @@ inline int CPU::opA_STRH(armInstr instr)
 	pc += 4;
 	return 2;
 }
+
 inline int CPU::opA_LDRSB(armInstr instr)
 {
-	uint32_t offset = instr.I ? instr.imm : reg[instr.rm];
+	if (!checkConditional(instr.cond))
+	{
+		pc += 4;
+		return 1;
+	}
 	uint32_t newAddr = reg[instr.rn];
+	if (instr.rn == 15) newAddr = pc + 4;
 
-	if (instr.P) newAddr = SDOffset(instr.U, newAddr, offset);
+	uint32_t offset = getHalfWordOffset(instr);
 
-	int8_t byteVal = read8(newAddr);
-	uint32_t readVal = static_cast<int32_t>(byteVal);
+	if (instr.P)
+	{
+		newAddr = SDOffset(instr.U, newAddr, offset);
+	}
 
-	if (!instr.P) newAddr = SDOffset(instr.U, newAddr, offset);
+	uint32_t readAddr = newAddr; // address actually used for read
+	uint32_t readVal = read8(newAddr);
 
-	if (!instr.P || instr.W)
+	if (!instr.P)
+	{
+		newAddr = SDOffset(instr.U, newAddr, offset);
+	}
+	if ((!instr.P || instr.W) && instr.rn != instr.rd)
 	{
 		reg[instr.rn] = newAddr;
+		if (instr.rn == 15)
+		{
+			pc += 4;
+		}
+	}
+
+	//MSB in read8 signifies if its all F or not
+	if (readVal & 0x80) //if MSB set
+	{
+		readVal |= 0xFFFFFF00;
 	}
 
 	reg[instr.rd] = readVal;
 
+	if (instr.rd == 15)
+	{
+		if (reg[15] & 0x1)
+		{
+			T = true;
+		}
+		else
+		{
+			T = false;
+		}
+	}
+
+	pc += 4;
 	return 3;
 }
 
 inline int CPU::opA_LDRSH(armInstr instr)
 {
-	uint32_t offset = instr.I ? instr.imm : reg[instr.rm];
+	if (!checkConditional(instr.cond))
+	{
+		pc += 4;
+		return 1;
+	}
 	uint32_t newAddr = reg[instr.rn];
+	if (instr.rn == 15) newAddr = pc + 4;
 
-	if (instr.P) newAddr = SDOffset(instr.U, newAddr, offset);
+	uint32_t offset = getHalfWordOffset(instr);
 
-	int16_t HWVal = read16(newAddr);
-	uint32_t readVal = static_cast<int32_t>(HWVal);
+	if (instr.P)
+	{
+		newAddr = SDOffset(instr.U, newAddr, offset);
+	}
 
-	if (!instr.P) newAddr = SDOffset(instr.U, newAddr, offset);
+	uint32_t readAddr = newAddr; // address actually used for read
+	uint32_t readVal = read16(newAddr);
 
-	if (!instr.P || instr.W)
+	if (!instr.P)
+	{
+		newAddr = SDOffset(instr.U, newAddr, offset);
+	}
+	if ((!instr.P || instr.W) && instr.rn != instr.rd)
 	{
 		reg[instr.rn] = newAddr;
+		if (instr.rn == 15)
+		{
+			pc += 4;
+		}
 	}
+	//before rotation, figure out if the MSB is set
+	bool isSetMSB = readVal & 0x8000;
+	uint8_t rotation = (readAddr & 1) ? 16 : 0;
+	if (rotation)
+	{
+		uint8_t lo = readVal & 0xFF;
+		uint8_t hi = (readVal >> 8) & 0xFF;
+		readVal = (lo << 24) | hi;
+	}
+
+	if (isSetMSB) // very ugly way of doing things but i wanna speed through coding this now
+	{
+		if (rotation)
+		{
+			readVal |= 0xFFFFFF00;
+		}
+		else
+		{
+			readVal |= 0xFFFF0000;
+		}
+	}
+	else
+	{
+		readVal &= 0x0000FFFF;
+	}
+
 
 	reg[instr.rd] = readVal;
 
+	if (instr.rd == 15)
+	{
+		if (reg[15] & 0x1)
+		{
+			T = true;
+		}
+		else
+		{
+			T = false;
+		}
+	}
+
+	pc += 4;
 	return 3;
 }
 
@@ -4340,8 +4431,7 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 }
 //TESTS TO FIX
 // "arm_cdp.json.bin"						*all fails here, so probably just not implemented
-// "arm_ldrh_strh.json.bin"
-// "arm_ldrsb_ldrsh.json.bin"
+// "arm_ldrsb_ldrsh.json.bin"				NOW WORKING ON THIS
 // "arm_mcr_mrc.json.bin"					*all fails here, so probably just not implemented
 // "arm_mrs.json.bin"
 // "arm_msr_imm.json.bin"					*all fails here, so probably just not implemented
@@ -4356,7 +4446,7 @@ void CPU::runIndividualTests()
 // this function is for running the individual ARM + THUMB single instruction tests, ensuring every single bound is checked	for the most critical instructions
 {
 	//loads the single test file in (each is composed of 5000 individual tests on the one instruction)
-	const char* str = "arm_ldrh_strh.json.bin";
+	const char* str = "arm_ldrsb_ldrsh.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -4471,7 +4561,7 @@ void CPU::runIndividualTests()
 		////////////
 
 		armInstr decoded = decodeArm(opcode);
-		if (tNum >=0 )//&& decoded.type == armOperation::ARM_STRH)// jtest TESTNG
+		if (tNum > 0  )// jtest TESTNG
 			//108 171 225
 		{ 
 			reset();
