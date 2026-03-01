@@ -4431,7 +4431,6 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 }
 //TESTS TO FIX
 // "arm_cdp.json.bin"						*all fails here, so probably just not implemented
-// "arm_ldrsb_ldrsh.json.bin"				NOW WORKING ON THIS
 // "arm_mcr_mrc.json.bin"					*all fails here, so probably just not implemented
 // "arm_mrs.json.bin"
 // "arm_msr_imm.json.bin"					*all fails here, so probably just not implemented
