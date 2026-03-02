@@ -404,8 +404,8 @@ void CPU::enterException(CPU::mode newMode, uint32_t vectorAddr, uint32_t return
 	CPSR |= 0x80;  // Disable IRQ
 	if (newMode == mode::FIQ) CPSR |= 0x40;// turn off FIQ if on FIQ
 
-	lr = returnAddr;
-	pc = vectorAddr;
+	lr = returnAddr+2;
+	pc = vectorAddr-4;
 
 	lr += 2;
 }
@@ -2209,6 +2209,11 @@ inline int CPU::opA_STM(armInstr instr)
 
 inline int CPU::opA_SWI(armInstr instr)
 {
+	if (!checkConditional(instr.cond))
+	{
+		pc += 4;
+		return 1;
+	}
 	printf("SWI #%d: r0=%08X r1=%08X r2=%08X\n", instr.imm, reg[0], reg[1], reg[2]); // debugging logger
 
 	enterException(mode::Supervisor, Vector::SWI, pc - 4);
@@ -4607,8 +4612,6 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 
 // "arm_msr_reg.json.bin" Single test here not working, very odd
 
-// "arm_mull_mlal.json.bin"					MULTIPLY
-
 // "arm_swi.json.bin"						SOFTWARE INTERRUPT
 
 //// COPROCESSOR ( last, NOT REQUIRED FOR GBA AND LIKELY IGNORED)
@@ -4620,7 +4623,7 @@ void CPU::runIndividualTests()
 // this function is for running the individual ARM + THUMB single instruction tests, ensuring every single bound is checked	for the most critical instructions
 {
 	//loads the single test file in (each is composed of 5000 individual tests on the one instruction)
-	const char* str = "arm_mull_mlal.json.bin";
+	const char* str = "arm_swi.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -4739,7 +4742,7 @@ void CPU::runIndividualTests()
 		////////////
 
 		armInstr decoded = decodeArm(opcode);
-		if (tNum  >=0 ) //jtest TESTNG 
+		if (tNum >=0 ) //jtest TESTNG 
 			//12 24 27 28
 		{ 
 			//armInstr decoded = decodeArm(opcode);
