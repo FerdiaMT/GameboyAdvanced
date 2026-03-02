@@ -1457,8 +1457,10 @@ inline int CPU::opA_MSR(armInstr instr)
 
 inline int CPU::opA_MUL(armInstr instr)
 {
-	uint32_t rm = reg[instr.rm];
-	uint32_t rs = reg[instr.rs];
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
+	pc += 4;
+	uint32_t rm = (instr.rm == 15) ? pc + 4 : reg[instr.rm]; //+4 if pc
+	uint32_t rs = (instr.rs == 15) ? pc + 4 : reg[instr.rs]; //+4 if pc
 
 	uint32_t res = (static_cast<uint64_t>(rm) * static_cast<uint64_t>(rs)) & 0xFFFFFFFF;
 	reg[instr.rd] = res;
@@ -1476,14 +1478,18 @@ inline int CPU::opA_MUL(armInstr instr)
 	else if ((rs & 0xFF000000) == 0 || (rs & 0xFF000000) == 0xFF000000) m = 3;
 	else m = 4;
 
+	if (instr.rd == 15)	pc += 4;
+
 	return m + 2;
 }
 
 inline int CPU::opA_MLA(armInstr instr)
 {
-	uint32_t rm = reg[instr.rm];
-	uint32_t rs = reg[instr.rs];
-	uint32_t rn = reg[instr.rn];
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
+	pc += 4;
+	uint32_t rm = (instr.rm == 15) ? pc + 4 : reg[instr.rm];
+	uint32_t rs = (instr.rs == 15) ? pc + 4 : reg[instr.rs];
+	uint32_t rn = (instr.rn == 15) ? pc + 4 : reg[instr.rn];
 
 	uint32_t res = rm * rs + rn;
 	reg[instr.rd] = res;
@@ -1499,6 +1505,8 @@ inline int CPU::opA_MLA(armInstr instr)
 	else if ((rs & 0xFFFF0000) == 0 || (rs & 0xFFFF0000) == 0xFFFF0000) m = 2;
 	else if ((rs & 0xFF000000) == 0 || (rs & 0xFF000000) == 0xFF000000) m = 3;
 	else m = 4;
+
+	if (instr.rd == 15) pc += 4;
 
 	return m + 2;
 }
@@ -4502,9 +4510,7 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 }
 //TESTS TO FIX
 
-// "arm_msr_imm.json.bin"					PSR TRANSFER
-// "arm_msr_reg.json.bin"					PSR TRANSFER
-
+// "arm_msr_reg.json.bin" Single test here not working, very odd
 
 // "arm_mull_mlal.json.bin"					MULTIPLY
 // "arm_mul_mla.json.bin"					MULTIPLY
@@ -4520,7 +4526,7 @@ void CPU::runIndividualTests()
 // this function is for running the individual ARM + THUMB single instruction tests, ensuring every single bound is checked	for the most critical instructions
 {
 	//loads the single test file in (each is composed of 5000 individual tests on the one instruction)
-	const char* str = "arm_msr_reg.json.bin";
+	const char* str = "arm_mul_mla.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -4639,7 +4645,7 @@ void CPU::runIndividualTests()
 		////////////
 
 		armInstr decoded = decodeArm(opcode);
-		if (tNum  >=0 )//&& (((decoded.raw >> 12) & 0b1111111111) == 0b1010001111) || (((decoded.raw >> 12) & 0b1111111111) == 0b1010011111) ) // jtest TESTNG 
+		if (tNum  >=0 && decoded.type == armOperation::ARM_MLA ) //jtest TESTNG 
 			//12 24 27 28
 		{ 
 			//armInstr decoded = decodeArm(opcode);
