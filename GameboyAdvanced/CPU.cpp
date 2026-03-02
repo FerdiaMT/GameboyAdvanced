@@ -1517,14 +1517,61 @@ inline int CPU::opA_MLA(armInstr instr)
 //				      MULTIPLY LONG and MULT-ACC  LONG s/u        		//
 //////////////////////////////////////////////////////////////////////////
 
-inline int CPU::opA_UMULL(armInstr instr)
+inline int CPU::opA_UMULL(armInstr instr) // unsigned mull (multiply long)
 {
-	return 1;
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
+	pc += 4;
+	uint32_t rm = (instr.rm == 15) ? pc + 4 : reg[instr.rm];
+	uint32_t rs = (instr.rs == 15) ? pc + 4 : reg[instr.rs];
+
+	uint64_t res = (static_cast<uint64_t>(rm) * static_cast<uint64_t>(rs));
+	reg[instr.rn] = res & 0xFFFFFFFF;
+	reg[instr.rd] = (res >> 32) & 0xFFFFFFFF;
+	if (instr.S)
+	{
+		N = (res >> 63) & 1;
+		Z = (res == 0);
+	}
+
+	uint8_t m = 0;
+	if ((rs & 0xFFFFFF00) == 0 || (rs & 0xFFFFFF00) == 0xFFFFFF00) m = 1;
+	else if ((rs & 0xFFFF0000) == 0 || (rs & 0xFFFF0000) == 0xFFFF0000) m = 2;
+	else if ((rs & 0xFF000000) == 0 || (rs & 0xFF000000) == 0xFF000000) m = 3;
+	else m = 4;
+
+	if (instr.rd == 15) pc += 4;
+	if (instr.rn == 15 && instr.rd != 15) pc += 4;
+	return m + 3;
 }
 
-inline int CPU::opA_UMLAL(armInstr instr)
+inline int CPU::opA_UMLAL(armInstr instr)// unsigned mlal
 {
-	return 1;
+	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
+	pc += 4;
+	uint32_t rm = (instr.rm == 15) ? pc + 4 : reg[instr.rm]; //+4 if pc
+	uint32_t rs = (instr.rs == 15) ? pc + 4 : reg[instr.rs]; //+4 if pc
+
+	uint64_t res = (static_cast<uint64_t>(rm) * static_cast<uint64_t>(rs));
+	uint64_t acc = ((uint64_t)reg[instr.rd] << 32) | reg[instr.rn];
+	res += acc;
+	reg[instr.rn] = res & 0xFFFFFFFF;
+	reg[instr.rd] = (res >> 32) & 0xFFFFFFFF;
+	if (instr.S)
+	{
+		N = (res >> 63) & 1;
+		Z = (res == 0);
+	}
+	// shortcutting the booths algo here
+	uint8_t m = 0;
+	if ((rs & 0xFFFFFF00) == 0 || (rs & 0xFFFFFF00) == 0xFFFFFF00) m = 1;
+	else if ((rs & 0xFFFF0000) == 0 || (rs & 0xFFFF0000) == 0xFFFF0000) m = 2;
+	else if ((rs & 0xFF000000) == 0 || (rs & 0xFF000000) == 0xFF000000) m = 3;
+	else m = 4;
+
+	if (instr.rd == 15)	pc += 8;
+	if (instr.rn == 15 && instr.rd !=15) pc += 8;
+
+	return m + 4;
 }
 
 inline int CPU::opA_SMULL(armInstr instr)
@@ -4513,7 +4560,6 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 // "arm_msr_reg.json.bin" Single test here not working, very odd
 
 // "arm_mull_mlal.json.bin"					MULTIPLY
-// "arm_mul_mla.json.bin"					MULTIPLY
 
 // "arm_swi.json.bin"						SOFTWARE INTERRUPT
 
@@ -4526,7 +4572,7 @@ void CPU::runIndividualTests()
 // this function is for running the individual ARM + THUMB single instruction tests, ensuring every single bound is checked	for the most critical instructions
 {
 	//loads the single test file in (each is composed of 5000 individual tests on the one instruction)
-	const char* str = "arm_mul_mla.json.bin";
+	const char* str = "arm_mull_mlal.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -4645,7 +4691,7 @@ void CPU::runIndividualTests()
 		////////////
 
 		armInstr decoded = decodeArm(opcode);
-		if (tNum  >=0 && decoded.type == armOperation::ARM_MLA ) //jtest TESTNG 
+		if (tNum  >=0 && decoded.type == armOperation::ARM_UMULL ) //jtest TESTNG 
 			//12 24 27 28
 		{ 
 			//armInstr decoded = decodeArm(opcode);
