@@ -313,7 +313,7 @@ uint8_t CPU::getModeIndex(mode mode) // used for register saving
 	case mode::Supervisor: return 3;
 	case mode::Abort:      return 4;
 	case mode::Undefined:  return 5;
-	default:               return 0;
+	default:               return 0xFE;
 	}
 }
 
@@ -443,22 +443,26 @@ void  CPU::setSPSR(uint32_t value)
 //CPSR helper
 void CPU::writeCPSR(uint32_t value)
 {
-	if (curMode == mode::User && ((value & 0x1F) != static_cast<uint8_t>(mode::User))) // if were in usre, and were trying to leave it
+	if (curMode == mode::User && ((value & 0x1F) != static_cast<uint8_t>(mode::User))) // if were in user, and were trying to leave it
 	{
 		CPSR = (CPSR & 0x000000FF) | (value & 0xFFFFFF00);  // update just flags, ignore rest
 		return;
 	}
-
+	if (getModeIndex((mode)(value&0x1f)) == 0XFE) // if returns fe (fail) TODO, figure out whats going on here
+	{
+		//jump up to next valid user mode ?
+		//while ((value & 0x1F) != 0x10)
+		//{
+		//	value += 1;
+		//}
+	}
 	mode newMode = CPSRbitToMode(value & 0x1F);
 
 	if (curMode != newMode) // if we should swap modes
 	{
 		switchMode(newMode);
 	}
-	else
-	{
-		CPSR = value;
-	}
+	CPSR = value;
 }
 
 
@@ -1421,6 +1425,7 @@ inline int CPU::opA_MSR(armInstr instr)
 	}
 	else // register mode
 	{
+		//if (instr.rm == 15) { reg[instr.rm] += 4; }
 		value = reg[instr.rm];
 	}
 
@@ -4515,7 +4520,7 @@ void CPU::runIndividualTests()
 // this function is for running the individual ARM + THUMB single instruction tests, ensuring every single bound is checked	for the most critical instructions
 {
 	//loads the single test file in (each is composed of 5000 individual tests on the one instruction)
-	const char* str = "arm_msr_imm.json.bin";
+	const char* str = "arm_msr_reg.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
