@@ -6,6 +6,7 @@
 #include <iostream>
 #include <string>
 #include <sstream>
+#include <assert.h>
 
 void binprintf(int v)
 {
@@ -385,7 +386,7 @@ void CPU::switchMode(mode newMode) // main function used for mode switching, cal
 
 void CPU::saveIntoSpsr(uint8_t index)
 {
-	if (index == 0) return; // if user or system
+	if (index == 0) assert(0); // if user or system
 	spsrBank[index] = CPSR;
 }
 
@@ -729,10 +730,6 @@ inline void CPU::writeALUResult(uint8_t rdI, uint32_t result, bool s)
 		returnFromException();
 		reg[15] = result; 
 	}
-	else if (rdI == 15)
-	{
-		reg[15] = result; 
-	}
 	else
 	{
 		reg[rdI] = result;
@@ -986,9 +983,10 @@ inline int CPU::opA_AND(armInstr instr)
 		}
 	}
 	uint32_t res = op1 & op2;
-	if (instr.rd == 15) res += 4;
+
 
 	if (instr.S) { setFlagNZC(res, isCarry); }
+	if (instr.rd == 15) res += 4;
 	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -1055,25 +1053,15 @@ inline int CPU::opA_ADD(armInstr instr)
 	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	uint32_t op1 = reg[instr.rn];
 	uint32_t op2 = getArmOp2(instr, nullptr);
-	
-
 	if (instr.rn == 15)
 	{
-		if (!instr.I && instr.shift_by_reg)
-		{
-			op1 += 8;
-		}
-		else
-		{
-			op1 += 4;
-		}
+		if (!instr.I && instr.shift_by_reg) op1 += 8;
+		else op1 += 4;
 	}
-
-
 	uint32_t res = op1 + op2;
 	if (instr.rd == 15) res += 4;
 
-	if (instr.S && instr.rd != 15) { setFlagsAdd(res, op1, op2); }
+	if (instr.S) { setFlagsAdd(res, op1, op2); }
 	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -1218,12 +1206,38 @@ inline int CPU::opA_RSC(armInstr instr)
 
 // test ops, for writing to flag
 
+//inline int CPU::opA_TST(armInstr instr)
+//{
+//	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
+//	bool isCarry = C;
+//	uint32_t op1 = reg[instr.rn];
+//	uint32_t op2 = getArmOp2(instr, nullptr);
+//
+//	if (instr.rn == 15)
+//	{
+//		if (!instr.I && instr.shift_by_reg)
+//		{
+//			op1 += 8;
+//		}
+//		else
+//		{
+//			op1 += 4;
+//		}
+//	}
+//
+//	uint32_t res = op1 & op2;
+//	setFlagNZC(res, isCarry);
+//	if (instr.rd == 15) res += 4;
+//	pc += 4;
+//	return dataProcessingCycleCalculator();
+//}
+
 inline int CPU::opA_TST(armInstr instr)
 {
 	if (!checkConditional(instr.cond)) { pc += 4; return 1; }
 	bool isCarry = C;
 	uint32_t op1 = reg[instr.rn];
-	uint32_t op2 = getArmOp2(instr, nullptr);
+	uint32_t op2 = getArmOp2(instr, &isCarry);
 
 	if (instr.rn == 15)
 	{
@@ -1236,14 +1250,18 @@ inline int CPU::opA_TST(armInstr instr)
 			op1 += 4;
 		}
 	}
-
 	uint32_t res = op1 & op2;
-	if (instr.rd == 15) res += 4;
 
-	if (instr.S && instr.rd != 15) { setFlagNZC(res, isCarry); }
+	N = res >> 31;
+	Z = (res == 0);
+	
+	if (instr.rd == 15) res += 4;
 	pc += 4;
+	//writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
 }
+
+
 
 inline int CPU::opA_TEQ(armInstr instr)
 {
@@ -4609,21 +4627,20 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 	return ss.str();
 }
 //TESTS TO FIX
+//CPSR / SPSR
 
-// "arm_msr_reg.json.bin" Single test here not working, very odd
+// arm_data_proc_immed
 
-// "arm_swi.json.bin"						SOFTWARE INTERRUPT
 
 //// COPROCESSOR ( last, NOT REQUIRED FOR GBA AND LIKELY IGNORED)
 // "arm_stc_ldc.json.bin"					STORE COPROCESSOR
 // "arm_cdp.json.bin"						COPROCESSOR DATA OPERATION
 // "arm_mcr_mrc.json.bin"					COPROCESSOR REGISTER TRANSFER
-
 void CPU::runIndividualTests() 
 // this function is for running the individual ARM + THUMB single instruction tests, ensuring every single bound is checked	for the most critical instructions
 {
 	//loads the single test file in (each is composed of 5000 individual tests on the one instruction)
-	const char* str = "arm_swi.json.bin";
+	const char* str = "arm_data_proc_immediate.json.bin";
 
 	FILE* f = fopen(str, "rb");
 	if (!f)
@@ -4713,7 +4730,6 @@ void CPU::runIndividualTests()
 		// The tests load into certain memory instructions
 		// during our testing, if a memory adress not listed here is read, it can be flagged as an error on the memory input address side
 		currentTransactions.clear();
-
 		int transactionCounter = 0;
 		while (transactionCounter < amtOfTransactions)
 		{
@@ -4726,7 +4742,6 @@ void CPU::runIndividualTests()
 			fread(&trans.access, 4, 1, f);
 			currentTransactions.push_back(trans);
 			transactionCounter++;
-			
 		}
 		uint32_t junkArr2[3];
 		fread(&junkArr2, 4, 2, f);
@@ -4742,7 +4757,7 @@ void CPU::runIndividualTests()
 		////////////
 
 		armInstr decoded = decodeArm(opcode);
-		if (tNum >=0 ) //jtest TESTNG 
+		if (tNum >=0 && decoded.type == armOperation::ARM_TST && decoded.S == true) //jtest TESTNG 
 			//12 24 27 28
 		{ 
 			//armInstr decoded = decodeArm(opcode);
@@ -4797,22 +4812,38 @@ void CPU::runIndividualTests()
 			pc += 4; 
 
 
-			// Check results - compare ALL registers including PC
+			// Check results compares following
+			// CPSR
+			// Standard Reg
+			// FIQ reg
+			// fiq 0-6
+			// irq 0-1
+			// svc 0-1
+			// abt 0-1
+			// und 0-1
+
 			bool testPassed = true;
-
 			mode failedOnMode = curMode; // remember mode system failed on 
-			switchMode(mode::System);
 
-			if ( (CPSR & 0xF000) != (CPSR_final & 0xF000) ) // seems like random mode changes can upset this 
+
+			// cpsr spsr checks
+			if ( (CPSR ) != (CPSR_final) ) // this will be the one requiring the most inspecting
 			{
 				testPassed = false;
-				if (true)//(failuresShown < maxFailuresToShow)
-				{
-					//printf("Test %d , opcode 0x%04x, CSPR FAIL: |NZCV| CPSR: %s, CPSR_init: %s, expected CPSR: %s\n",tNum, opcode,  CPSRparser(CPSR).c_str(), CPSRparser(CPSR_init).c_str(), CPSRparser(CPSR_final).c_str() );
-					printf("Test %d FAILED, opcode:0x%08x  cur:0x%08x , expect:0x%08x , og:0x%08x , mode: %02x\n",
-						tNum, decoded.raw, CPSR, CPSR_final,CPSR_init, failedOnMode);
-				} 
+				printf("Test %d FAILED CPSR, opcode:0x%08x  cur:0x%08x , expect:0x%08x , og:0x%08x , |%s| mode: %02x\n", tNum, decoded.raw, CPSR, CPSR_final,CPSR_init, decodedStr.c_str(), failedOnMode);
+				printf("org: ");binprintf(CPSR_init);
+				printf("cur: ");binprintf(CPSR);
+				printf("exp: ");binprintf(CPSR_final);
+				printf("     ");printf("NZCV                    IFT43210\n");
 			}
+			if (spsrBank[getModeIndex(mode::FIQ)] != SPSR_init[0])			{ printf("Test %d SPSR FAIL og:%08x cr:%08x fn:%08x | FIQ\n", tNum, SPSR_init[0], spsrBank[getModeIndex(mode::FIQ)]			, SPSR_final[0]); }
+			if (spsrBank[getModeIndex(mode::Supervisor)] != SPSR_init[1])	{ printf("Test %d SPSR FAIL og:%08x cr:%08x fn:%08x | SPV\n", tNum, SPSR_init[1], spsrBank[getModeIndex(mode::Supervisor)]	, SPSR_final[1]); }
+			if (spsrBank[getModeIndex(mode::Abort)] != SPSR_init[2])		{ printf("Test %d SPSR FAIL og:%08x cr:%08x fn:%08x | ABT\n", tNum, SPSR_init[2], spsrBank[getModeIndex(mode::Abort)]		, SPSR_final[2]); }
+			if (spsrBank[getModeIndex(mode::IRQ)] != SPSR_init[3])			{ printf("Test %d SPSR FAIL og:%08x cr:%08x fn:%08x | IRQ\n", tNum, SPSR_init[3], spsrBank[getModeIndex(mode::IRQ)]			, SPSR_final[3]); }
+			if (spsrBank[getModeIndex(mode::Undefined)] != SPSR_init[4])	{ printf("Test %d SPSR FAIL og:%08x cr:%08x fn:%08x | UND\n", tNum, SPSR_init[4], spsrBank[getModeIndex(mode::Undefined)]	, SPSR_final[4]); }
+
+			// Swap mode, reg compare
+			switchMode(mode::System);
 			for (int r = 0; r < 16; r++)
 			{
 				if (reg[r] != R_final[r])
@@ -4936,6 +4967,7 @@ void CPU::runIndividualTests()
 						tNum, opcode, base_addr, r14RegBank[5], R_und_final[1], CPSRtoString(), decodedStr.c_str());
 				}
 			}
+
 			if (testPassed)
 				passed++;
 			else
