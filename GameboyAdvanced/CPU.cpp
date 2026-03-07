@@ -1088,7 +1088,7 @@ inline int CPU::opA_SUB(armInstr instr)
 	uint32_t res = op1 - op2;
 	if (instr.rd == 15) res += 4;
 
-	if (instr.S && instr.rd != 15) { setFlagsSub(res, op1, op2); }
+	if (instr.S) { setFlagsSub(res, op1, op2); }
 	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -1114,7 +1114,7 @@ inline int CPU::opA_ADC(armInstr instr)
 	uint32_t res = op1 + op2 + C;
 	if (instr.rd == 15) res += 4;
 
-	if (instr.S && instr.rd != 15) { setFlagsAdd(res, op1, op2); }
+	if (instr.S) { setFlagsAdd(res, op1, op2); }
 	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -1142,7 +1142,7 @@ inline int CPU::opA_SBC(armInstr instr)
 	uint32_t res = op1 - op2 - 1 + C;
 	if (instr.rd == 15) res += 4;
 
-	if (instr.S && instr.rd != 15) { setFlagsSub(res, op1, op2); }
+	if (instr.S) { setFlagsSub(res, op1, op2); }
 	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -1171,7 +1171,7 @@ inline int CPU::opA_RSB(armInstr instr)
 	uint32_t res = op2 -op1 ;
 	if (instr.rd == 15) res += 4;
 
-	if (instr.S && instr.rd != 15) { setFlagsSub(res, op2, op1); }
+	if (instr.S) { setFlagsSub(res, op2, op1); }
 	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -1198,7 +1198,7 @@ inline int CPU::opA_RSC(armInstr instr)
 	uint32_t res = op2  - op1 - 1 + C;
 	if (instr.rd == 15) res += 4;
 
-	if (instr.S && instr.rd != 15) { setFlagsSub(res, op2, op1); }
+	if (instr.S) { setFlagsSub(res, op2, op1); }
 	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -1255,7 +1255,7 @@ inline int CPU::opA_TST(armInstr instr)
 	N = res >> 31;
 	Z = (res == 0);
 	
-	if (instr.rd == 15) res += 4;
+	if (instr.rd) res += 4;
 	pc += 4;
 	//writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -1284,7 +1284,7 @@ inline int CPU::opA_TEQ(armInstr instr)
 	uint32_t res = op1 ^ op2;
 	if (instr.rd == 15) res += 4;
 
-	if (instr.S && instr.rd != 15) { setFlagNZC(res, isCarry); }
+	setFlagNZC(res, isCarry);
 	pc += 4;
 	return dataProcessingCycleCalculator();
 }
@@ -1309,7 +1309,7 @@ inline int CPU::opA_CMP(armInstr instr)
 	uint32_t res = op1 - op2;
 	if (instr.rd == 15) res += 4;
 
-	if (instr.S && instr.rd != 15) { setFlagsSub(res, op1, op2); }
+	setFlagsSub(res, op1, op2);
 
 	pc += 4;
 
@@ -1336,7 +1336,7 @@ inline int CPU::opA_CMN(armInstr instr)
 	uint32_t res = op1 + op2;
 	if (instr.rd == 15) res += 4;
 
-	if (instr.S && instr.rd != 15) { setFlagsAdd(res, op1, op2); }
+	if (instr.S) { setFlagsAdd(res, op1, op2); }
 	pc += 4;
 	return dataProcessingCycleCalculator();
 }
