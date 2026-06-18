@@ -1,0 +1,1 @@
+/usr/bin/c++ -Wl,--dependency-file=CMakeFiles/GBA.dir/link.d CMakeFiles/GBA.dir/Bus.cpp.o CMakeFiles/GBA.dir/CPU.cpp.o CMakeFiles/GBA.dir/DebuggerCPU.cpp.o CMakeFiles/GBA.dir/GBA.cpp.o CMakeFiles/GBA.dir/Main.cpp.o CMakeFiles/GBA.dir/PPU.cpp.o -o GBA

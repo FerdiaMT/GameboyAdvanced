@@ -1,7 +1,7 @@
 #pragma once
 #include "CPU.h"
 #include "Bus.h"
-#include "DebuggerCPU.h";
+#include "DebuggerCPU.h"
 
 class GBA
 {

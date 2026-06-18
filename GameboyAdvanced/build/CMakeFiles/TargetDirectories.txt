@@ -1,0 +1,3 @@
+/home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/build/CMakeFiles/GBA.dir
+/home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/build/CMakeFiles/edit_cache.dir
+/home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/build/CMakeFiles/rebuild_cache.dir

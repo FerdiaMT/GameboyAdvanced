@@ -7,6 +7,7 @@
 #include <string>
 #include <sstream>
 #include <assert.h>
+#include <vector>
 
 void binprintf(int v)
 {
@@ -4468,9 +4469,9 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 		}
 
 		if (instr.type == armOperation::ARM_LDR)
-			ss << "    | " << regStr(instr.rd) << " = [" << regStr(instr.rn) << " } offset]";
+			ss << "    | " << regStr(instr.rd) << " = [" << regStr(instr.rn) << " ï¿½} offset]";
 		else
-			ss << "    | [" << regStr(instr.rn) << " } offset] = " << regStr(instr.rd);
+			ss << "    | [" << regStr(instr.rn) << " ï¿½} offset] = " << regStr(instr.rd);
 		break;
 	}
 
@@ -4508,9 +4509,9 @@ std::string CPU::armToStr(CPU::armInstr& instr)
 
 		bool isLoad = (idx == 0 || idx == 2 || idx == 3);
 		if (isLoad)
-			ss << "    | " << regStr(instr.rd) << " = [" << regStr(instr.rn) << " } offset]";
+			ss << "    | " << regStr(instr.rd) << " = [" << regStr(instr.rn) << " ï¿½} offset]";
 		else
-			ss << "    | [" << regStr(instr.rn) << " } offset] = " << regStr(instr.rd);
+			ss << "    | [" << regStr(instr.rn) << " ï¿½} offset] = " << regStr(instr.rd);
 		break;
 	}
 

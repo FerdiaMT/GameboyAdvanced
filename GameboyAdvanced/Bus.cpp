@@ -1,7 +1,8 @@
 #define _CRT_SECURE_NO_WARNINGS
 
 #include "Bus.h"
-
+#include <cstdio>
+#include <cstring>
 
 Bus::Bus()
 {

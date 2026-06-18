@@ -15,7 +15,7 @@ GBA::GBA(): cpu(&bus) //, debuggerCPU(&cpu)
 {
 	if (!bus.loadROM(rom, 0x00000000))
 	{
-		printf("error with loading the binary tester");
+		printf("error with loading the binary tester\n");
 		return;
 	}
 
