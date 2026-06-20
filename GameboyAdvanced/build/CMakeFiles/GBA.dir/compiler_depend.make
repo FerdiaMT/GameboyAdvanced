@@ -163,6 +163,9 @@ CMakeFiles/GBA.dir/Bus.cpp.o: /home/ferdia/Documents/WA0_7/GameboyAdvanced/Gameb
 CMakeFiles/GBA.dir/CPU.cpp.o: /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/CPU.cpp \
   /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/Bus.h \
   /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/CPU.h \
+  /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/CPUTypes.h \
+  /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/DebuggerCPU.h \
+  /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/Decoder.h \
   /usr/include/alloca.h \
   /usr/include/asm-generic/bitsperlong.h \
   /usr/include/asm-generic/errno-base.h \
@@ -407,7 +410,9 @@ CMakeFiles/GBA.dir/CPU.cpp.o: /home/ferdia/Documents/WA0_7/GameboyAdvanced/Gameb
 CMakeFiles/GBA.dir/DebuggerCPU.cpp.o: /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/DebuggerCPU.cpp \
   /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/Bus.h \
   /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/CPU.h \
+  /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/CPUTypes.h \
   /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/DebuggerCPU.h \
+  /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/Decoder.h \
   /usr/include/alloca.h \
   /usr/include/asm-generic/bitsperlong.h \
   /usr/include/asm-generic/errno-base.h \
@@ -1193,6 +1198,8 @@ CMakeFiles/GBA.dir/Bus.cpp.o:
 
 /usr/include/c++/15/x86_64-redhat-linux/bits/messages_members.h:
 
+/usr/include/c++/15/locale:
+
 /usr/include/c++/15/iosfwd:
 
 /usr/include/c++/15/ext/type_traits.h:
@@ -1427,10 +1434,6 @@ CMakeFiles/GBA.dir/GBA.cpp.o:
 
 /usr/include/asm/posix_types_64.h:
 
-/usr/include/asm/posix_types.h:
-
-/usr/include/bits/time.h:
-
 /usr/include/bits/types/__mbstate_t.h:
 
 /usr/include/bits/stdio_lim.h:
@@ -1609,6 +1612,16 @@ CMakeFiles/GBA.dir/PPU.cpp.o:
 
 /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/CPU.h:
 
+/home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/CPUTypes.h:
+
+/home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/DebuggerCPU.h:
+
+/usr/include/asm/posix_types.h:
+
+/usr/include/bits/time.h:
+
+/home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/Decoder.h:
+
 /usr/include/alloca.h:
 
 /usr/include/asm-generic/errno.h:
@@ -1703,8 +1716,6 @@ CMakeFiles/GBA.dir/PPU.cpp.o:
 
 /usr/include/c++/15/string_view:
 
-/usr/include/c++/15/locale:
-
 /usr/include/bits/endian.h:
 
 /usr/include/c++/15/system_error:
@@ -1726,8 +1737,6 @@ CMakeFiles/GBA.dir/PPU.cpp.o:
 /usr/include/errno.h:
 
 /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/DebuggerCPU.cpp:
-
-/home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/DebuggerCPU.h:
 
 /usr/include/c++/15/x86_64-redhat-linux/bits/c++locale.h:
 

@@ -165,6 +165,9 @@ CMakeFiles/GBA.dir/CPU.cpp.o
  /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/CPU.cpp
  /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/Bus.h
  /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/CPU.h
+ /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/CPUTypes.h
+ /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/DebuggerCPU.h
+ /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/Decoder.h
  /usr/include/alloca.h
  /usr/include/asm-generic/bitsperlong.h
  /usr/include/asm-generic/errno-base.h
@@ -410,7 +413,9 @@ CMakeFiles/GBA.dir/DebuggerCPU.cpp.o
  /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/DebuggerCPU.cpp
  /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/Bus.h
  /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/CPU.h
+ /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/CPUTypes.h
  /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/DebuggerCPU.h
+ /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/Decoder.h
  /usr/include/alloca.h
  /usr/include/asm-generic/bitsperlong.h
  /usr/include/asm-generic/errno-base.h

@@ -164,8 +164,11 @@ CMakeFiles/GBA.dir/CPU.cpp.o: \
  /usr/include/c++/15/bits/basic_ios.tcc /usr/include/c++/15/ostream \
  /usr/include/c++/15/bits/ostream.h /usr/include/c++/15/bits/ostream.tcc \
  /usr/include/c++/15/bits/istream.tcc \
- /usr/include/c++/15/bits/sstream.tcc /usr/include/c++/15/iostream \
- /usr/include/assert.h /usr/include/c++/15/vector \
- /usr/include/c++/15/bits/stl_vector.h \
+ /usr/include/c++/15/bits/sstream.tcc \
+ /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/Decoder.h \
+ /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/DebuggerCPU.h \
+ /home/ferdia/Documents/WA0_7/GameboyAdvanced/GameboyAdvanced/include/CPUTypes.h \
+ /usr/include/c++/15/iostream /usr/include/assert.h \
+ /usr/include/c++/15/vector /usr/include/c++/15/bits/stl_vector.h \
  /usr/include/c++/15/bits/stl_bvector.h \
  /usr/include/c++/15/bits/vector.tcc
