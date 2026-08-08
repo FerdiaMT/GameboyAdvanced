@@ -1,21 +1,23 @@
-This is my current side project im doing for fun
+Fully working ISS for the ARM7TDMI chip
 
-Right now, i am just working on getting the CPU working (ARM7TDMI) which is proving itself to be a challenge.
+Uses a RTL verilog with a testbench to verify instruction behavior w/ built in random program generator
 
-I currently have all the THUMB instructions fully working and tested
+## Build flow:
 
-### UPDATE:
-About 80% of arm instructions are implemented, just missing test suite fully passing on following now
-- arm_cdp					
-- arm_ldrsb_ldrsh
-- arm_mcr_mrc	
-- arm_mrs
-- arm_msr_imm	
-- arm_msr_reg	
-- arm_mul_mla	
-- arm_mull_mlal
-- arm_stc_ldc
-- arm_swi			
-- arm_swp
+```sh
+cmake --preset debug
+cmake --build --preset debug
+```
 
-so basically most software interupt handling, multiplying and a few load store instrs
+You can then run the object ./GBA, passing in  your desired ARM7 hex file
+
+### Tests:
+
+The model contains tests for ARM and THUMB mode in the cpu
+There is a collection of "common behavior" tests written in C, which are compiled into arm7 machine code
+
+You can run the tests using 
+
+```sh
+ctest --preset debug -j 4 
+```
