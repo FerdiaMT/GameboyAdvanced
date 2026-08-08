@@ -80,7 +80,7 @@ class CPU
 		}
 	}
 
-	bool runIndividualTests(const char* fixturePath);
+	bool runIndividualTests(const char* fixturePath, bool isThumbSst);
 	void runThumbTestsEXTRADEBUG();
 };
 }

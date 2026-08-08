@@ -38,6 +38,8 @@ public:
 	uint8_t read8(uint32_t addr, bool bReadOnly = false);
 	uint16_t read16(uint32_t addr, bool bReadOnly = false);
 	uint32_t read32(uint32_t addr, bool bReadOnly = false);
+	uint16_t fetch16(uint32_t addr);
+	uint32_t fetch32(uint32_t addr);
 
 	void write8(uint32_t addr, uint8_t data);
 	void write16(uint32_t addr, uint16_t data);
@@ -94,4 +96,3 @@ public:
 	uint32_t r13RegBank[6];  // individual SP for everone except usr/sys which share
 	uint32_t r14RegBank[6]; // individual LR for everone except usr/sys which share
 	uint32_t spsrBank[6]; // individual LR for everone except usr/sys have 0 , 0 IS SET TO DEADBEEF
-

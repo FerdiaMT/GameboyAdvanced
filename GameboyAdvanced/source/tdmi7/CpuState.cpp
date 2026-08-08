@@ -159,11 +159,13 @@ void CPU::saveIntoSpsr(uint8_t index)
 // excpetion handling
 void CPU::enterException(CPU::mode newMode, uint32_t vectorAddr, uint32_t returnAddr)
 {
+	const uint32_t previousCpsr = CPSR;
 	switchMode(newMode); // switch the reg bankings , swaps curMode
 
 	uint8_t newModeIndex = getModeIndex(curMode); // new modes index for switching
 
-	saveIntoSpsr(newModeIndex); // saves the current CPSR into the bank
+	// SPSR captures the caller's CPSR, before switchMode updates the mode bits.
+	spsrBank[newModeIndex] = previousCpsr;
 
 	//EXTRA FOR EXCEPTION HANDLING
 	CPSR |= 0x80;  // Disable IRQ
@@ -208,6 +210,9 @@ void  CPU::setSPSR(uint32_t value)
 //CPSR helper
 void CPU::writeCPSR(uint32_t value)
 {
+	// ARM7TDMI implements only modes whose M[4] bit is set.  Writes to CPSR
+	// therefore read back with that bit high, including otherwise invalid modes.
+	value |= 0x10;
 	if (curMode == mode::User && ((value & 0x1F) != static_cast<uint8_t>(mode::User))) // if were in user, and were trying to leave it
 	{
 		CPSR = (CPSR & 0x000000FF) | (value & 0xFFFFFF00);  // update just flags, ignore rest

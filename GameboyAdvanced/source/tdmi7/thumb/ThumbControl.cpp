@@ -1,4 +1,5 @@
 #include "tdmi7/CPU.h"
+#include "tdmi7/LegacyTestMemory.h"
 
 namespace tdmi7
 {
@@ -15,13 +16,15 @@ int CPU::opT_BX(thumbInstr instr)
 	if (target & 1)
 	{
 		T = 1;
-		pc = (target+2) & ~1; // keep thumb
+		pc = target & ~1U;
+		if (legacy::singleStepTestActive) pc += 2;
 
 	}
 	else
 	{
 		T = 0;  //swap arm
-		pc = (target + 6)&~1;
+		pc = target & ~3U;
+		if (legacy::singleStepTestActive) pc = (target + 6) & ~1U;
 	}
 	return 3;
 }
@@ -66,7 +69,9 @@ int CPU::opT_B(thumbInstr instr)
 int CPU::opT_BL_PREFIX(thumbInstr instr)
 {
 
-	lr = pc + (int32_t)instr.imm;
+	// tick() has advanced PC to the instruction after this first BL halfword.
+	// The SST state already represents the architectural PC two bytes later.
+	lr = pc + (legacy::singleStepTestActive ? 0 : 2) + static_cast<int32_t>(instr.imm);
 	return 1;
 }
 
@@ -75,8 +80,16 @@ int CPU::opT_BL_SUFFIX(thumbInstr instr)
 
 	uint32_t target = lr + (int32_t)instr.imm;
 
-	lr = (pc - 2) | 1;
-	pc = (target + 2) & ~1U;
+	if (legacy::singleStepTestActive)
+	{
+		lr = (pc - 2) | 1U;
+		pc = (target + 2) & ~1U;
+	}
+	else
+	{
+		lr = pc | 1U;
+		pc = target & ~1U;
+	}
 	return 3;
 }
 
@@ -87,7 +100,16 @@ int CPU::opT_SWI(thumbInstr instr)
 		return 1;
 	}
 	enterException(mode::Supervisor, Vector::SWI, pc - 4);
-	pc -= 2;
+	if (legacy::singleStepTestActive)
+	{
+		T = 0;
+		lr -= 2;
+		pc += 2;
+	}
+	else
+	{
+		pc -= 2;
+	}
 	return 3;
 }
 

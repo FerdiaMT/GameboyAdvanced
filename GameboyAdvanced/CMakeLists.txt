@@ -53,12 +53,20 @@ include(CTest)
 if(BUILD_TESTING)
     add_executable(GBA_regression_tests source/RegressionTests.cpp)
     target_link_libraries(GBA_regression_tests PRIVATE gba_core)
+    add_executable(GBA_timing_trace_tests tests/CpuTimingTraceTests.cpp)
+    target_link_libraries(GBA_timing_trace_tests PRIVATE gba_core)
+    add_executable(arm7_differential_iss tests/differential/Arm7DifferentialIss.cpp)
+    target_link_libraries(arm7_differential_iss PRIVATE gba_core)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(GBA_regression_tests PRIVATE -Wall -Wextra)
+        target_compile_options(GBA_timing_trace_tests PRIVATE -Wall -Wextra)
+        target_compile_options(arm7_differential_iss PRIVATE -Wall -Wextra)
     endif()
 
     add_test(NAME command_help COMMAND GBA --help)
     add_test(NAME instruction_regressions COMMAND GBA_regression_tests)
+    add_test(NAME cpu_timing_traces COMMAND GBA_timing_trace_tests)
+    set_tests_properties(cpu_timing_traces PROPERTIES LABELS "cpu;timing")
 
     add_test(
         NAME raw_instruction_test_build
@@ -162,6 +170,49 @@ if(BUILD_TESTING)
         endif()
     endforeach()
 
+    foreach(thumb_sst_fixture IN ITEMS
+        thumb_add_cmp_mov_hi
+        thumb_add_sp_or_pc
+        thumb_add_sub
+        thumb_add_sub_sp
+        thumb_b
+        thumb_bcc
+        thumb_bl_blx_prefix
+        thumb_bl_suffix
+        thumb_bx
+        thumb_data_proc
+        thumb_ldm_stm
+        thumb_ldr_pc_rel
+        thumb_ldr_str_imm_offset
+        thumb_ldr_str_reg_offset
+        thumb_ldr_str_sp_rel
+        thumb_ldrb_strb_imm_offset
+        thumb_ldrh_strh_imm_offset
+        thumb_ldrh_strh_reg_offset
+        thumb_ldrsb_strb_reg_offset
+        thumb_ldrsh_ldrsb_reg_offset
+        thumb_lsl_lsr_asr
+        thumb_mov_cmp_add_sub
+        thumb_push_pop
+        thumb_swi
+        thumb_undefined_bcc
+    )
+        set(thumb_sst_path "${CMAKE_SOURCE_DIR}/bin/${thumb_sst_fixture}.json.bin")
+        if(EXISTS "${thumb_sst_path}")
+            add_test(
+                NAME THUMB::SST::${thumb_sst_fixture}
+                COMMAND $<TARGET_FILE:GBA> test thumb ${thumb_sst_path}
+            )
+            set_tests_properties(THUMB::SST::${thumb_sst_fixture} PROPERTIES
+                WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+                LABELS "thumb;thumb-sst"
+                TIMEOUT 120
+            )
+        else()
+            message(STATUS "Thumb SST fixture not found; skipping ${thumb_sst_fixture}")
+        endif()
+    endforeach()
+
     foreach(raw_thumb_c_test IN ITEMS
         c_add_cmp
         c_loop_sum
@@ -192,11 +243,36 @@ if(BUILD_TESTING)
         )
     endforeach()
 
-    add_test(NAME legacy_thumb_instruction_tests COMMAND GBA test thumb)
+    add_test(NAME legacy_thumb_instruction_tests COMMAND $<TARGET_FILE:GBA> test thumb)
     set_tests_properties(legacy_thumb_instruction_tests PROPERTIES
-        DISABLED TRUE
-        LABELS legacy
+        LABELS "legacy;thumb"
     )
+
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    find_program(IVERILOG_EXECUTABLE iverilog)
+    find_program(VVP_EXECUTABLE vvp)
+    if(Python3_Interpreter_FOUND AND IVERILOG_EXECUTABLE AND VVP_EXECUTABLE)
+        set(ARM7_DIFFERENTIAL_TIMEOUT 120)
+        if(DEFINED ENV{ARM7_DIFFERENTIAL_TIMEOUT})
+            set(ARM7_DIFFERENTIAL_TIMEOUT "$ENV{ARM7_DIFFERENTIAL_TIMEOUT}")
+        endif()
+        add_test(
+            NAME ARM::differential_reference
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/differential/run_arm7_differential.py
+                --iss $<TARGET_FILE:arm7_differential_iss>
+                --reference-dir ${CMAKE_SOURCE_DIR}/third_party/arm7-reference
+                --testbench ${CMAKE_SOURCE_DIR}/tests/differential/arm7_reference_tb.v
+                --iverilog ${IVERILOG_EXECUTABLE}
+                --vvp ${VVP_EXECUTABLE}
+        )
+        set_tests_properties(ARM::differential_reference PROPERTIES
+            LABELS "arm;differential;rtl"
+            TIMEOUT ${ARM7_DIFFERENTIAL_TIMEOUT}
+            WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        )
+    else()
+        message(STATUS "ARM7 differential test disabled: requires Python 3, iverilog, and vvp")
+    endif()
     add_custom_target(check
         COMMAND ${CMAKE_CTEST_COMMAND} --output-on-failure
         DEPENDS GBA

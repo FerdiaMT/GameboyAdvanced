@@ -28,12 +28,33 @@ describe.
   execution. The older Thumb diagnostic harness lives in `tests/legacy/` and
   is built as the separate `gba_legacy_diagnostics` target.
 
-The ARM single-step-test (SST) fixtures are prebuilt files in `bin/` named
-`arm_*.json.bin`. Each fixture is executed by `GBA test arm <fixture>` and is
-registered automatically with CTest when present. Run the group with:
+The ARM and Thumb single-step-test (SST) fixtures are prebuilt files in `bin/`
+named `arm_*.json.bin` and `thumb_*.json.bin`. Each fixture is executed by
+`GBA test arm <fixture>` or `GBA test thumb <fixture>` and is registered
+automatically with CTest when present. Run either group with:
 
 ```bash
 ctest --preset debug -L arm-sst --output-on-failure
+ctest --preset debug -L thumb-sst --output-on-failure
+```
+
+## Timing trace baseline
+
+`Bus` has opt-in CPU timing instrumentation for deterministic tests.  With it
+enabled, each CPU tick records instruction fetches, data reads/writes, and any
+remaining internal cycles.  Every external access is classified as sequential
+or non-sequential and charged using `Bus::CpuTimingConfig`.
+
+The trace supports both flat configurable N/S costs and a GBA region model.
+The latter covers BIOS, EWRAM, IWRAM, I/O, palette/VRAM/OAM, Game Pak wait
+state regions, SRAM, WAITCNT, 16-bit Game Pak bus splitting, and the forced
+non-sequential access at each Game Pak 128 KiB boundary. `cpu_timing_traces`
+exercises this contract for ARM and Thumb fetches, loads, stores, and a branch
+pipeline refill. It does not yet model prefetch or DMA/PPU contention. Run it
+with:
+
+```bash
+ctest --preset debug -L timing --output-on-failure
 ```
 
 Keep behavior-preserving moves separate from instruction-correctness changes:

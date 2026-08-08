@@ -1131,7 +1131,7 @@ bool testBX(CPU& cpu)
 bool testLDR_PC(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
 
     // Calculate target address: (PC + 2 + 2) & ~2 + offset
     uint32_t targetAddr = 0x0800010C;
@@ -1544,7 +1544,7 @@ bool testLDR_SP(CPU& cpu)
 bool testADD_PC(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
 
     CPU::thumbInstr instr;
     instr.rd = 0;
@@ -1572,7 +1572,7 @@ bool testADD_SP_IMM(CPU& cpu)
     instr.rd = 0;
     instr.imm = 0x10;
 
-    cpu.opT_ADD_SP_IMM(instr);
+    cpu.opT_ADD_SP(instr);
 
     if (cpu.reg[0] != 0x03007F10)
     {
@@ -1595,7 +1595,7 @@ bool testADD_SP(CPU& cpu)
     CPU::thumbInstr instr;
     instr.imm = 0x10;
 
-    cpu.opT_ADD_SP(instr);
+    cpu.opT_ADD_SP_IMM(instr);
 
     if (cpu.reg[13] != 0x03007F10)
     {
@@ -1615,7 +1615,7 @@ bool testSUB_SP(CPU& cpu)
     instr.imm = 0x10;
     instr.imm = -(int32_t)instr.imm;
 
-    cpu.opT_ADD_SP(instr);
+    cpu.opT_ADD_SP_IMM(instr);
 
     if (cpu.reg[13] != 0x03007F00)
     {
@@ -1823,7 +1823,7 @@ bool testPUSH_All(CPU& cpu)
 bool testBEQ_Taken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.Z = 1;  // Condition true
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_B_COND;
@@ -1841,7 +1841,7 @@ bool testBEQ_Taken(CPU& cpu)
 bool testBEQ_NotTaken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.Z = 0;  // Condition false
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_B_COND;
@@ -1861,7 +1861,7 @@ bool testBEQ_NotTaken(CPU& cpu)
 bool testBNE_Taken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.Z = 0;  // Condition true
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_B_COND;
@@ -1879,7 +1879,7 @@ bool testBNE_Taken(CPU& cpu)
 bool testBNE_NotTaken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.Z = 1;  // Condition false
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_B_COND;
@@ -1899,7 +1899,7 @@ bool testBNE_NotTaken(CPU& cpu)
 bool testBCS_Taken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.C = 1;  // Condition true
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_B_COND;
@@ -1917,7 +1917,7 @@ bool testBCS_Taken(CPU& cpu)
 bool testBCS_NotTaken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.C = 0;  // Condition false
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_B_COND;
@@ -1937,7 +1937,7 @@ bool testBCS_NotTaken(CPU& cpu)
 bool testBCC_Taken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.C = 0;  // Condition true
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_B_COND;
@@ -1956,7 +1956,7 @@ bool testBCC_Taken(CPU& cpu)
 bool testBMI_Taken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.N = 1;  // Condition true
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_B_COND;
@@ -1975,7 +1975,7 @@ bool testBMI_Taken(CPU& cpu)
 bool testBPL_Taken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.N = 0;  // Condition true
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_B_COND;
@@ -1994,7 +1994,7 @@ bool testBPL_Taken(CPU& cpu)
 bool testBVS_Taken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.V = 1;  // Condition true
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_B_COND;
@@ -2013,7 +2013,7 @@ bool testBVS_Taken(CPU& cpu)
 bool testBVC_Taken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.V = 0;  // Condition true
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_B_COND;
@@ -2032,7 +2032,7 @@ bool testBVC_Taken(CPU& cpu)
 bool testBHI_Taken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.C = 1;
     cpu.Z = 0;  // Condition true
     CPU::thumbInstr instr;
@@ -2051,7 +2051,7 @@ bool testBHI_Taken(CPU& cpu)
 bool testBHI_NotTaken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.C = 1;
     cpu.Z = 1;  // Condition false (Z=1 means equal)
     CPU::thumbInstr instr;
@@ -2072,7 +2072,7 @@ bool testBHI_NotTaken(CPU& cpu)
 bool testBLS_Taken_Carry(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.C = 0;  // Condition true (carry clear)
     cpu.Z = 0;
     CPU::thumbInstr instr;
@@ -2091,7 +2091,7 @@ bool testBLS_Taken_Carry(CPU& cpu)
 bool testBLS_Taken_Zero(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.C = 1;
     cpu.Z = 1;  // Condition true (zero set)
     CPU::thumbInstr instr;
@@ -2110,7 +2110,7 @@ bool testBLS_Taken_Zero(CPU& cpu)
 bool testBLS_NotTaken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.C = 1;  // Both conditions false
     cpu.Z = 0;
     CPU::thumbInstr instr;
@@ -2131,7 +2131,7 @@ bool testBLS_NotTaken(CPU& cpu)
 bool testBGE_Taken_BothSet(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.N = 1;
     cpu.V = 1;  // N=V, condition true
     CPU::thumbInstr instr;
@@ -2150,7 +2150,7 @@ bool testBGE_Taken_BothSet(CPU& cpu)
 bool testBGE_Taken_BothClear(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.N = 0;
     cpu.V = 0;  // N=V, condition true
     CPU::thumbInstr instr;
@@ -2169,7 +2169,7 @@ bool testBGE_Taken_BothClear(CPU& cpu)
 bool testBGE_NotTaken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.N = 1;
     cpu.V = 0;  // N!=V, condition false
     CPU::thumbInstr instr;
@@ -2190,7 +2190,7 @@ bool testBGE_NotTaken(CPU& cpu)
 bool testBLT_Taken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.N = 1;
     cpu.V = 0;  // N!=V, condition true
     CPU::thumbInstr instr;
@@ -2209,7 +2209,7 @@ bool testBLT_Taken(CPU& cpu)
 bool testBLT_NotTaken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.N = 1;
     cpu.V = 1;  // N=V, condition false
     CPU::thumbInstr instr;
@@ -2230,7 +2230,7 @@ bool testBLT_NotTaken(CPU& cpu)
 bool testBGT_Taken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.Z = 0;
     cpu.N = 1;
     cpu.V = 1;  // Z=0 and N=V, condition true
@@ -2250,7 +2250,7 @@ bool testBGT_Taken(CPU& cpu)
 bool testBGT_NotTaken_Zero(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.Z = 1;  // Zero set, condition false
     cpu.N = 1;
     cpu.V = 1;
@@ -2271,7 +2271,7 @@ bool testBGT_NotTaken_Zero(CPU& cpu)
 bool testBGT_NotTaken_NV(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.Z = 0;
     cpu.N = 1;
     cpu.V = 0;  // N!=V, condition false
@@ -2293,7 +2293,7 @@ bool testBGT_NotTaken_NV(CPU& cpu)
 bool testBLE_Taken_Zero(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.Z = 1;  // Condition true (zero set)
     cpu.N = 0;
     cpu.V = 0;
@@ -2313,7 +2313,7 @@ bool testBLE_Taken_Zero(CPU& cpu)
 bool testBLE_Taken_NV(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.Z = 0;
     cpu.N = 1;
     cpu.V = 0;  // N!=V, condition true
@@ -2333,7 +2333,7 @@ bool testBLE_Taken_NV(CPU& cpu)
 bool testBLE_NotTaken(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.Z = 0;  // Both conditions false
     cpu.N = 1;
     cpu.V = 1;
@@ -2355,7 +2355,7 @@ bool testBLE_NotTaken(CPU& cpu)
 bool testBEQ_Backward(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.Z = 1;
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_B_COND;
@@ -2375,7 +2375,7 @@ bool testBEQ_Backward(CPU& cpu)
 bool testBranch_MaxForward(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.Z = 1;
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_B_COND;
@@ -2395,7 +2395,7 @@ bool testBranch_MaxForward(CPU& cpu)
 bool testBranch_MaxBackward(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     cpu.Z = 1;
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_B_COND;
@@ -2418,7 +2418,7 @@ bool testBranch_MaxBackward(CPU& cpu)
 bool testB_Forward(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_B;
     instr.imm = 0x100 << 1;  // Already shifted: 512 bytes
@@ -2435,7 +2435,7 @@ bool testB_Forward(CPU& cpu)
 bool testB_Backward(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_B;
     instr.imm = -256 * 2;  // Already shifted: -512 bytes
@@ -2452,7 +2452,7 @@ bool testB_Backward(CPU& cpu)
 bool testB_MaxRange(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_B;
     instr.imm = 1023 << 1;  // Already shifted: 2046 bytes
@@ -2473,7 +2473,7 @@ bool testB_MaxRange(CPU& cpu)
 bool testBL_Prefix(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_BL_PREFIX;
     instr.imm = 0x400 << 12;  // Already shifted by 12: 0x400000
@@ -2491,7 +2491,7 @@ bool testBL_Prefix(CPU& cpu)
 bool testBL_Suffix(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000102;  // After BL prefix instruction
+    cpu.pc = 0x08000104;  // tick() has advanced past the BL suffix
     cpu.lr = 0x08400104;  // From BL prefix
     CPU::thumbInstr instr;
     instr.type = CPU::thumbOperation::THUMB_BL_SUFFIX;
@@ -2505,8 +2505,8 @@ bool testBL_Suffix(CPU& cpu)
         std::cout << "  Expected PC=0x" << std::hex << expectedPC << ", got 0x" << cpu.pc << std::dec << std::endl;
         return false;
     }
-    // LR = (oldPC + 2) | 1 = 0x08000105
-    uint32_t expectedLR = (oldPC + 2) | 1;
+    // LR is the address after the suffix, with the Thumb-state bit set.
+    uint32_t expectedLR = oldPC | 1;
     if (cpu.lr != expectedLR)
     {
         std::cout << "  Expected LR=0x" << std::hex << expectedLR << ", got 0x" << cpu.lr << std::dec << std::endl;
@@ -2518,7 +2518,7 @@ bool testBL_Suffix(CPU& cpu)
 bool testBL_NegativeOffset(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000100;
+    cpu.pc = 0x08000102;
     // First instruction: BL prefix with negative offset
     CPU::thumbInstr instr1;
     instr1.type = CPU::thumbOperation::THUMB_BL_PREFIX;
@@ -2526,7 +2526,7 @@ bool testBL_NegativeOffset(CPU& cpu)
     instr1.imm = -1 * (1 << 12);  // 0xFFFFF000
     cpu.opT_BL_PREFIX(instr1);
 
-    cpu.pc = 0x08000102;
+    cpu.pc = 0x08000104;
     CPU::thumbInstr instr2;
     instr2.type = CPU::thumbOperation::THUMB_BL_SUFFIX;
     instr2.imm = 0x400 << 1;  // Already shifted
@@ -2545,14 +2545,14 @@ bool testBL_NegativeOffset(CPU& cpu)
 bool testBL_MaxRange(CPU& cpu)
 {
     cpu.reset();
-    cpu.pc = 0x08000000;
+    cpu.pc = 0x08000002;
 
     CPU::thumbInstr instr1;
     instr1.type = CPU::thumbOperation::THUMB_BL_PREFIX;
     instr1.imm = 0x7FF << 12; 
     cpu.opT_BL_PREFIX(instr1);
 
-    cpu.pc = 0x08000002;
+    cpu.pc = 0x08000004;
     CPU::thumbInstr instr2;
     instr2.type = CPU::thumbOperation::THUMB_BL_SUFFIX;
     instr2.imm = 0x7FF << 1; 

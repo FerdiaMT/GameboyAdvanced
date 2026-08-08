@@ -1,4 +1,5 @@
 #include "tdmi7/CPU.h"
+#include "tdmi7/LegacyTestMemory.h"
 
 namespace tdmi7
 {
@@ -7,7 +8,7 @@ using namespace CPUTypes;
 int CPU::opT_MOV_IMM(thumbInstr instr)
 {
 	reg[instr.rd] = instr.imm;
-	N = instr.imm & 0x80000000;
+	N = (instr.imm >> 31) & 1U;
 	Z = instr.imm == 0;
 	return 1;
 }
@@ -94,7 +95,7 @@ int CPU::opT_LSL_IMM(thumbInstr instr)
 		C = (value >> (32 - shift)) & 1;
 		reg[instr.rd] = value << shift;
 	}
-	N = reg[instr.rd] & 0x80000000;
+	N = (reg[instr.rd] >> 31) & 1U;
 	Z = reg[instr.rd] == 0;
 	return 1;
 }
@@ -106,7 +107,7 @@ int CPU::opT_LSR_IMM(thumbInstr instr)
 	if (shift == 0) shift = 32;
 	C = (value >> (shift - 1)) & 1;
 	reg[instr.rd] = (shift == 32) ? 0 : (value >> shift);
-	N = reg[instr.rd] & 0x80000000;
+	N = (reg[instr.rd] >> 31) & 1U;
 	Z = reg[instr.rd] == 0;
 	return 1;
 }
@@ -118,7 +119,7 @@ int CPU::opT_ASR_IMM(thumbInstr instr)
 	if (shift == 0) shift = 32;
 	C = (value >> (shift - 1)) & 1;
 	reg[instr.rd] = (shift == 32) ? (value >> 31) : (value >> shift);
-	N = reg[instr.rd] & 0x80000000;
+	N = (reg[instr.rd] >> 31) & 1U;
 	Z = reg[instr.rd] == 0;
 	return 1;
 }
@@ -126,7 +127,7 @@ int CPU::opT_ASR_IMM(thumbInstr instr)
 int CPU::opT_AND_REG(thumbInstr instr)
 {
 	reg[instr.rd] = reg[instr.rd] & reg[instr.rs];
-	N = reg[instr.rd] & 0x80000000;
+	N = (reg[instr.rd] >> 31) & 1U;
 	Z = reg[instr.rd] == 0;
 	return 1;
 }
@@ -134,7 +135,7 @@ int CPU::opT_AND_REG(thumbInstr instr)
 int CPU::opT_EOR_REG(thumbInstr instr)
 {
 	reg[instr.rd] = reg[instr.rd] ^ reg[instr.rs];
-	N = reg[instr.rd] & 0x80000000;
+	N = (reg[instr.rd] >> 31) & 1U;
 	Z = reg[instr.rd] == 0;
 	return 1;
 }
@@ -158,7 +159,7 @@ int CPU::opT_LSL_REG(thumbInstr instr)
 		C = 0;
 		reg[instr.rd] = 0;
 	}
-	N = reg[instr.rd] & 0x80000000;
+	N = (reg[instr.rd] >> 31) & 1U;
 	Z = reg[instr.rd] == 0;
 	return 1;
 }
@@ -182,7 +183,7 @@ int CPU::opT_LSR_REG(thumbInstr instr)
 		C = 0;
 		reg[instr.rd] = 0;
 	}
-	N = reg[instr.rd] & 0x80000000;
+	N = (reg[instr.rd] >> 31) & 1U;
 	Z = reg[instr.rd] == 0;
 	return 1;
 }
@@ -202,7 +203,7 @@ int CPU::opT_ASR_REG(thumbInstr instr)
 		C = (value >> 31) & 1;
 		reg[instr.rd] = value >> 31;
 	}
-	N = reg[instr.rd] & 0x80000000;
+	N = (reg[instr.rd] >> 31) & 1U;
 	Z = reg[instr.rd] == 0;
 	return 1;
 }
@@ -246,7 +247,7 @@ int CPU::opT_ROR_REG(thumbInstr instr)
 			reg[instr.rd] = (reg[instr.rd] >> shift) | (reg[instr.rd] << (32 - shift));
 		}
 	}
-	N = reg[instr.rd] & 0x80000000;
+	N = (reg[instr.rd] >> 31) & 1U;
 	Z = reg[instr.rd] == 0;
 	return 1;
 }
@@ -254,7 +255,7 @@ int CPU::opT_ROR_REG(thumbInstr instr)
 int CPU::opT_TST_REG(thumbInstr instr)
 {
 	uint32_t result = reg[instr.rd] & reg[instr.rs];
-	N = result & 0x80000000;
+	N = (result >> 31) & 1U;
 	Z = result == 0;
 	return 1;
 }
@@ -289,7 +290,7 @@ int CPU::opT_CMN_REG(thumbInstr instr)
 int CPU::opT_ORR_REG(thumbInstr instr)
 {
 	reg[instr.rd] = reg[instr.rd] | reg[instr.rs];
-	N = reg[instr.rd] & 0x80000000;
+	N = (reg[instr.rd] >> 31) & 1U;
 	Z = reg[instr.rd] == 0;
 	return 1;
 }
@@ -297,7 +298,7 @@ int CPU::opT_ORR_REG(thumbInstr instr)
 int CPU::opT_MUL_REG(thumbInstr instr)
 {
 	reg[instr.rd] = reg[instr.rd] * reg[instr.rs];
-	N = reg[instr.rd] & 0x80000000;
+	N = (reg[instr.rd] >> 31) & 1U;
 	Z = reg[instr.rd] == 0;
 	return 1;
 }
@@ -305,7 +306,7 @@ int CPU::opT_MUL_REG(thumbInstr instr)
 int CPU::opT_BIC_REG(thumbInstr instr)
 {
 	reg[instr.rd] = reg[instr.rd] & ~reg[instr.rs];
-	N = reg[instr.rd] & 0x80000000;
+	N = (reg[instr.rd] >> 31) & 1U;
 	Z = reg[instr.rd] == 0;
 	return 1;
 }
@@ -313,7 +314,7 @@ int CPU::opT_BIC_REG(thumbInstr instr)
 int CPU::opT_MVN_REG(thumbInstr instr)
 {
 	reg[instr.rd] = ~reg[instr.rs];
-	N = reg[instr.rd] & 0x80000000;
+	N = (reg[instr.rd] >> 31) & 1U;
 	Z = reg[instr.rd] == 0;
 	return 1;
 }
@@ -321,7 +322,11 @@ int CPU::opT_MVN_REG(thumbInstr instr)
 int CPU::opT_ADD_HI(thumbInstr instr)
 {
 	reg[instr.rd] = reg[instr.rd] + reg[instr.rs];
-	if (instr.rd == 15) reg[15] = (reg[15] & ~1) + 2;
+	if (instr.rd == 15)
+	{
+		reg[15] &= ~1U;
+		if (legacy::singleStepTestActive) reg[15] += 2;
+	}
 
 	return 1;
 }
@@ -339,7 +344,11 @@ int CPU::opT_MOV_HI(thumbInstr instr)
 {
 	reg[instr.rd] = reg[instr.rs];
 
-	if (instr.rd == 15) reg[15] = (reg[15] & ~1) + 2;
+	if (instr.rd == 15)
+	{
+		reg[15] &= ~1U;
+		if (legacy::singleStepTestActive) reg[15] += 2;
+	}
 
 	return 1;
 }

@@ -1,4 +1,5 @@
 #include "tdmi7/CPU.h"
+#include "tdmi7/LegacyTestMemory.h"
 
 namespace tdmi7
 {
@@ -15,6 +16,12 @@ int countSetBits(uint32_t value)
 	return count;
 }
 
+uint32_t rotateWordLoad(uint32_t value, uint32_t address)
+{
+	const uint32_t rotation = (address & 3U) * 8U;
+	return rotation == 0 ? value : (value >> rotation) | (value << (32U - rotation));
+}
+
 
 //////////////////////////////////////////////////////////////////////////////////////////
 ///								    OPS                    							   ///
@@ -23,15 +30,16 @@ int CPU::opT_LDR_PC(thumbInstr instr)
 {
 	// tick() has already advanced pc by two bytes. Thumb's PC-relative base is
 	// the current instruction address plus four, rounded down to a word.
-	uint32_t address = ((pc + 2) & ~3U) + instr.imm;
-	reg[instr.rd] = read32(address);
+	const uint32_t pcBase = legacy::singleStepTestActive ? pc : pc + 2;
+	uint32_t address = (pcBase & ~3U) + instr.imm;
+	reg[instr.rd] = rotateWordLoad(read32(address), address);
 	return 3;
 }
 
 int CPU::opT_LDR_REG(thumbInstr instr)
 {
 	uint32_t address = reg[instr.rs] + reg[instr.rn];
-	reg[instr.rd] = read32(address);
+	reg[instr.rd] = rotateWordLoad(read32(address), address);
 	return 3;
 }
 
@@ -65,7 +73,7 @@ int CPU::opT_LDRH_REG(thumbInstr instr)
 	uint32_t misalignment = address & 1; // if missaligned
 	if (misalignment != 0)
 	{
-		value = (value & 0xFF) | (value & 0xFF00) << 16;
+		value = (value >> 8) | (value << 24);
 	}
 
 	reg[instr.rd] = value;
@@ -95,17 +103,8 @@ int CPU::opT_LDRSH_REG(thumbInstr instr)
 
 	if (address & 1) // if unaligned
 	{
-		value = value & 0xFF;
-
-
-		if ((value >> 7) & 1)
-		{
-			signedVal |= 0xFFFFFF00;
-		}
-		else
-		{
-			signedVal = value;
-		}
+		const int8_t byte = static_cast<int8_t>(value >> 8);
+		signedVal = static_cast<uint32_t>(static_cast<int32_t>(byte));
 
 	}
 	else
@@ -128,7 +127,7 @@ int CPU::opT_LDRSH_REG(thumbInstr instr)
 int CPU::opT_LDR_IMM(thumbInstr instr)
 {
 	uint32_t address = reg[instr.rs] + instr.imm;
-	reg[instr.rd] = read32(address);
+	reg[instr.rd] = rotateWordLoad(read32(address), address);
 	return 3;
 }
 
@@ -162,7 +161,7 @@ int CPU::opT_LDRH_IMM(thumbInstr instr)
 	uint32_t misalignment = address & 1; // if missaligned
 	if (misalignment != 0)
 	{
-		value = (value & 0xFF) | (value & 0xFF00) << 16;
+		value = (value >> 8) | (value << 24);
 	}
 
 	reg[instr.rd] = value;
@@ -178,7 +177,7 @@ int CPU::opT_STRH_IMM(thumbInstr instr)
 int CPU::opT_LDR_SP(thumbInstr instr)
 {
 	uint32_t address = sp + instr.imm;
-	reg[instr.rd] = read32(address);
+	reg[instr.rd] = rotateWordLoad(read32(address), address);
 	return 3;
 }
 
@@ -191,7 +190,8 @@ int CPU::opT_STR_SP(thumbInstr instr)
 
 int CPU::opT_ADD_PC(thumbInstr instr)
 {
-	reg[instr.rd] = (pc & ~2) + instr.imm;
+	const uint32_t pcBase = legacy::singleStepTestActive ? pc : pc + 2;
+	reg[instr.rd] = (pcBase & ~3U) + instr.imm;
 	return 1;
 }
 
@@ -236,7 +236,14 @@ int CPU::opT_POP(thumbInstr instr)
 
 	if (instr.imm == 0)
 	{
-		reg[15] = (read32(sp) ) + 2;  
+		if (legacy::singleStepTestActive)
+		{
+			reg[15] = read32(sp) + 2;
+		}
+		else
+		{
+			reg[15] = read32(sp) & ~1U;
+		}
 		sp += 0x40; 
 		return 1;
 	}
@@ -248,7 +255,11 @@ int CPU::opT_POP(thumbInstr instr)
 			reg[i] = read32(sp);
 			sp += 4;
 
-			if (i == 15) reg[15] = (reg[15]+2)&~1; // Clear bit 0 for THUMB mode
+			if (i == 15)
+			{
+				reg[15] &= ~1U;
+				if (legacy::singleStepTestActive) reg[15] += 2;
+			}
 		}
 	}
 	return 1 + countSetBits(instr.imm);

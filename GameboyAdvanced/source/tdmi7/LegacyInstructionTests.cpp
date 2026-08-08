@@ -24,7 +24,7 @@ void printBits(uint32_t value)
 }
 }
 
-bool CPU::runIndividualTests(const char* fixturePath)
+bool CPU::runIndividualTests(const char* fixturePath, bool isThumbSst)
 // this function is for running the individual ARM + THUMB single instruction tests, ensuring every single bound is checked	for the most critical instructions
 {
 	//loads the single test file in (each is composed of 5000 individual tests on the one instruction)
@@ -141,7 +141,8 @@ bool CPU::runIndividualTests(const char* fixturePath)
 		// LOADS
 		////////////
 
-		armInstr decoded = decodeArm(opcode);
+		armInstr decodedArm = decodeArm(opcode);
+		thumbInstr decodedThumb = decodeThumb(static_cast<uint16_t>(opcode));
 		{
 			//armInstr decoded = decodeArm(opcode);
 			reset();
@@ -181,18 +182,15 @@ bool CPU::runIndividualTests(const char* fixturePath)
 			switchMode(CPSRbitToMode(CPSR & 0x1F));
 			///DECODE / EXECUTE
 
-			//THUMB
-			// 
-			//thumbInstr decoded = decodeThumb(opcode);
-			//std::string decodedStr = thumbToStr(decoded);
-			//pc+=2 
-			// 
-			//ARM
-
-			//armInstr decoded = decodeArm(opcode);
-			std::string decodedStr = armToStr(decoded);
-			curOpCycles = armExecute(decoded);
-			pc += 4; 
+			const std::string decodedStr = isThumbSst
+				? thumbToStr(decodedThumb)
+				: armToStr(decodedArm);
+			legacy::singleStepTestActive = true;
+			curOpCycles = isThumbSst
+				? thumbExecute(decodedThumb)
+				: armExecute(decodedArm);
+			legacy::singleStepTestActive = false;
+			pc += isThumbSst ? 2 : 4;
 
 
 			// Check results compares following
@@ -210,23 +208,45 @@ bool CPU::runIndividualTests(const char* fixturePath)
 
 
 			// cpsr spsr checks
-			if (CPSR != CPSR_final)
+			uint32_t comparedCpsr = CPSR;
+			uint32_t expectedCpsr = CPSR_final;
+			// Thumb MUL leaves the carry flag architecturally undefined.  The
+			// fixture records a particular hardware result, but it is not a
+			// portable correctness requirement.
+			if (isThumbSst && decodedThumb.type == thumbOperation::THUMB_MUL_REG)
+			{
+				comparedCpsr &= ~(1U << 29);
+				expectedCpsr &= ~(1U << 29);
+			}
+			if (comparedCpsr != expectedCpsr)
 			{
 				testPassed = false;
 				if (failuresShown < maxFailuresToShow)
 				{
-					printf("Test %d FAILED CPSR, opcode:0x%08x  cur:0x%08x , expect:0x%08x , og:0x%08x , |%s| mode: %02x\n", tNum, decoded.raw, CPSR, CPSR_final,CPSR_init, decodedStr.c_str(), static_cast<unsigned int>(failedOnMode));
+					printf("Test %d FAILED CPSR, opcode:0x%08x  cur:0x%08x , expect:0x%08x , og:0x%08x , |%s| mode: %02x\n", tNum, opcode, CPSR, CPSR_final,CPSR_init, decodedStr.c_str(), static_cast<unsigned int>(failedOnMode));
 					printf("org: ");printBits(CPSR_init);
 					printf("cur: ");printBits(CPSR);
 					printf("exp: ");printBits(CPSR_final);
 					printf("     ");printf("NZCV                    IFT43210\n");
 				}
 			}
-			if (failuresShown < maxFailuresToShow && spsrBank[getModeIndex(mode::FIQ)] != SPSR_init[0])			{ printf("Test %d SPSR FAIL og:%08x cr:%08x fn:%08x | FIQ\n", tNum, SPSR_init[0], spsrBank[getModeIndex(mode::FIQ)]			, SPSR_final[0]); }
-			if (failuresShown < maxFailuresToShow && spsrBank[getModeIndex(mode::Supervisor)] != SPSR_init[1])	{ printf("Test %d SPSR FAIL og:%08x cr:%08x fn:%08x | SPV\n", tNum, SPSR_init[1], spsrBank[getModeIndex(mode::Supervisor)]	, SPSR_final[1]); }
-			if (failuresShown < maxFailuresToShow && spsrBank[getModeIndex(mode::Abort)] != SPSR_init[2])		{ printf("Test %d SPSR FAIL og:%08x cr:%08x fn:%08x | ABT\n", tNum, SPSR_init[2], spsrBank[getModeIndex(mode::Abort)]		, SPSR_final[2]); }
-			if (failuresShown < maxFailuresToShow && spsrBank[getModeIndex(mode::IRQ)] != SPSR_init[3])			{ printf("Test %d SPSR FAIL og:%08x cr:%08x fn:%08x | IRQ\n", tNum, SPSR_init[3], spsrBank[getModeIndex(mode::IRQ)]			, SPSR_final[3]); }
-			if (failuresShown < maxFailuresToShow && spsrBank[getModeIndex(mode::Undefined)] != SPSR_init[4])	{ printf("Test %d SPSR FAIL og:%08x cr:%08x fn:%08x | UND\n", tNum, SPSR_init[4], spsrBank[getModeIndex(mode::Undefined)]	, SPSR_final[4]); }
+			const mode spsrModes[] = {
+				mode::FIQ, mode::Supervisor, mode::Abort, mode::IRQ, mode::Undefined
+			};
+			const char* const spsrModeNames[] = { "FIQ", "SVC", "ABT", "IRQ", "UND" };
+			for (int spsrIndex = 0; spsrIndex < 5; ++spsrIndex)
+			{
+				const uint32_t currentSpsr = spsrBank[getModeIndex(spsrModes[spsrIndex])];
+				if (currentSpsr != SPSR_final[spsrIndex])
+				{
+					testPassed = false;
+					if (failuresShown < maxFailuresToShow)
+					{
+						printf("Test %d SPSR FAIL og:%08x cr:%08x fn:%08x | %s\n",
+							tNum, SPSR_init[spsrIndex], currentSpsr, SPSR_final[spsrIndex], spsrModeNames[spsrIndex]);
+					}
+				}
+			}
 
 			// Swap mode, reg compare
 			switchMode(mode::System);

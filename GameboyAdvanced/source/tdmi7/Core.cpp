@@ -108,9 +108,12 @@ bool CPU::handleTestSwi(uint32_t immediate)
 
 uint32_t CPU::tick()
 {
+	const bool timingTraceEnabled = bus->isCpuTimingTraceEnabled();
+	const size_t timingTraceStart = bus->cpuTimingTrace().size();
+
 	if (!T) // if arm mode
 	{
-		instruction = read32(pc);
+		instruction = fetch32(pc);
 		curArmInstr = decodeArm(instruction);
 
 		curOpCycles = armExecute(curArmInstr);
@@ -118,11 +121,24 @@ uint32_t CPU::tick()
 	}
 	else // if thumb mode
 	{
-		uint16_t thumbCode = read16(pc);
+		uint16_t thumbCode = fetch16(pc);
 		curThumbInstr = decodeThumb(thumbCode);
 		pc += 2;
 
 		curOpCycles = thumbExecute(curThumbInstr);
+	}
+
+	if (timingTraceEnabled)
+	{
+		// Existing handlers express the ARM7's baseline timing assuming every
+		// external access takes one cycle.  Retain the remaining internal part,
+		// then replace the external accesses with the bus's configured N/S cost.
+		const size_t externalAccesses = bus->cpuTimingExternalAccessCountSince(timingTraceStart);
+		const uint32_t internalCycles = curOpCycles > externalAccesses
+			? curOpCycles - static_cast<uint32_t>(externalAccesses)
+			: 0;
+		bus->recordCpuInternal(internalCycles);
+		curOpCycles = static_cast<uint16_t>(bus->cpuTimingCyclesSince(timingTraceStart));
 	}
 
 	cycleTotal += curOpCycles; // this could be returned and made so the ppu does this many frames too ... 

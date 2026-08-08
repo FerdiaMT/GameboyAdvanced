@@ -18,7 +18,7 @@ void printUsage(const char* program)
 {
 	std::cout << "Usage:\n"
 		<< "  " << program << " run <cartridge.gba> [--steps N] [--trace [trace-file]] [--test-swi]\n"
-		<< "  " << program << " test thumb\n"
+		<< "  " << program << " test thumb [fixture.json.bin]\n"
 		<< "  " << program << " test arm <fixture.json.bin>\n"
 		<< "  " << program << " --help\n";
 }
@@ -65,12 +65,20 @@ int main(int argc, char* argv[])
 		return debugger.runAllThumbTests(cpu) ? 0 : 1;
 	}
 
+	if (argc == 4 && std::string(argv[1]) == "test" && std::string(argv[2]) == "thumb")
+	{
+		Bus bus;
+		tdmi7::Decoder decoder;
+		tdmi7::CPU cpu(&bus, &decoder);
+		return cpu.runIndividualTests(argv[3], true) ? 0 : 1;
+	}
+
 	if (argc == 4 && std::string(argv[1]) == "test" && std::string(argv[2]) == "arm")
 	{
 		Bus bus;
 		tdmi7::Decoder decoder;
 		tdmi7::CPU cpu(&bus, &decoder);
-		return cpu.runIndividualTests(argv[3]) ? 0 : 1;
+		return cpu.runIndividualTests(argv[3], false) ? 0 : 1;
 	}
 
 	if (argc >= 3)

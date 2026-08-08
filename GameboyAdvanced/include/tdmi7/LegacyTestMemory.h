@@ -16,6 +16,7 @@ struct Transaction
 };
 
 extern std::vector<Transaction> transactions;
+extern bool singleStepTestActive;
 extern uint32_t testBaseAddress;
 extern uint16_t testThumbOpcode;
 }

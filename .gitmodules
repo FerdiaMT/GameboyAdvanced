@@ -1,0 +1,3 @@
+[submodule "GameboyAdvanced/third_party/arm7-reference"]
+	path = GameboyAdvanced/third_party/arm7-reference
+	url = https://github.com/chsasank/ARM7.git
