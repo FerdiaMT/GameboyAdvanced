@@ -21,3 +21,4 @@ You can run the tests using
 ```sh
 ctest --preset debug -j 4 
 ```
+The GBA object can be ran with the --trace flag, which will return a Simics like instruction trace
