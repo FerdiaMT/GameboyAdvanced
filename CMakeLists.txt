@@ -66,29 +66,59 @@ target_include_directories(gba_core PUBLIC include/)
 add_library(gba_legacy_diagnostics STATIC tests/legacy/ThumbInstructionTests.cpp)
 target_link_libraries(gba_legacy_diagnostics PRIVATE gba_core)
 
-add_executable(GBA source/Main.cpp)
-target_link_libraries(GBA PRIVATE gba_core gba_legacy_diagnostics)
-set_target_properties(GBA PROPERTIES
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}"
-)
+if(NOT EMSCRIPTEN)
+    add_executable(GBA source/Main.cpp)
+    target_link_libraries(GBA PRIVATE gba_core gba_legacy_diagnostics)
+    set_target_properties(GBA PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}"
+    )
+endif()
 
-# The emulator remains usable for headless testing without SDL.  When the
-# development package is present, the command-line runner can show the PPU's
-# 240x160 ARGB framebuffer in a simple scaled window.
-find_package(SDL2 QUIET)
-if(SDL2_FOUND)
-    target_link_libraries(GBA PRIVATE SDL2::SDL2)
-    target_compile_definitions(GBA PRIVATE GBA_HAS_SDL2=1)
+# Browser frontend.  It deliberately has its own entry point: the native
+# executable is a CLI/SDL application, whereas browsers need a callback-based
+# main loop and receive input through the page.  Emscripten's virtual file
+# system contains the bundled default BIOS and Super Mario Advance cartridge.
+if(EMSCRIPTEN)
+    add_executable(GBA_web source/WebMain.cpp)
+    target_link_libraries(GBA_web PRIVATE gba_core)
+    target_link_options(GBA_web PRIVATE
+        "--shell-file" "${CMAKE_SOURCE_DIR}/web/shell.html"
+        "--preload-file=${CMAKE_SOURCE_DIR}/bin/gba_bios.bin@/assets/gba_bios.bin"
+        "--preload-file=${CMAKE_SOURCE_DIR}/bin/sma.gba@/assets/sma.gba"
+        "-sENVIRONMENT=web"
+        "-sFILESYSTEM=1"
+        "-sASSERTIONS=1"
+    )
+    set_target_properties(GBA_web PROPERTIES
+        OUTPUT_NAME "index"
+        SUFFIX ".html"
+    )
+endif()
+
+if(NOT EMSCRIPTEN)
+    # The emulator remains usable for headless testing without SDL.  When the
+    # development package is present, the command-line runner can show the PPU's
+    # 240x160 ARGB framebuffer in a simple scaled window.
+    find_package(SDL2 QUIET)
+    if(SDL2_FOUND)
+        target_link_libraries(GBA PRIVATE SDL2::SDL2)
+        target_compile_definitions(GBA PRIVATE GBA_HAS_SDL2=1)
+    endif()
 endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(gba_core PRIVATE -Wall -Wextra)
     target_compile_options(gba_legacy_diagnostics PRIVATE -Wall -Wextra)
-    target_compile_options(GBA PRIVATE -Wall -Wextra)
+    if(TARGET GBA)
+        target_compile_options(GBA PRIVATE -Wall -Wextra)
+    endif()
+    if(TARGET GBA_web)
+        target_compile_options(GBA_web PRIVATE -Wall -Wextra)
+    endif()
 endif()
 
 include(CTest)
-if(BUILD_TESTING)
+if(BUILD_TESTING AND NOT EMSCRIPTEN)
     add_executable(GBA_regression_tests source/RegressionTests.cpp)
     target_link_libraries(GBA_regression_tests PRIVATE gba_core)
     add_executable(GBA_timing_trace_tests tests/CpuTimingTraceTests.cpp)

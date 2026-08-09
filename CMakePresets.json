@@ -47,6 +47,16 @@
         "BUILD_TESTING": "ON",
         "GBA_ENABLE_COVERAGE": "ON"
       }
+    },
+    {
+      "name": "web",
+      "displayName": "WebAssembly browser build",
+      "description": "Emscripten build that bundles the BIOS and Super Mario Advance into a browser page.",
+      "binaryDir": "${sourceDir}/build/web",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTING": "OFF"
+      }
     }
   ],
   "buildPresets": [
@@ -65,6 +75,11 @@
     {
       "name": "coverage",
       "configurePreset": "coverage"
+    },
+    {
+      "name": "web",
+      "configurePreset": "web",
+      "targets": [ "GBA_web" ]
     }
   ],
   "testPresets": [
