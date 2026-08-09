@@ -25,7 +25,8 @@ mono_crash.*
 x64/
 x86/
 [Ww][Ii][Nn]32/
-[Aa][Rr][Mm]/
+# Intentionally do not ignore generic `arm/` directories: this project keeps
+# its ARM7TDMI instruction implementations under source/tdmi7/arm/.
 [Aa][Rr][Mm]64/
 bld/
 [Bb]in/
