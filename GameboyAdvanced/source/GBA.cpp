@@ -4,25 +4,99 @@
 #include <iomanip>
 #include <ostream>
 
-GBA::GBA(): cpu(&bus, &decoder)
+GBA::GBA(): ppu(bus), cpu(&bus, &decoder), system(bus, cpu, ppu), clockedDevices{ &ppu, &system }
 {
+	ppu.setHBlankCallback([this] { system.onHBlank(); });
+	ppu.setVBlankCallback([this] { system.onVBlank(); });
+	ppu.setVCountCallback([this] { system.onVCount(); });
 }
 
 bool GBA::loadCartridge(const char* path)
 {
-	cpu.reset();
+	reset();
 	if (!bus.loadROM(path, 0x08000000))
 	{
 		return false;
 	}
 
-	cpu.pc = 0x08000000;
+	cpu.pc = bus.hasBios() ? 0x00000000U : 0x08000000U;
 	return true;
+}
+
+bool GBA::loadBios(const char* path)
+{
+	return bus.loadBios(path);
+}
+
+void GBA::reset()
+{
+	cpu.reset();
+	ppu.reset();
+	bus.resetSystemState();
+	system.reset();
+	masterCycles = 0;
+	cartridgeCodeExecuted = false;
 }
 
 uint32_t GBA::tick()
 {
-	return cpu.tick();
+	// A halted ARM7 consumes no instructions.  Advancing it one master cycle at
+	// a time made BIOS IntrWait/HALT loops need 280,896 host iterations per
+	// frame.  The PPU's next boundary is an observable hardware event, so
+	// advance directly to it; device callbacks can assert IRQ and the next tick
+	// will perform the normal CPU wake/exception sequence.
+	if (cpu.isHalted())
+	{
+		const uint32_t elapsedCycles = ppu.cyclesUntilNextEvent();
+		masterCycles += elapsedCycles;
+		advanceDevices(elapsedCycles);
+		return elapsedCycles;
+	}
+	const uint32_t cyclesBefore = static_cast<uint32_t>(cpu.cycleTotal);
+	cpu.tick();
+	if (cpu.pc >= 0x08000000U && cpu.pc < 0x0E000000U)
+		cartridgeCodeExecuted = true;
+	const uint32_t elapsedCycles = static_cast<uint32_t>(cpu.cycleTotal) - cyclesBefore;
+	masterCycles += elapsedCycles;
+	advanceDevices(elapsedCycles);
+	const uint32_t dmaCycles = system.takeDmaStallCycles();
+	if (dmaCycles != 0)
+	{
+		masterCycles += dmaCycles;
+		advanceDevices(dmaCycles);
+	}
+	return elapsedCycles + dmaCycles;
+}
+
+uint64_t GBA::masterCycleCount() const
+{
+	return masterCycles;
+}
+
+bool GBA::hasExecutedCartridgeCode() const
+{
+	return cartridgeCodeExecuted;
+}
+
+void GBA::attachClockedDevice(ClockedDevice& device)
+{
+	for (const auto* existing : clockedDevices)
+	{
+		if (existing == &device)
+			return;
+	}
+	clockedDevices.push_back(&device);
+}
+
+void GBA::setPressedKeys(uint16_t pressedMask)
+{
+	system.setPressedKeys(pressedMask);
+}
+
+void GBA::advanceDevices(uint32_t cycles)
+{
+	for (ClockedDevice* device : clockedDevices)
+		device->advance(cycles);
 }
 
 void GBA::enableTestSwiHalt(bool enabled)
@@ -61,6 +135,6 @@ GBA::RunResult GBA::runSteps(uint64_t steps, std::ostream* traceOutput)
 		tick();
 	}
 
-	return { static_cast<uint32_t>(cpu.cycleTotal), completedSteps, cpu.testHalt };
+	return { masterCycles, completedSteps, cpu.testHalt };
 
 }

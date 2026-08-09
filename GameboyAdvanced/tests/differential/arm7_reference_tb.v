@@ -100,6 +100,7 @@ module arm7_reference_tb;
         $write("ARM7_REF_STATE");
         for (index = 0; index < 15; index = index + 1)
             $write(" r%0d=%08x", index, dut.RegisterFile.R[index]);
+		$write(" cpsr=%08x", dut.RegisterFile.cspr);
         $write("\n");
         $finish;
     end

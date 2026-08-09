@@ -59,3 +59,12 @@ ctest --preset debug -L timing --output-on-failure
 
 Keep behavior-preserving moves separate from instruction-correctness changes:
 the ARM/Thumb CTest baseline is intended to make that distinction visible.
+
+## System clock
+
+`GBA` owns the master-cycle scheduler. Each `GBA::tick()` executes one CPU
+instruction, obtains its elapsed cycle delta, then advances every attached
+`ClockedDevice` in deterministic registration order. The PPU is the first
+device attached by default; its current implementation only tracks cycles,
+ready for scanline timing. Timers, DMA, audio, and input will use the same
+interface rather than independently counting CPU instructions.

@@ -5,6 +5,8 @@
 #include <unordered_map>
 #include <string>
 #include <sstream>
+#include <functional>
+#include <utility>
 #include "tdmi7/CPUTypes.h"
 
 namespace tdmi7

@@ -68,6 +68,14 @@ public:
 
 	uint32_t tick();
 
+	// External hardware raises IRQ/FIQ between instructions.  The bus and
+	// peripherals will drive these once the system scheduler is in place.
+	void requestIrq();
+	void requestFiq();
+	void setIrqLine(bool asserted);
+	void setHalted(bool value) { halted = value; }
+	bool isHalted() const { return halted; }
+
 	// Opt-in test ABI for raw instruction binaries.  When enabled, SWI #0
 	// reports pass and SWI #1 reports fail instead of entering the SWI vector.
 	enum class TestHalt : uint8_t
@@ -78,8 +86,10 @@ public:
 	};
 
 	void enableTestSwiHalt(bool enabled);
+	void setHleSwiHandler(std::function<bool(uint32_t, bool)> handler) { hleSwiHandler = std::move(handler); }
 	bool handleTestSwi(uint32_t immediate);
 	TestHalt testHalt = TestHalt::None;
+	std::function<bool(uint32_t, bool)> hleSwiHandler;
 	//Operation decode(uint32_t passedIns);
 	CPUTypes::armInstr decodeArm(uint32_t instr);
 	int armExecute(CPUTypes::armInstr instr);
@@ -97,6 +107,8 @@ public:
 
 private:
 	bool testSwiHaltEnabled = false;
+	bool irqPending = false;
+	bool fiqPending = false;
+	bool halted = false;
 
 public:
-

@@ -2,12 +2,18 @@
 cmake_minimum_required(VERSION 3.10)
 project(GBA LANGUAGES CXX)
 
+# Cross-translation-unit inlining matters for an interpreter: instruction and
+# pixel paths cross several deliberately small abstraction boundaries.
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_RELEASE ON)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 set(GBA_CORE_SOURCES
     source/Bus.cpp
+    source/GBA.cpp
+    source/SystemControl.cpp
 
     # tdmi7 CPU subsystem
     source/tdmi7/Core.cpp
@@ -37,11 +43,20 @@ target_include_directories(gba_core PUBLIC include/)
 add_library(gba_legacy_diagnostics STATIC tests/legacy/ThumbInstructionTests.cpp)
 target_link_libraries(gba_legacy_diagnostics PRIVATE gba_core)
 
-add_executable(GBA source/GBA.cpp source/Main.cpp)
+add_executable(GBA source/Main.cpp)
 target_link_libraries(GBA PRIVATE gba_core gba_legacy_diagnostics)
 set_target_properties(GBA PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_SOURCE_DIR}"
 )
+
+# The emulator remains usable for headless testing without SDL.  When the
+# development package is present, the command-line runner can show the PPU's
+# 240x160 ARGB framebuffer in a simple scaled window.
+find_package(SDL2 QUIET)
+if(SDL2_FOUND)
+    target_link_libraries(GBA PRIVATE SDL2::SDL2)
+    target_compile_definitions(GBA PRIVATE GBA_HAS_SDL2=1)
+endif()
 
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     target_compile_options(gba_core PRIVATE -Wall -Wextra)
@@ -55,18 +70,61 @@ if(BUILD_TESTING)
     target_link_libraries(GBA_regression_tests PRIVATE gba_core)
     add_executable(GBA_timing_trace_tests tests/CpuTimingTraceTests.cpp)
     target_link_libraries(GBA_timing_trace_tests PRIVATE gba_core)
+    add_executable(GBA_cpu_architectural_tests tests/CpuArchitecturalTests.cpp)
+    target_link_libraries(GBA_cpu_architectural_tests PRIVATE gba_core)
+    add_executable(GBA_bios_bootstrap_tests tests/BiosBootstrapTests.cpp)
+    target_link_libraries(GBA_bios_bootstrap_tests PRIVATE gba_core)
+    add_executable(GBA_bus_mapping_tests tests/BusMappingTests.cpp)
+    target_link_libraries(GBA_bus_mapping_tests PRIVATE gba_core)
+    add_executable(GBA_master_scheduler_tests tests/MasterSchedulerTests.cpp)
+    target_link_libraries(GBA_master_scheduler_tests PRIVATE gba_core)
+    add_executable(GBA_system_control_tests tests/SystemControlTests.cpp)
+    target_link_libraries(GBA_system_control_tests PRIVATE gba_core)
+    add_executable(GBA_video_program_tests tests/VideoProgramTests.cpp)
+    target_link_libraries(GBA_video_program_tests PRIVATE gba_core)
     add_executable(arm7_differential_iss tests/differential/Arm7DifferentialIss.cpp)
     target_link_libraries(arm7_differential_iss PRIVATE gba_core)
     if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
         target_compile_options(GBA_regression_tests PRIVATE -Wall -Wextra)
         target_compile_options(GBA_timing_trace_tests PRIVATE -Wall -Wextra)
+        target_compile_options(GBA_cpu_architectural_tests PRIVATE -Wall -Wextra)
+        target_compile_options(GBA_bios_bootstrap_tests PRIVATE -Wall -Wextra)
+        target_compile_options(GBA_bus_mapping_tests PRIVATE -Wall -Wextra)
+        target_compile_options(GBA_master_scheduler_tests PRIVATE -Wall -Wextra)
+        target_compile_options(GBA_system_control_tests PRIVATE -Wall -Wextra)
+        target_compile_options(GBA_video_program_tests PRIVATE -Wall -Wextra)
         target_compile_options(arm7_differential_iss PRIVATE -Wall -Wextra)
     endif()
 
     add_test(NAME command_help COMMAND GBA --help)
+    if(SDL2_FOUND)
+        add_test(NAME sdl_framebuffer_smoke COMMAND GBA --screen-smoke)
+        set_tests_properties(sdl_framebuffer_smoke PROPERTIES
+            ENVIRONMENT "SDL_VIDEODRIVER=dummy"
+            LABELS "gba;video;sdl"
+        )
+        add_test(NAME sdl_input_mapping_smoke COMMAND GBA --input-smoke)
+        set_tests_properties(sdl_input_mapping_smoke PROPERTIES LABELS "gba;input;sdl")
+    endif()
     add_test(NAME instruction_regressions COMMAND GBA_regression_tests)
     add_test(NAME cpu_timing_traces COMMAND GBA_timing_trace_tests)
     set_tests_properties(cpu_timing_traces PROPERTIES LABELS "cpu;timing")
+    add_test(NAME cpu_architectural_state COMMAND GBA_cpu_architectural_tests)
+    set_tests_properties(cpu_architectural_state PROPERTIES LABELS "cpu;architecture;exceptions")
+    add_test(NAME bios_bootstrap_control_flow COMMAND GBA_bios_bootstrap_tests)
+    set_tests_properties(bios_bootstrap_control_flow PROPERTIES LABELS "bios;cpu;boot")
+    add_test(NAME gba_bus_mapping COMMAND GBA_bus_mapping_tests)
+    set_tests_properties(gba_bus_mapping PROPERTIES LABELS "bus;gba;memory")
+    add_test(NAME gba_master_scheduler COMMAND GBA_master_scheduler_tests)
+    set_tests_properties(gba_master_scheduler PROPERTIES LABELS "gba;scheduler;timing")
+    add_test(NAME gba_system_control COMMAND GBA_system_control_tests)
+    set_tests_properties(gba_system_control PROPERTIES LABELS "gba;system;interrupts;timers;dma")
+    add_test(NAME gba_mode3_gradient_program COMMAND GBA_video_program_tests)
+    set_tests_properties(gba_mode3_gradient_program PROPERTIES
+        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+        DEPENDS raw_instruction_test_build
+        LABELS "gba;video;integration"
+    )
 
     add_test(
         NAME raw_instruction_test_build

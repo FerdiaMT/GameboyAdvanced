@@ -59,6 +59,15 @@ public:
 
 public:
 	//OPS FOR MODE SWITCHING / EXCEPTION HANDLING
+	enum class Exception : uint8_t
+	{
+		Undefined,
+		SoftwareInterrupt,
+		PrefetchAbort,
+		DataAbort,
+		Irq,
+		Fiq,
+	};
 
 
 
@@ -78,6 +87,7 @@ public:
 
 	// excpetion handling
 	void enterException(CPU::mode newMode, uint32_t vectorAddr, uint32_t returnAddr);
+	void raiseException(Exception exception, uint32_t instructionAddress);
 	void returnFromException();
 
 	//SPSR helpers

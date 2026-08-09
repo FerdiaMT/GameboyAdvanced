@@ -32,14 +32,14 @@ int CPU::opT_LDR_PC(thumbInstr instr)
 	// the current instruction address plus four, rounded down to a word.
 	const uint32_t pcBase = legacy::singleStepTestActive ? pc : pc + 2;
 	uint32_t address = (pcBase & ~3U) + instr.imm;
-	reg[instr.rd] = rotateWordLoad(read32(address), address);
+	reg[instr.rd] = rotateWordLoad(read32(legacy::singleStepTestActive ? address : (address & ~3U)), address);
 	return 3;
 }
 
 int CPU::opT_LDR_REG(thumbInstr instr)
 {
 	uint32_t address = reg[instr.rs] + reg[instr.rn];
-	reg[instr.rd] = rotateWordLoad(read32(address), address);
+	reg[instr.rd] = rotateWordLoad(read32(legacy::singleStepTestActive ? address : (address & ~3U)), address);
 	return 3;
 }
 
@@ -127,7 +127,7 @@ int CPU::opT_LDRSH_REG(thumbInstr instr)
 int CPU::opT_LDR_IMM(thumbInstr instr)
 {
 	uint32_t address = reg[instr.rs] + instr.imm;
-	reg[instr.rd] = rotateWordLoad(read32(address), address);
+	reg[instr.rd] = rotateWordLoad(read32(legacy::singleStepTestActive ? address : (address & ~3U)), address);
 	return 3;
 }
 

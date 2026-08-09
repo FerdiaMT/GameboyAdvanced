@@ -87,6 +87,7 @@ int main(int argc, char* argv[])
 	for (unsigned index = 0; index < initialRegisters.size(); ++index)
 		output << " r" << std::dec << index << '=' << std::hex << std::setfill('0')
 			<< std::setw(8) << cpu.reg[index];
+	output << " cpsr=" << std::setw(8) << cpu.CPSR;
 	output << '\n';
 	return 0;
 }

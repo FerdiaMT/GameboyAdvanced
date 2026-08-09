@@ -29,7 +29,7 @@ namespace Vector // use these for jumping
 {
 	constexpr uint32_t Reset = 0x00000000;
 	constexpr uint32_t Undefined = 0x00000004;
-	constexpr uint32_t SWI = 0x00000010;//0x00000008;
+	constexpr uint32_t SWI = 0x00000008;
 	constexpr uint32_t PrefetchAbort = 0x0000000C;
 	constexpr uint32_t DataAbort = 0x00000010;
 	constexpr uint32_t Reserved = 0x00000014;
@@ -61,6 +61,9 @@ void CPU::reset()
 	curOpCycles = 0;
 	cycleTotal = 0;
 	testHalt = TestHalt::None;
+	irqPending = false;
+	fiqPending = false;
+	halted = false;
 	std::fill(std::begin(r8FIQ), std::end(r8FIQ), 0);
 	std::fill(std::begin(r8User), std::end(r8User), 0);
 	std::fill(std::begin(r13RegBank), std::end(r13RegBank), 0);
@@ -76,6 +79,21 @@ void CPU::reset()
 	N = Z = C = V = 0;
 	unbankRegisters(curMode);
 	lr = 0x08000000;
+}
+
+void CPU::requestIrq()
+{
+	irqPending = true;
+}
+
+void CPU::requestFiq()
+{
+	fiqPending = true;
+}
+
+void CPU::setIrqLine(bool asserted)
+{
+	irqPending = asserted;
 }
 
 void CPU::enableTestSwiHalt(bool enabled)
@@ -108,6 +126,37 @@ bool CPU::handleTestSwi(uint32_t immediate)
 
 uint32_t CPU::tick()
 {
+	if (halted)
+	{
+		// HALT wakes when an enabled interrupt becomes pending, independently of
+		// the CPSR interrupt mask.  Exception entry still honours that mask.
+		if (!irqPending && !fiqPending)
+		{
+			curOpCycles = 1;
+			cycleTotal += curOpCycles;
+			return cycleTotal;
+		}
+		halted = false;
+	}
+	// FIQ has priority over IRQ.  The ARM7 samples these at an instruction
+	// boundary, before fetching the next instruction.
+	if (fiqPending && !F)
+	{
+		fiqPending = false;
+		raiseException(Exception::Fiq, pc);
+		curOpCycles = 3;
+		cycleTotal += curOpCycles;
+		return cycleTotal;
+	}
+	if (irqPending && !I)
+	{
+		irqPending = false;
+		raiseException(Exception::Irq, pc);
+		curOpCycles = 3;
+		cycleTotal += curOpCycles;
+		return cycleTotal;
+	}
+
 	const bool timingTraceEnabled = bus->isCpuTimingTraceEnabled();
 	const size_t timingTraceStart = bus->cpuTimingTrace().size();
 

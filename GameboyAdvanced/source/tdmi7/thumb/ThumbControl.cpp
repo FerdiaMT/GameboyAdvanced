@@ -5,11 +5,6 @@ namespace tdmi7
 {
 using namespace CPUTypes;
 
-namespace Vector
-{
-constexpr uint32_t SWI = 0x00000010;
-}
-
 int CPU::opT_BX(thumbInstr instr)
 {
 	uint32_t target = reg[instr.rs];
@@ -99,24 +94,24 @@ int CPU::opT_SWI(thumbInstr instr)
 	{
 		return 1;
 	}
-	enterException(mode::Supervisor, Vector::SWI, pc - 4);
+	if (hleSwiHandler && hleSwiHandler(instr.imm, true))
+	{
+		return 3;
+	}
+	// tick() has already advanced PC beyond this Thumb halfword.
+	raiseException(Exception::SoftwareInterrupt, pc - 2);
 	if (legacy::singleStepTestActive)
 	{
-		T = 0;
-		lr -= 2;
+		// Preserve the old SST runner's displayed pipeline PC convention.
 		pc += 2;
-	}
-	else
-	{
-		pc -= 2;
 	}
 	return 3;
 }
 
 int CPU::opT_UNDEFINED(thumbInstr)
 {
-	//printf("UNDEFINED TRIGGERED, REPLACE LATER WITH PROPER VECTOR HANDLER");
-	return 1;
+	raiseException(Exception::Undefined, pc - 2);
+	return 3;
 }
 
 }

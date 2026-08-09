@@ -2,7 +2,8 @@
 
 #include "Bus.h"
 #include <cstdio>
-#include <cstring>
+#include <algorithm>
+#include <string>
 
 void Bus::enableCpuTimingTrace(bool enabled)
 {
@@ -187,6 +188,14 @@ uint32_t Bus::gbaAccessCycles(CpuTimingRegion region, bool sequential, uint8_t w
     return cpuTimingConfig.nonSequentialCycles;
 }
 
+uint32_t Bus::dmaAccessCycles(uint32_t address, uint8_t width, bool sequential) const
+{
+    const CpuTimingRegion region = cpuTimingRegion(address);
+    if (isGamePakRegion(region) && width == 4)
+        return gamePakAccessCycles(region, sequential) + gamePakAccessCycles(region, true);
+    return gbaAccessCycles(region, sequential, width);
+}
+
 void Bus::recordCpuExternalAccess(CpuTimingAccess access, uint32_t address, uint8_t width,
     CpuTimingRegion region, bool forceSequential)
 {
@@ -205,44 +214,51 @@ void Bus::recordCpuExternalAccess(CpuTimingAccess access, uint32_t address, uint
     previousCpuWidth = width;
 }
 
-Bus::Bus()
+Bus::Bus() = default;
+
+bool Bus::loadBios(const char* filename)
 {
-    memorySize = 0x10000000; 
-    biosRom = std::make_unique<uint8_t[]>(memorySize);
-    memset(biosRom.get(), 0, memorySize);
+    FILE* file = fopen(filename, "rb");
+    if (!file) return false;
+    std::array<uint8_t, BiosSize> image{};
+    const size_t bytes = fread(image.data(), 1, image.size(), file);
+    const bool noExtraBytes = fgetc(file) == EOF;
+    fclose(file);
+    if (bytes != image.size() || !noExtraBytes) return false;
+    bios = image;
+    loadedBios = true;
+    return true;
 }
+
+void Bus::loadBiosImage(const uint8_t* data, size_t size)
+{
+    if (data == nullptr || size != BiosSize) return;
+    std::copy(data, data + BiosSize, bios.begin());
+    loadedBios = true;
+}
+
+bool Bus::hasBios() const { return loadedBios; }
 
 //====================
 // READ FUNCTIONS
 //====================
 uint32_t Bus::read32(uint32_t addr, bool)
 {
-    if (addr < memorySize - 3)
-    {  // Ensure we can read 4 bytes
-        return (biosRom[addr + 3] << 24) |
-            (biosRom[addr + 2] << 16) |
-            (biosRom[addr + 1] << 8) |
-            biosRom[addr];
-    }
-    return 0;  // Out of bounds
+    return static_cast<uint32_t>(readMapped8(addr)) |
+        (static_cast<uint32_t>(readMapped8(addr + 1)) << 8) |
+        (static_cast<uint32_t>(readMapped8(addr + 2)) << 16) |
+        (static_cast<uint32_t>(readMapped8(addr + 3)) << 24);
 }
 
 uint16_t Bus::read16(uint32_t addr, bool)
 {
-    if (addr < memorySize - 1)
-    {
-        return (biosRom[addr + 1] << 8) | biosRom[addr];
-    }
-    return 0;
+    return static_cast<uint16_t>(readMapped8(addr)) |
+        (static_cast<uint16_t>(readMapped8(addr + 1)) << 8);
 }
 
 uint8_t Bus::read8(uint32_t addr, bool)
 {
-    if (addr < memorySize)
-    {
-        return biosRom[addr];
-    }
-    return 0;
+    return readMapped8(addr);
 }
 
 //====================
@@ -250,58 +266,43 @@ uint8_t Bus::read8(uint32_t addr, bool)
 //====================
 void Bus::write8(uint32_t addr, uint8_t data)
 {
-    if (addr < memorySize)
-    {
-        biosRom[addr] = data;
-    }
+	writeMapped8(addr, data);
     if (addr == 0x04000204U)
     {
         setWaitcnt((waitcnt & 0xFF00U) | data);
+		io[0x204] = static_cast<uint8_t>(waitcnt);
     }
     else if (addr == 0x04000205U)
     {
         setWaitcnt((waitcnt & 0x00FFU) | (static_cast<uint16_t>(data) << 8));
+		io[0x205] = static_cast<uint8_t>(waitcnt >> 8);
     }
 }
 
 void Bus::write16(uint32_t addr, uint16_t data)
 {
-    if (addr < memorySize - 1)
-    {
-        biosRom[addr] = data & 0xFF;
-        biosRom[addr + 1] = (data >> 8) & 0xFF;
-    }
+	writeMapped8(addr, static_cast<uint8_t>(data));
+	writeMapped8(addr + 1, static_cast<uint8_t>(data >> 8));
     if (addr == 0x04000204U)
     {
         setWaitcnt(data);
+		io[0x204] = static_cast<uint8_t>(waitcnt);
+		io[0x205] = static_cast<uint8_t>(waitcnt >> 8);
     }
 }
 
 void Bus::write32(uint32_t addr, uint32_t data) 
 {
-    if (addr < memorySize - 3)
-    {
-        biosRom[addr] = data & 0xFF;
-        biosRom[addr + 1] = (data >> 8) & 0xFF;
-        biosRom[addr + 2] = (data >> 16) & 0xFF;
-        biosRom[addr + 3] = (data >> 24) & 0xFF;
-    }
+	writeMapped8(addr, static_cast<uint8_t>(data));
+	writeMapped8(addr + 1, static_cast<uint8_t>(data >> 8));
+	writeMapped8(addr + 2, static_cast<uint8_t>(data >> 16));
+	writeMapped8(addr + 3, static_cast<uint8_t>(data >> 24));
 
     if (addr == 0x04000204U)
     {
         setWaitcnt(static_cast<uint16_t>(data));
-    }
-
-    if (addr == 0x03000000) // this is here for the arm tester
-    {
-        if (data == 0)
-        {
-            printf(" All tests passed!\n");
-        }
-        else
-        {
-            printf("Test failed: %d\n", data);
-        }
+		io[0x204] = static_cast<uint8_t>(waitcnt);
+		io[0x205] = static_cast<uint8_t>(waitcnt >> 8);
     }
 
 }
@@ -324,13 +325,21 @@ bool Bus::loadROM(const char* filename, uint32_t loadAddr)
     size_t fileSize = ftell(file);
     fseek(file, 0, SEEK_SET);
 
-    if (fileSize > memorySize - loadAddr)
+    if (loadAddr < 0x08000000U || loadAddr >= 0x0E000000U)
     {
         fclose(file);
         return false;
     }
 
-    size_t bytesRead = fread(&biosRom[loadAddr], 1, fileSize, file);
+    const size_t offset = cartridgeOffset(loadAddr);
+    if (offset + fileSize > 0x02000000U)
+    {
+        fclose(file);
+        return false;
+    }
+    cartridgeRom.clear();
+    cartridgeRom.resize(offset + fileSize);
+    size_t bytesRead = fread(cartridgeRom.data() + offset, 1, fileSize, file);
     fclose(file);
 
     if (bytesRead != fileSize)
@@ -338,6 +347,119 @@ bool Bus::loadROM(const char* filename, uint32_t loadAddr)
         return false;
     }
 
+	detectSaveType();
+
     printf("rom loaded\n");
     return true;
+}
+
+void Bus::loadCartridgeImage(const uint8_t* data, size_t size, uint32_t loadAddr)
+{
+    if (data == nullptr || loadAddr < 0x08000000U || loadAddr >= 0x0E000000U)
+        return;
+    const size_t offset = cartridgeOffset(loadAddr);
+    if (offset + size > 0x02000000U)
+        return;
+    cartridgeRom.resize(std::max(cartridgeRom.size(), offset + size));
+    std::copy(data, data + size, cartridgeRom.begin() + offset);
+	detectSaveType();
+}
+
+Bus::SaveType Bus::saveType() const { return detectedSaveType; }
+void Bus::setSaveType(SaveType type) { detectedSaveType = type; }
+bool Bus::isGamePakPrefetchEnabled() const { return (waitcnt & 0x4000U) != 0; }
+void Bus::setIoHandlers(IoReadHandler readHandler, IoWriteHandler writeHandler)
+{
+	ioReadHandler = std::move(readHandler);
+	ioWriteHandler = std::move(writeHandler);
+}
+
+void Bus::resetSystemState()
+{
+	io.fill(0);
+	waitcnt = 0;
+	clearCpuTimingTrace();
+}
+
+uint32_t Bus::vramOffset(uint32_t address)
+{
+    uint32_t offset = address & 0x1FFFFU;
+    // The 96 KiB VRAM block mirrors its final 32 KiB over 0x18000..0x1FFFF.
+    if (offset >= VramSize)
+        offset = 0x10000U + (offset & 0x7FFFU);
+    return offset;
+}
+
+uint32_t Bus::cartridgeOffset(uint32_t address)
+{
+    // Each 32 MiB Game Pak wait-state window exposes the same cartridge
+    // address range.
+    return address & 0x01FFFFFFU;
+}
+
+uint32_t Bus::saveOffset(uint32_t address) const
+{
+	const uint32_t mask = detectedSaveType == SaveType::Sram ? 0x7FFFU :
+		detectedSaveType == SaveType::Flash128 ? 0x1FFFFU : 0xFFFFU;
+	return address & mask;
+}
+
+void Bus::detectSaveType()
+{
+	auto contains = [this](const char* id)
+	{
+		const size_t length = std::char_traits<char>::length(id);
+		return cartridgeRom.size() >= length && std::search(cartridgeRom.begin(), cartridgeRom.end(),
+			id, id + length) != cartridgeRom.end();
+	};
+	if (contains("FLASH1M_V")) detectedSaveType = SaveType::Flash128;
+	else if (contains("FLASH512_V") || contains("FLASH_V")) detectedSaveType = SaveType::Flash64;
+	else if (contains("EEPROM_V")) detectedSaveType = SaveType::Eeprom512;
+	else if (contains("SRAM_V")) detectedSaveType = SaveType::Sram;
+	else detectedSaveType = SaveType::Unknown;
+}
+
+uint8_t Bus::readMapped8(uint32_t address) const
+{
+    switch (address >> 24)
+    {
+    case 0x00: return address < BiosSize ? bios[address] : 0;
+    case 0x02: return ewram[address & (EwramSize - 1)];
+    case 0x03: return iwram[address & (IwramSize - 1)];
+    case 0x04:
+    {
+        uint8_t value = 0;
+        if (ioReadHandler && ioReadHandler(address, value)) return value;
+        return io[address & (IoSize - 1)];
+    }
+    case 0x05: return palette[address & (PaletteSize - 1)];
+    case 0x06: return vram[vramOffset(address)];
+    case 0x07: return oam[address & (OamSize - 1)];
+    case 0x08: case 0x09: case 0x0A: case 0x0B: case 0x0C: case 0x0D:
+    {
+        const uint32_t offset = cartridgeOffset(address);
+        return offset < cartridgeRom.size() ? cartridgeRom[offset] : 0;
+    }
+    case 0x0E: return save[saveOffset(address)];
+    default: return 0;
+    }
+}
+
+void Bus::writeMapped8(uint32_t address, uint8_t data)
+{
+    switch (address >> 24)
+    {
+    case 0x00: if (address < BiosSize) bios[address] = data; break;
+    case 0x02: ewram[address & (EwramSize - 1)] = data; break;
+    case 0x03: iwram[address & (IwramSize - 1)] = data; break;
+    case 0x04:
+        io[address & (IoSize - 1)] = data;
+        if (ioWriteHandler) ioWriteHandler(address, data);
+        break;
+    case 0x05: palette[address & (PaletteSize - 1)] = data; break;
+    case 0x06: vram[vramOffset(address)] = data; break;
+    case 0x07: oam[address & (OamSize - 1)] = data; break;
+    case 0x0E: save[saveOffset(address)] = data; break;
+    default: break; // Cartridge ROM and unmapped regions are read-only/open bus.
+    }
 }

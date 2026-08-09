@@ -321,7 +321,10 @@ int CPU::opT_MVN_REG(thumbInstr instr)
 
 int CPU::opT_ADD_HI(thumbInstr instr)
 {
-	reg[instr.rd] = reg[instr.rd] + reg[instr.rs];
+	const uint32_t architecturalPc = pc + (legacy::singleStepTestActive ? 0U : 2U);
+	const uint32_t source = instr.rs == 15 ? architecturalPc : reg[instr.rs];
+	const uint32_t destination = instr.rd == 15 ? architecturalPc : reg[instr.rd];
+	reg[instr.rd] = destination + source;
 	if (instr.rd == 15)
 	{
 		reg[15] &= ~1U;
@@ -333,8 +336,9 @@ int CPU::opT_ADD_HI(thumbInstr instr)
 
 int CPU::opT_CMP_HI(thumbInstr instr)
 {
-	uint32_t op1 = reg[instr.rd];
-	uint32_t op2 = reg[instr.rs];
+	const uint32_t architecturalPc = pc + (legacy::singleStepTestActive ? 0U : 2U);
+	uint32_t op1 = instr.rd == 15 ? architecturalPc : reg[instr.rd];
+	uint32_t op2 = instr.rs == 15 ? architecturalPc : reg[instr.rs];
 	uint32_t result = op1 - op2;
 	updateFlagsNZCV_Sub(result, op1, op2);
 	return 1;
@@ -342,7 +346,11 @@ int CPU::opT_CMP_HI(thumbInstr instr)
 
 int CPU::opT_MOV_HI(thumbInstr instr)
 {
-	reg[instr.rd] = reg[instr.rs];
+	// Thumb tick() has advanced pc by two bytes before entering the handler;
+	// a source r15 is architecturally the current instruction address plus 4.
+	reg[instr.rd] = instr.rs == 15
+		? pc + (legacy::singleStepTestActive ? 0U : 2U)
+		: reg[instr.rs];
 
 	if (instr.rd == 15)
 	{

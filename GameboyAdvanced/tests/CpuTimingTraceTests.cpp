@@ -22,6 +22,15 @@ struct Machine
     }
 };
 
+void writeCartridge32(Bus& bus, uint32_t address, uint32_t value)
+{
+    const uint8_t bytes[] = {
+        static_cast<uint8_t>(value), static_cast<uint8_t>(value >> 8),
+        static_cast<uint8_t>(value >> 16), static_cast<uint8_t>(value >> 24),
+    };
+    bus.loadCartridgeImage(bytes, sizeof(bytes), address);
+}
+
 using Access = Bus::CpuTimingAccess;
 
 struct ExpectedEvent
@@ -208,8 +217,8 @@ bool testGamePakWordFetchSplitsIntoHalfwords()
     machine.bus.enableGbaRegionTiming(true);
     machine.bus.clearCpuTimingTrace();
     machine.cpu.pc = 0x08000000;
-    machine.bus.write32(0x08000000, 0xE3A0002A); // MOV r0, #42
-    machine.bus.write32(0x08000004, 0xE2800001); // ADD r0, r0, #1
+    writeCartridge32(machine.bus, 0x08000000, 0xE3A0002A); // MOV r0, #42
+    writeCartridge32(machine.bus, 0x08000004, 0xE2800001); // ADD r0, r0, #1
 
     EXPECT(testName, machine.cpu.tick() == 8);
     EXPECT(testName, machine.cpu.tick() == 14);
@@ -230,7 +239,7 @@ bool testWaitcntChangesGamePakTiming()
     machine.bus.write16(0x04000204, 0x0014); // WS0: 3 waitstates N, 1 waitstate S
     machine.bus.clearCpuTimingTrace();
     machine.cpu.pc = 0x08000000;
-    machine.bus.write32(0x08000000, 0xE3A0002A); // MOV r0, #42
+    writeCartridge32(machine.bus, 0x08000000, 0xE3A0002A); // MOV r0, #42
 
     EXPECT(testName, machine.bus.getWaitcnt() == 0x0014);
     EXPECT(testName, machine.cpu.tick() == 6);
@@ -247,7 +256,7 @@ bool testGamePakBoundaryForcesNonSequential()
     machine.bus.enableGbaRegionTiming(true);
     machine.bus.clearCpuTimingTrace();
     machine.cpu.pc = 0x0801FFFE;
-    machine.bus.write32(0x0801FFFE, 0xE3A0002A); // MOV r0, #42 across a 128 KiB boundary
+    writeCartridge32(machine.bus, 0x0801FFFE, 0xE3A0002A); // MOV r0, #42 across a 128 KiB boundary
 
     EXPECT(testName, machine.cpu.tick() == 10);
     return expectTrace(testName, machine.bus.cpuTimingTrace(), {
@@ -264,7 +273,7 @@ bool testGamePakMirrorsUseIndependentWaitstates()
     waitState1.bus.enableGbaRegionTiming(true);
     waitState1.bus.clearCpuTimingTrace();
     waitState1.cpu.pc = 0x0A000000;
-    waitState1.bus.write32(0x0A000000, 0xE3A0002A); // MOV r0, #42
+    writeCartridge32(waitState1.bus, 0x0A000000, 0xE3A0002A); // MOV r0, #42
     EXPECT(testName, waitState1.cpu.tick() == 10); // WS1: 5N + 5S by default
     EXPECT(testName, waitState1.bus.cpuTimingTrace()[0].region == Bus::CpuTimingRegion::GamePak1);
     EXPECT(testName, waitState1.bus.cpuTimingTrace()[1].cycles == 5);
@@ -273,7 +282,7 @@ bool testGamePakMirrorsUseIndependentWaitstates()
     waitState2.bus.enableGbaRegionTiming(true);
     waitState2.bus.clearCpuTimingTrace();
     waitState2.cpu.pc = 0x0C000000;
-    waitState2.bus.write32(0x0C000000, 0xE3A0002A); // MOV r0, #42
+    writeCartridge32(waitState2.bus, 0x0C000000, 0xE3A0002A); // MOV r0, #42
     EXPECT(testName, waitState2.cpu.tick() == 14); // WS2: 5N + 9S by default
     EXPECT(testName, waitState2.bus.cpuTimingTrace()[0].region == Bus::CpuTimingRegion::GamePak2);
     EXPECT(testName, waitState2.bus.cpuTimingTrace()[1].cycles == 9);
@@ -290,7 +299,7 @@ bool testGamePakDataLoadFromIwram()
     machine.cpu.T = 1;
     machine.cpu.reg[1] = 0x08000000;
     machine.bus.write16(0x03000000, 0x6808); // LDR r0, [r1, #0]
-    machine.bus.write32(0x08000000, 0x12345678);
+    writeCartridge32(machine.bus, 0x08000000, 0x12345678);
 
     EXPECT(testName, machine.cpu.tick() == 9);
     EXPECT(testName, machine.cpu.reg[0] == 0x12345678);
@@ -298,6 +307,25 @@ bool testGamePakDataLoadFromIwram()
         { Access::InstructionFetch, 0x03000000, 2, false, 1, Bus::CpuTimingRegion::Iwram },
         { Access::DataRead, 0x08000000, 2, false, 5, Bus::CpuTimingRegion::GamePak0 },
         { Access::DataRead, 0x08000002, 2, true, 3, Bus::CpuTimingRegion::GamePak0 },
+    });
+}
+
+bool testSramWaitcntTimingOracle()
+{
+    constexpr const char* testName = "sram_waitcnt_timing_oracle";
+    Machine machine;
+    machine.bus.enableGbaRegionTiming(true);
+    machine.bus.clearCpuTimingTrace();
+
+    // WAITCNT SRAM bits 0-1 select 4, 3, 2, or 8 waitstates; each access
+    // itself adds one cycle and SRAM has no distinct sequential timing.
+    machine.bus.recordCpuAccess(Access::DataRead, 0x0E000000, 1);
+    machine.bus.write16(0x04000204, 0x0003); // 8 waitstates + one access cycle
+    machine.bus.recordCpuAccess(Access::DataWrite, 0x0E000001, 1);
+    EXPECT(testName, machine.bus.getWaitcnt() == 0x0003);
+    return expectTrace(testName, machine.bus.cpuTimingTrace(), {
+        { Access::DataRead, 0x0E000000, 1, false, 5, Bus::CpuTimingRegion::Sram },
+        { Access::DataWrite, 0x0E000001, 1, true, 9, Bus::CpuTimingRegion::Sram },
     });
 }
 
@@ -328,7 +356,8 @@ int main()
         runTest("waitcnt_changes_gamepak_timing", testWaitcntChangesGamePakTiming) &&
         runTest("gamepak_boundary_forces_nonsequential", testGamePakBoundaryForcesNonSequential) &&
         runTest("gamepak_mirrors_use_independent_waitstates", testGamePakMirrorsUseIndependentWaitstates) &&
-        runTest("gamepak_data_load_from_iwram", testGamePakDataLoadFromIwram);
+        runTest("gamepak_data_load_from_iwram", testGamePakDataLoadFromIwram) &&
+        runTest("sram_waitcnt_timing_oracle", testSramWaitcntTimingOracle);
 
     return passed ? 0 : 1;
 }

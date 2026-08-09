@@ -23,6 +23,7 @@ REGISTER_COUNT = 15
 PROGRAM_WORDS = 256
 NOP = 0xE1A00000  # MOV r0, r0
 STATE_PATTERN = re.compile(r"r(\d+)=([0-9a-fA-F]{8})")
+CPSR_PATTERN = re.compile(r"cpsr=([0-9a-fA-F]{8})")
 OPCODE_NAMES = {
     0: "and", 1: "eor", 2: "sub", 3: "rsb", 4: "add",
     12: "orr", 13: "mov", 14: "bic", 15: "mvn",
@@ -37,7 +38,7 @@ def immediate(opcode: int, rn: int, rd: int, value: int) -> int:
     return 0xE2000000 | (opcode << 21) | (rn << 16) | (rd << 12) | value
 
 
-def generate_program(rng: random.Random, instruction_count: int) -> list[int]:
+def generate_program(rng: random.Random, instruction_count: int, required_opcode: int) -> list[int]:
     # Keep the first stage deliberately hazard-free. The upstream RTL's
     # forwarding path is incomplete, so every instruction reads only registers
     # that this program never writes. This isolates ALU semantics from pipeline
@@ -49,7 +50,10 @@ def generate_program(rng: random.Random, instruction_count: int) -> list[int]:
         # A destination is safe as an input until its own instruction executes.
         # This lets a 15-instruction program remain hazard-free too.
         source_registers = destinations[index:]
-        opcode = rng.choice(register_ops)
+        # Each corpus case is assigned one required ALU family below; the
+        # remaining operations stay random.  This prevents a small random run
+        # from accidentally omitting a supported instruction family.
+        opcode = required_opcode if index == 0 else rng.choice(register_ops)
         rn = 0 if opcode in (13, 15) else rng.choice(source_registers)
         program.append(data_processing(opcode, rn, rd, rng.choice(source_registers)))
     return program
@@ -72,7 +76,7 @@ def assembly_listing(program: list[int]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def parse_state(path: Path, marker: str) -> dict[int, int]:
+def parse_state(path: Path, marker: str) -> tuple[dict[int, int], int]:
     text = path.read_text(encoding="utf-8")
     line = next((line for line in text.splitlines() if line.startswith(marker)), None)
     if line is None:
@@ -80,7 +84,10 @@ def parse_state(path: Path, marker: str) -> dict[int, int]:
     state = {int(register): int(value, 16) for register, value in STATE_PATTERN.findall(line)}
     if set(state) != set(range(REGISTER_COUNT)):
         raise RuntimeError(f"incomplete {marker} state: {line}")
-    return state
+    cpsr_match = CPSR_PATTERN.search(line)
+    if cpsr_match is None:
+        raise RuntimeError(f"missing CPSR in {marker} state: {line}")
+    return state, int(cpsr_match.group(1), 16)
 
 
 def run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[str]:
@@ -161,7 +168,7 @@ def main() -> int:
 
         for case in range(args.cases):
             initial = [rng.getrandbits(32) for _ in range(REGISTER_COUNT)]
-            program = generate_program(rng, args.instructions)
+            program = generate_program(rng, args.instructions, tuple(OPCODE_NAMES)[case % len(OPCODE_NAMES)])
             # The reference instruction cache has no reset/read handshake. Its
             # first fetched word is discarded while that cache output settles.
             # A leading architectural NOP aligns the ten generated operations.
@@ -185,9 +192,12 @@ def main() -> int:
             with rtl_path.open("w", encoding="utf-8") as output:
                 run([vvp, str(simulation), f"+state={state_path}", f"+program={program_path}"], stdout=output)
 
-            iss_state = parse_state(iss_path, "ARM7_ISS_STATE")
-            rtl_state = parse_state(rtl_path, "ARM7_REF_STATE")
-            if iss_state != rtl_state:
+            iss_state, iss_cpsr = parse_state(iss_path, "ARM7_ISS_STATE")
+            rtl_state, rtl_cpsr = parse_state(rtl_path, "ARM7_REF_STATE")
+            # The reference RTL exposes only NZCV; its remaining CPSR bits are
+            # not an ARM7 programmer's model. Compare exactly that shared
+            # architectural subset.
+            if iss_state != rtl_state or (iss_cpsr & 0xF0000000) != (rtl_cpsr & 0xF0000000):
                 print(f"differential mismatch: seed=0x{args.seed:x}, case={case}", file=sys.stderr)
                 print("initial registers:", " ".join(f"r{i}=0x{value:08x}" for i, value in enumerate(initial)), file=sys.stderr)
                 print("program:", " ".join(f"0x{instruction:08x}" for instruction in program), file=sys.stderr)
@@ -197,6 +207,11 @@ def main() -> int:
                             f"r{register}: iss=0x{iss_state[register]:08x} rtl=0x{rtl_state[register]:08x}",
                             file=sys.stderr,
                         )
+                if (iss_cpsr & 0xF0000000) != (rtl_cpsr & 0xF0000000):
+                    print(
+                        f"NZCV: iss=0x{iss_cpsr >> 28:x} rtl=0x{rtl_cpsr >> 28:x}",
+                        file=sys.stderr,
+                    )
                 return 1
 
     print(f"ARM7 differential passed: {args.cases} cases, seed=0x{args.seed:x}")

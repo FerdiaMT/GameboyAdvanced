@@ -1081,7 +1081,9 @@ bool testCMP_HI(CPU& cpu)
 bool testMOV_HI(CPU& cpu)
 {
     cpu.reset();
-    cpu.reg[15] = 0x08000100;
+    // The high-register handler is entered after Thumb fetch has advanced
+    // PC by two bytes.  Source r15 is therefore instruction address + 4.
+    cpu.reg[15] = 0x08000102;
 
     CPU::thumbInstr instr;
     instr.rd = 0;
@@ -1089,9 +1091,9 @@ bool testMOV_HI(CPU& cpu)
 
     cpu.opT_MOV_HI(instr);
 
-    if (cpu.reg[0] != 0x08000100)
+    if (cpu.reg[0] != 0x08000104)
     {
-        std::cout << "  Expected R0=0x08000100, got 0x" << std::hex << cpu.reg[0] << std::dec << std::endl;
+        std::cout << "  Expected R0=0x08000104, got 0x" << std::hex << cpu.reg[0] << std::dec << std::endl;
         return false;
     }
 
@@ -1135,7 +1137,8 @@ bool testLDR_PC(CPU& cpu)
 
     // Calculate target address: (PC + 2 + 2) & ~2 + offset
     uint32_t targetAddr = 0x0800010C;
-    cpu.write32(targetAddr, 0xDEADBEEF);
+    const uint8_t literal[] = { 0xEF, 0xBE, 0xAD, 0xDE };
+    cpu.bus->loadCartridgeImage(literal, sizeof(literal), targetAddr);
 
     CPU::thumbInstr instr;
     instr.rd = 0;
