@@ -14,36 +14,23 @@ jobs:
     name: ASan + UBSan
     runs-on: ubuntu-latest
     timeout-minutes: 25
-
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Install dependencies
-        run: |
+      - run: |
           sudo apt-get update
           sudo apt-get install --yes clang iverilog libsdl2-dev
-
       - name: Run sanitizer suite
         shell: bash
         run: |
           set +e
           tools/run_sanitizers.sh | tee sanitizer.log
           status=${PIPESTATUS[0]}
-          {
-            echo '## ASan + UBSan'
-            echo
-            if [[ "$status" == 0 ]]; then
-              echo 'Passed — no memory-safety or undefined-behaviour findings.'
-            else
-              echo 'Failed — inspect the sanitizer log artifact and job output.'
-            fi
-          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$status" == 0 ]]; then message='Passed — no sanitizer findings.'; else message='Failed — inspect the sanitizer log.'; fi
+          printf '## ASan + UBSan\n\n%s\n' "$message" >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
-
-      - name: Upload sanitizer log
-        if: always()
+      - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: sanitizer-log
@@ -52,57 +39,35 @@ jobs:
           retention-days: 14
 
   coverage:
-    name: Coverage
     runs-on: ubuntu-latest
     timeout-minutes: 25
-
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Install dependencies
-        run: |
+      - run: |
           sudo apt-get update
           sudo apt-get install --yes clang gcovr iverilog libsdl2-dev
-
-      - name: Configure and build coverage target
-        run: |
+      - run: |
           cmake --preset coverage
           cmake --build --preset coverage --parallel 2
-
-      - name: Run coverage suite
-        run: ctest --preset coverage --output-on-failure
-
+          ctest --preset coverage --output-on-failure
       - name: Generate coverage site and Shields metric
         shell: bash
         run: |
           mkdir -p coverage-site
-          gcovr --root . --object-directory build/coverage \
-            --filter 'source/' --filter 'include/' \
-            --html-details coverage-site/index.html \
-            --json-summary coverage-site/summary.json
+          gcovr --root . --object-directory build/coverage --filter 'source/' --filter 'include/' --html-details coverage-site/index.html --json-summary coverage-site/summary.json
           python3 - <<'PY'
           import json
           from pathlib import Path
-
           summary = json.loads(Path('coverage-site/summary.json').read_text())
-          line = summary.get('line_coverage', {})
-          percent = float(line.get('percent', 0.0))
+          percent = float(summary.get('line_coverage', {}).get('percent', 0.0))
           color = 'brightgreen' if percent >= 80 else 'yellow' if percent >= 60 else 'red'
-          Path('coverage-site/coverage.json').write_text(json.dumps({
-              'schemaVersion': 1,
-              'label': 'coverage',
-              'message': f'{percent:.1f}%',
-              'color': color,
-          }) + '\n')
-          Path('coverage-site/coverage.md').write_text(
-              f'## Coverage\\n\\n**Line coverage:** {percent:.1f}%\\n')
+          Path('coverage-site/coverage.json').write_text(json.dumps({'schemaVersion': 1, 'label': 'coverage', 'message': f'{percent:.1f}%', 'color': color}) + '\n')
+          Path('coverage-site/coverage.md').write_text(f'## Coverage\n\n**Line coverage:** {percent:.1f}%\n')
           PY
           cat coverage-site/coverage.md >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload coverage report
-        if: always()
+      - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: coverage-report
@@ -111,7 +76,6 @@ jobs:
           retention-days: 30
 
   deploy-coverage:
-    name: Publish coverage dashboard
     needs: coverage
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     runs-on: ubuntu-latest
@@ -121,22 +85,14 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-
     steps:
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-
-      - name: Download coverage report
-        uses: actions/download-artifact@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/download-artifact@v4
         with:
           name: coverage-report
           path: _site
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@v3
         with:
           path: _site
-
-      - name: Deploy Pages
-        id: deployment
+      - id: deployment
         uses: actions/deploy-pages@v4

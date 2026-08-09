@@ -12,36 +12,21 @@ jobs:
   profile:
     runs-on: ubuntu-latest
     timeout-minutes: 25
-
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Install dependencies
-        run: |
+      - run: |
           sudo apt-get update
           sudo apt-get install --yes clang iverilog valgrind
-
-      - name: Build profiling target
-        run: |
+      - run: |
           cmake --preset debug
           cmake --build --preset debug --target GBA_regression_tests --parallel 2
-
-      - name: Collect Callgrind profile
-        run: |
           mkdir -p callgrind
-          valgrind --tool=callgrind --callgrind-out-file=callgrind/callgrind.out \
-            build/debug/GBA_regression_tests
+          valgrind --tool=callgrind --callgrind-out-file=callgrind/callgrind.out build/debug/GBA_regression_tests
           callgrind_annotate --auto=yes callgrind/callgrind.out > callgrind/callgrind.txt
-          {
-            echo '## Callgrind'
-            echo
-            echo 'A call-count profile is available as a workflow artifact.'
-          } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload Callgrind profile
-        uses: actions/upload-artifact@v4
+          printf '## Callgrind\n\nA call-count profile is available as an artifact.\n' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
         with:
           name: callgrind-profile
           path: callgrind

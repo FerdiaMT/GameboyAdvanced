@@ -13,43 +13,25 @@ jobs:
     name: Debug CTest
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
     steps:
-      - name: Check out source and submodules
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           submodules: recursive
-
-      - name: Install test dependencies
-        run: |
+      - run: |
           sudo apt-get update
           sudo apt-get install --yes clang iverilog libsdl2-dev
-
-      - name: Configure
-        run: cmake --preset debug
-
-      - name: Build
-        run: cmake --build --preset debug --parallel 2
-
+      - run: cmake --preset debug
+      - run: cmake --build --preset debug --parallel 2
       - name: Run CTest suite
-        id: ctest
         shell: bash
         run: |
           set +e
           ctest --preset debug --output-on-failure | tee ctest.log
           status=${PIPESTATUS[0]}
           summary=$(grep -E '[0-9]+% tests passed, [0-9]+ tests failed out of [0-9]+' ctest.log | tail -1 || true)
-          {
-            echo '## CTest'
-            echo
-            echo "\`\`\`text"
-            echo "${summary:-CTest did not produce a summary.}"
-            echo "\`\`\`"
-          } >> "$GITHUB_STEP_SUMMARY"
+          printf '## CTest\n\n```text\n%s\n```\n' "${summary:-CTest did not produce a summary.}" >> "$GITHUB_STEP_SUMMARY"
           exit "$status"
-
-      - name: Upload CTest log
-        if: always()
+      - if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ctest-log

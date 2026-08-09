@@ -17,6 +17,7 @@
 mono_crash.*
 
 # Build results
+[Bb]uild/
 [Dd]ebug/
 [Dd]ebugPublic/
 [Rr]elease/
@@ -32,6 +33,22 @@ bld/
 [Oo]ut/
 [Ll]og/
 [Ll]ogs/
+
+# CMake and local emulator output
+/cmake-build-*/
+/CMakeCache.txt
+/CMakeFiles/
+/cmake_install.cmake
+/Makefile
+/GBA
+*.gba
+*.sav
+*.elf
+*.json.bin
+/gba_bios.bin
+/ferdiaTest*.bin
+/tests/assembly/build/
+/traces/*.trace
 
 # Visual Studio 2015/2017 cache/options directory
 .vs/
