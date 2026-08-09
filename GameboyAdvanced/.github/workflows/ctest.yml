@@ -2,6 +2,8 @@ name: CTest
 
 on:
   pull_request:
+  push:
+    branches: [main]
 
 permissions:
   contents: read
@@ -21,7 +23,7 @@ jobs:
       - name: Install test dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes clang iverilog
+          sudo apt-get install --yes clang iverilog libsdl2-dev
 
       - name: Configure
         run: cmake --preset debug
@@ -30,4 +32,27 @@ jobs:
         run: cmake --build --preset debug --parallel 2
 
       - name: Run CTest suite
-        run: ctest --preset debug --output-on-failure
+        id: ctest
+        shell: bash
+        run: |
+          set +e
+          ctest --preset debug --output-on-failure | tee ctest.log
+          status=${PIPESTATUS[0]}
+          summary=$(grep -E '[0-9]+% tests passed, [0-9]+ tests failed out of [0-9]+' ctest.log | tail -1 || true)
+          {
+            echo '## CTest'
+            echo
+            echo "\`\`\`text"
+            echo "${summary:-CTest did not produce a summary.}"
+            echo "\`\`\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Upload CTest log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctest-log
+          path: ctest.log
+          if-no-files-found: ignore
+          retention-days: 14

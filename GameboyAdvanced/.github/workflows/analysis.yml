@@ -1,0 +1,142 @@
+name: Quality analysis
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sanitizers:
+    name: ASan + UBSan
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang iverilog libsdl2-dev
+
+      - name: Run sanitizer suite
+        shell: bash
+        run: |
+          set +e
+          tools/run_sanitizers.sh | tee sanitizer.log
+          status=${PIPESTATUS[0]}
+          {
+            echo '## ASan + UBSan'
+            echo
+            if [[ "$status" == 0 ]]; then
+              echo 'Passed — no memory-safety or undefined-behaviour findings.'
+            else
+              echo 'Failed — inspect the sanitizer log artifact and job output.'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Upload sanitizer log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sanitizer-log
+          path: sanitizer.log
+          if-no-files-found: ignore
+          retention-days: 14
+
+  coverage:
+    name: Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang gcovr iverilog libsdl2-dev
+
+      - name: Configure and build coverage target
+        run: |
+          cmake --preset coverage
+          cmake --build --preset coverage --parallel 2
+
+      - name: Run coverage suite
+        run: ctest --preset coverage --output-on-failure
+
+      - name: Generate coverage site and Shields metric
+        shell: bash
+        run: |
+          mkdir -p coverage-site
+          gcovr --root . --object-directory build/coverage \
+            --filter 'source/' --filter 'include/' \
+            --html-details coverage-site/index.html \
+            --json-summary coverage-site/summary.json
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          summary = json.loads(Path('coverage-site/summary.json').read_text())
+          line = summary.get('line_coverage', {})
+          percent = float(line.get('percent', 0.0))
+          color = 'brightgreen' if percent >= 80 else 'yellow' if percent >= 60 else 'red'
+          Path('coverage-site/coverage.json').write_text(json.dumps({
+              'schemaVersion': 1,
+              'label': 'coverage',
+              'message': f'{percent:.1f}%',
+              'color': color,
+          }) + '\n')
+          Path('coverage-site/coverage.md').write_text(
+              f'## Coverage\\n\\n**Line coverage:** {percent:.1f}%\\n')
+          PY
+          cat coverage-site/coverage.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage-site
+          if-no-files-found: ignore
+          retention-days: 30
+
+  deploy-coverage:
+    name: Publish coverage dashboard
+    needs: coverage
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      - name: Download coverage report
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: _site
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+      - name: Deploy Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

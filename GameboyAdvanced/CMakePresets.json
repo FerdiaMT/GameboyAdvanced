@@ -25,6 +25,28 @@
         "CMAKE_BUILD_TYPE": "Release",
         "BUILD_TESTING": "OFF"
       }
+    },
+    {
+      "name": "sanitize",
+      "displayName": "ASan + UBSan",
+      "description": "Debug test build with AddressSanitizer and UndefinedBehaviorSanitizer.",
+      "binaryDir": "${sourceDir}/build/sanitize",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": "ON",
+        "GBA_ENABLE_SANITIZERS": "ON"
+      }
+    },
+    {
+      "name": "coverage",
+      "displayName": "gcov coverage",
+      "description": "Debug test build instrumented for GCC gcov coverage.",
+      "binaryDir": "${sourceDir}/build/coverage",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "BUILD_TESTING": "ON",
+        "GBA_ENABLE_COVERAGE": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -35,12 +57,34 @@
     {
       "name": "release",
       "configurePreset": "release"
+    },
+    {
+      "name": "sanitize",
+      "configurePreset": "sanitize"
+    },
+    {
+      "name": "coverage",
+      "configurePreset": "coverage"
     }
   ],
   "testPresets": [
     {
       "name": "debug",
       "configurePreset": "debug",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "sanitize",
+      "configurePreset": "sanitize",
+      "output": {
+        "outputOnFailure": true
+      }
+    },
+    {
+      "name": "coverage",
+      "configurePreset": "coverage",
       "output": {
         "outputOnFailure": true
       }

@@ -1793,7 +1793,7 @@ bool testPUSH_All(CPU& cpu)
     cpu.reset();
     for (int i = 0; i < 8; i++)
     {
-        cpu.reg[i] = 0x11111111 * (i + 1);
+        cpu.reg[i] = 0x11111111U * static_cast<uint32_t>(i + 1);
     }
     cpu.reg[13] = 0x03008000;
     CPU::thumbInstr instr;
@@ -1807,7 +1807,7 @@ bool testPUSH_All(CPU& cpu)
     // Verify memory
     for (int i = 0; i < 8; i++)
     {
-        uint32_t expected = 0x11111111 * (i + 1);
+        uint32_t expected = 0x11111111U * static_cast<uint32_t>(i + 1);
         uint32_t addr = 0x03007FE0 + (i * 4);
         if (cpu.read32(addr) != expected)
         {

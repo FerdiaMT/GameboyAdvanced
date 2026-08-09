@@ -10,6 +10,29 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+option(GBA_ENABLE_SANITIZERS "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
+option(GBA_ENABLE_COVERAGE "Build with GCC gcov coverage instrumentation" OFF)
+
+if(GBA_ENABLE_SANITIZERS AND GBA_ENABLE_COVERAGE)
+    message(FATAL_ERROR "Sanitizers and gcov coverage cannot be enabled in the same build.")
+endif()
+
+if(GBA_ENABLE_SANITIZERS)
+    if(NOT CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+        message(FATAL_ERROR "GBA_ENABLE_SANITIZERS requires GCC or Clang.")
+    endif()
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined)
+endif()
+
+if(GBA_ENABLE_COVERAGE)
+    if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        message(FATAL_ERROR "GBA_ENABLE_COVERAGE currently requires GCC/gcov.")
+    endif()
+    add_compile_options(--coverage -O0 -g)
+    add_link_options(--coverage)
+endif()
+
 set(GBA_CORE_SOURCES
     source/Bus.cpp
     source/GBA.cpp
