@@ -3,6 +3,7 @@
 #include "Bus.h"
 #include <cstdio>
 #include <algorithm>
+#include <cstring>
 #include <string>
 
 void Bus::enableCpuTimingTrace(bool enabled)
@@ -506,17 +507,38 @@ uint16_t Bus::readEepromBit()
 
 void Bus::detectSaveType()
 {
-	auto contains = [this](const char* id)
+	// Save-library identifiers may appear anywhere in the Game Pak image.
+	// Scanning separately for every identifier made loading SMA take four full
+	// passes over the ROM. Inspect each possible identifier once, then apply the
+	// same precedence as the former ordered searches.
+	bool hasFlash1M = false;
+	bool hasFlash = false;
+	bool hasEeprom = false;
+	bool hasSram = false;
+	const auto matches = [this](size_t offset, const char* id, size_t length)
 	{
-		const size_t length = std::char_traits<char>::length(id);
-		return cartridgeRom.size() >= length && std::search(cartridgeRom.begin(), cartridgeRom.end(),
-			id, id + length) != cartridgeRom.end();
+		return offset + length <= cartridgeRom.size() &&
+			std::memcmp(cartridgeRom.data() + offset, id, length) == 0;
 	};
-	if (contains("FLASH1M_V")) detectedSaveType = SaveType::Flash128;
-	else if (contains("FLASH512_V") || contains("FLASH_V")) detectedSaveType = SaveType::Flash64;
-	else if (contains("EEPROM_V")) detectedSaveType = SaveType::Eeprom512;
-	else if (contains("SRAM_V")) detectedSaveType = SaveType::Sram;
-	else detectedSaveType = SaveType::Unknown;
+
+	for (size_t offset = 0; offset < cartridgeRom.size(); ++offset)
+	{
+		switch (cartridgeRom[offset])
+		{
+		case 'F':
+			hasFlash1M = hasFlash1M || matches(offset, "FLASH1M_V", 9);
+			hasFlash = hasFlash || matches(offset, "FLASH512_V", 10) || matches(offset, "FLASH_V", 7);
+			break;
+		case 'E': hasEeprom = hasEeprom || matches(offset, "EEPROM_V", 8); break;
+		case 'S': hasSram = hasSram || matches(offset, "SRAM_V", 6); break;
+		default: break;
+		}
+	}
+
+	detectedSaveType = hasFlash1M ? SaveType::Flash128 :
+		hasFlash ? SaveType::Flash64 :
+		hasEeprom ? SaveType::Eeprom512 :
+		hasSram ? SaveType::Sram : SaveType::Unknown;
 }
 
 uint8_t Bus::readMapped8(uint32_t address) const

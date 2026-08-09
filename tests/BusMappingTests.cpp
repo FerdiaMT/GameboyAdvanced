@@ -71,6 +71,26 @@ bool testWaitcntLivesInIo()
     return true;
 }
 
+bool testSaveTypeDetection()
+{
+    constexpr const char* name = "save_type_detection";
+    const auto detect = [](const char* image, size_t size)
+    {
+        Bus bus;
+        bus.loadCartridgeImage(reinterpret_cast<const uint8_t*>(image), size);
+        return bus.saveType();
+    };
+
+    EXPECT(name, detect("FLASH_V123", 10) == Bus::SaveType::Flash64);
+    EXPECT(name, detect("FLASH512_V123", 13) == Bus::SaveType::Flash64);
+    EXPECT(name, detect("EEPROM_V123", 11) == Bus::SaveType::Eeprom512);
+    EXPECT(name, detect("SRAM_V123", 9) == Bus::SaveType::Sram);
+    // Preserve the former global precedence rather than choosing the first
+    // identifier encountered while scanning the ROM.
+    EXPECT(name, detect("SRAM_V123FLASH1M_V123", 21) == Bus::SaveType::Flash128);
+    return true;
+}
+
 bool testEepromSerialProtocol()
 {
     constexpr const char* name = "eeprom_serial_protocol";
@@ -113,6 +133,7 @@ int main()
         run("mapped_regions_and_mirrors", testMappedRegionsAndMirrors) &&
         run("cartridge_is_read_only_and_mirrored", testCartridgeIsReadOnlyAndMirrored) &&
         run("waitcnt_lives_in_io", testWaitcntLivesInIo) &&
+		run("save_type_detection", testSaveTypeDetection) &&
         run("eeprom_serial_protocol", testEepromSerialProtocol);
     return passed ? 0 : 1;
 }
