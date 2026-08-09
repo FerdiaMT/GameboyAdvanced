@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: '20 3 * * 0'
   workflow_dispatch:
 
 permissions:
@@ -56,17 +58,57 @@ jobs:
         shell: bash
         run: |
           mkdir -p coverage-site
-          gcovr --root . --object-directory build/coverage --filter 'source/' --filter 'include/' --html-details coverage-site/index.html --json-summary coverage-site/summary.json
+          gcda_count=$(find build/coverage -type f -name '*.gcda' | wc -l)
+          gcno_count=$(find build/coverage -type f -name '*.gcno' | wc -l)
+          echo "Coverage inputs: ${gcda_count} .gcda data files, ${gcno_count} .gcno notes files."
+          if (( gcda_count == 0 )); then
+            echo "::warning title=Coverage data missing::No .gcda files were produced by the test run."
+          fi
+          gcovr --root . --object-directory build/coverage --filter 'source/' --filter 'include/' --txt coverage-site/coverage.txt --html-details coverage-site/index.html --json-summary coverage-site/summary.json
+          echo "--- gcovr line-coverage report ---"
+          cat coverage-site/coverage.txt
           python3 - <<'PY'
           import json
           from pathlib import Path
+
           summary = json.loads(Path('coverage-site/summary.json').read_text())
-          percent = float(summary.get('line_coverage', {}).get('percent', 0.0))
+          # gcovr 7+ writes aggregate fields at the JSON root; accept the
+          # older nested layout too so the metric is not silently read as 0%.
+          line_coverage = summary.get('line_coverage')
+          if line_coverage is not None:
+              percent = float(line_coverage.get('percent', 0.0))
+              covered = int(line_coverage.get('covered', 0))
+              total = int(line_coverage.get('total', 0))
+          else:
+              percent = float(summary.get('line_percent', 0.0))
+              covered = int(summary.get('line_covered', 0))
+              total = int(summary.get('line_total', 0))
           color = 'brightgreen' if percent >= 80 else 'yellow' if percent >= 60 else 'red'
           Path('coverage-site/coverage.json').write_text(json.dumps({'schemaVersion': 1, 'label': 'coverage', 'message': f'{percent:.1f}%', 'color': color}) + '\n')
-          Path('coverage-site/coverage.md').write_text(f'## Coverage\n\n**Line coverage:** {percent:.1f}%\n')
+          Path('coverage-site/coverage-metrics.json').write_text(json.dumps({'percent': percent, 'covered': covered, 'total': total}) + '\n')
+          Path('coverage-site/coverage.md').write_text(f'## Coverage\n\n**Total line coverage:** {percent:.1f}% ({covered}/{total} lines)\n')
+          print(f'Total line coverage: {percent:.1f}% ({covered}/{total} lines)')
           PY
           cat coverage-site/coverage.md >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            if ! python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          metrics = json.loads(Path('coverage-site/coverage-metrics.json').read_text())
+          percent = float(metrics['percent'])
+          covered = int(metrics['covered'])
+          total = int(metrics['total'])
+          print(f'Coverage gate: {percent:.1f}% ({covered}/{total} lines); required: 50.0%.')
+          if percent < 50.0:
+              print(f'::error title=Coverage below threshold::Total line coverage is {percent:.1f}% ({covered}/{total} lines); required: 50.0%.')
+              raise SystemExit(1)
+          PY
+            then
+              echo "Total line coverage is below the required 50%; see the gcovr table and coverage summary above." >&2
+              exit 1
+            fi
+          fi
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -75,9 +117,68 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-  deploy-coverage:
-    needs: coverage
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  profile:
+    name: BIOS bootstrap Callgrind
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang iverilog valgrind
+      - name: Profile BIOS bootstrap instruction reads
+        shell: bash
+        run: |
+          cmake --preset debug
+          cmake --build --preset debug --target GBA_bios_bootstrap_tests --parallel 2
+          mkdir -p profile-site callgrind
+          valgrind --tool=callgrind --callgrind-out-file=callgrind/callgrind.out build/debug/GBA_bios_bootstrap_tests
+          callgrind_annotate --auto=yes callgrind/callgrind.out > callgrind/callgrind.txt
+          ir=$(awk '/^summary:/ { print $2; exit }' callgrind/callgrind.out)
+          if [[ ! "$ir" =~ ^[0-9]+$ ]]; then
+            echo 'Callgrind did not produce an Ir summary.' >&2
+            exit 1
+          fi
+          python3 - "$ir" <<'PY'
+          import json
+          import sys
+
+          ir = int(sys.argv[1])
+          if ir >= 1_000_000:
+              value = f'{ir / 1_000_000:.2f}M'
+          elif ir >= 1_000:
+              value = f'{ir / 1_000:.1f}k'
+          else:
+              value = str(ir)
+          with open('profile-site/bios-bootstrap-ir.json', 'w') as stream:
+              json.dump({
+                  'schemaVersion': 1,
+                  'label': 'BIOS bootstrap Ir',
+                  'message': value,
+                  'color': 'blue',
+              }, stream)
+              stream.write('\n')
+          PY
+          printf '## BIOS bootstrap profile\n\n**Callgrind Ir:** %s\n' "$ir" >> "$GITHUB_STEP_SUMMARY"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bios-bootstrap-callgrind
+          path: callgrind
+          if-no-files-found: ignore
+          retention-days: 30
+      - if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: profile-badge
+          path: profile-site
+          retention-days: 30
+
+  deploy-metrics:
+    needs: [coverage, profile]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -90,6 +191,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: coverage-report
+          path: _site
+      - uses: actions/download-artifact@v4
+        with:
+          name: profile-badge
           path: _site
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -2,8 +2,8 @@ Fully working ISS for the ARM7TDMI chip
 
 [![CTest](https://github.com/FerdiaMT/GameboyAdvanced/actions/workflows/ctest.yml/badge.svg)](https://github.com/FerdiaMT/GameboyAdvanced/actions/workflows/ctest.yml)
 [![Quality analysis](https://github.com/FerdiaMT/GameboyAdvanced/actions/workflows/analysis.yml/badge.svg)](https://github.com/FerdiaMT/GameboyAdvanced/actions/workflows/analysis.yml)
-[![Callgrind profile](https://github.com/FerdiaMT/GameboyAdvanced/actions/workflows/profile.yml/badge.svg)](https://github.com/FerdiaMT/GameboyAdvanced/actions/workflows/profile.yml)
 [![Coverage](https://img.shields.io/endpoint?url=https%3A%2F%2Fferdiamt.github.io%2FGameboyAdvanced%2Fcoverage.json)](https://ferdiamt.github.io/GameboyAdvanced/)
+[![BIOS bootstrap Ir](https://img.shields.io/endpoint?url=https%3A%2F%2Fferdiamt.github.io%2FGameboyAdvanced%2Fbios-bootstrap-ir.json)](https://github.com/FerdiaMT/GameboyAdvanced/actions/workflows/analysis.yml)
 
 Uses a RTL verilog with a testbench to verify instruction behavior w/ built in random program generator
 
