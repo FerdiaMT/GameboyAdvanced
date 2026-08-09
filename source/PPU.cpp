@@ -414,9 +414,13 @@ void PPU::plotPixel(uint32_t x, uint16_t line, uint32_t color, unsigned priority
 		lineLayers[x] = layer;
 		return;
 	}
-	if ((windowMask(x, line) & layer) == 0 || priority > linePriorities[x]) return;
+	// WININ/WINOUT only gate layers while one of the hardware windows is
+	// enabled. The BIOS leaves WINOUT clear during its semi-transparent affine
+	// OBJ animation; treating that inactive register as a mask hides every
+	// letter until it switches to the static logo.
+	const uint8_t mask = (displayControl & 0xE000U) != 0 ? windowMask(x, line) : 0x3FU;
+	if ((mask & layer) == 0 || priority > linePriorities[x]) return;
 	uint32_t* output = pixels.data() + line * 240;
-	const uint8_t mask = windowMask(x, line);
 	const bool effects = (mask & 0x20U) != 0;
 	const unsigned effect = (blendControl >> 6) & 3U;
 	const bool sourceTarget = (blendControl & layer) != 0;

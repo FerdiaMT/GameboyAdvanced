@@ -33,6 +33,16 @@ private:
 	std::array<uint8_t, SaveSize> save{};
 	std::vector<uint8_t> cartridgeRom;
 	SaveType detectedSaveType = SaveType::Unknown;
+	enum class EepromPhase : uint8_t { Idle, Command, Address, WriteData, Stop };
+	EepromPhase eepromPhase = EepromPhase::Idle;
+	bool eepromReadCommand = false;
+	uint8_t eepromAddressBits = 0;
+	uint16_t eepromAddress = 0;
+	uint8_t eepromDataBits = 0;
+	uint64_t eepromData = 0;
+	uint8_t eepromReadDummyBits = 0;
+	uint8_t eepromReadDataBits = 0;
+	uint16_t eepromReadAddress = 0;
 	IoReadHandler ioReadHandler;
 	IoWriteHandler ioWriteHandler;
 
@@ -163,6 +173,10 @@ private:
 	static uint32_t vramOffset(uint32_t address);
 	static uint32_t cartridgeOffset(uint32_t address);
 	uint32_t saveOffset(uint32_t address) const;
+	bool isEepromAddress(uint32_t address) const;
+	void writeEepromBit(uint8_t bit);
+	uint16_t readEepromBit();
+	void resetEepromTransfer();
 	void detectSaveType();
 
 	CpuTimingConfig cpuTimingConfig;

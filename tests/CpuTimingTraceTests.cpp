@@ -83,17 +83,17 @@ bool testThumbSequentialFetches()
 {
     constexpr const char* testName = "thumb_sequential_fetches";
     Machine machine;
-    machine.cpu.pc = 0x100;
+    machine.cpu.pc = 0x03000000;
     machine.cpu.T = 1;
-    machine.bus.write16(0x100, 0x202A); // MOV r0, #42
-    machine.bus.write16(0x102, 0x3001); // ADD r0, #1
+    machine.bus.write16(0x03000000, 0x202A); // MOV r0, #42
+    machine.bus.write16(0x03000002, 0x3001); // ADD r0, #1
 
     EXPECT(testName, machine.cpu.tick() == 4);
     EXPECT(testName, machine.cpu.tick() == 5);
     EXPECT(testName, machine.cpu.reg[0] == 43);
     return expectTrace(testName, machine.bus.cpuTimingTrace(), {
-        { Access::InstructionFetch, 0x100, 2, false, 4, Bus::CpuTimingRegion::Bios },
-        { Access::InstructionFetch, 0x102, 2, true, 1, Bus::CpuTimingRegion::Bios },
+        { Access::InstructionFetch, 0x03000000, 2, false, 4, Bus::CpuTimingRegion::Iwram },
+        { Access::InstructionFetch, 0x03000002, 2, true, 1, Bus::CpuTimingRegion::Iwram },
     });
 }
 

@@ -151,12 +151,16 @@ void CPU::writeALUResult(uint8_t rdI, uint32_t result, bool s)
 	if (s && rdI == 15)
 	{
 		returnFromException();
-		reg[15] = result; 
 	}
-	else
+	if (rdI == 15)
 	{
-		reg[rdI] = result;
+		// Data-processing writes to r15 never exchange instruction sets.  The
+		// low address bits are ignored in the current state; in the exception
+		// return form CPSR/T was restored immediately above.
+		reg[15] = T ? (result & ~1U) : (result & ~3U);
+		return;
 	}
+	reg[rdI] = result;
 }
 
 //////////////////////////////////////////////////////////////////////////
@@ -348,7 +352,6 @@ int CPU::opA_AND(armInstr instr)
 
 
 	if (instr.S) { setFlagNZC(res, isCarry); }
-	if (instr.rd == 15) res += 4;
 	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -375,7 +378,6 @@ int CPU::opA_ORR(armInstr instr)
 	uint32_t res = op1 | op2;
 
 	if (instr.S) { setFlagNZC(res, isCarry); }
-	if (instr.rd == 15) res += 4;
 	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -402,7 +404,6 @@ int CPU::opA_EOR(armInstr instr)
 	uint32_t res = op1 ^ op2;
 
 	if (instr.S) { setFlagNZC(res, isCarry); }
-	if (instr.rd == 15) res += 4;
 	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -427,7 +428,6 @@ int CPU::opA_ADD(armInstr instr)
 	uint32_t res = op1 + op2;
 
 	if (instr.S) { setFlagsAdd(res, op1, op2); }
-	if (instr.rd == 15) res += 4;
 	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -493,7 +493,6 @@ int CPU::opA_ADC(armInstr instr)
 			static_cast<int64_t>(static_cast<int32_t>(op2)) + carryIn;
 		V = signedResult > 0x7FFFFFFFLL || signedResult < -0x80000000LL;
 	}
-	if (instr.rd == 15) res += 4;
 	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -530,7 +529,6 @@ int CPU::opA_SBC(armInstr instr)
 			static_cast<int64_t>(static_cast<int32_t>(op2)) - borrow;
 		V = signedResult > 0x7FFFFFFFLL || signedResult < -0x80000000LL;
 	}
-	if (instr.rd == 15) res += 4;
 	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -559,7 +557,6 @@ int CPU::opA_RSB(armInstr instr)
 	uint32_t res = op2 -op1 ;
 
 	if (instr.S) { setFlagsSub(res, op2, op1); }
-	if (instr.rd == 15) res += 4;
 	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -595,7 +592,6 @@ int CPU::opA_RSC(armInstr instr)
 			static_cast<int64_t>(static_cast<int32_t>(op1)) - borrow;
 		V = signedResult > 0x7FFFFFFFLL || signedResult < -0x80000000LL;
 	}
-	if (instr.rd == 15) res += 4;
 	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -747,7 +743,6 @@ int CPU::opA_MOV(armInstr instr)
 	uint32_t res = op2;
 
 	if (instr.S) { setFlagNZC(res, isCarry); }
-	if (instr.rd == 15) res += 4;
 	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -763,7 +758,6 @@ int CPU::opA_MVN(armInstr instr)
 	uint32_t res = ~(op2);
 
 	if (instr.S) { setFlagNZC(res, isCarry); }
-	if (instr.rd == 15) res += 4;
 	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();
@@ -790,7 +784,6 @@ int CPU::opA_BIC(armInstr instr)
 	uint32_t res = op1 & ~(op2);
 
 	if (instr.S) { setFlagNZC(res, isCarry); }
-	if (instr.rd == 15) res += 4;
 	pc += 4;
 	writeALUResult(instr.rd, res, instr.S);
 	return dataProcessingCycleCalculator();

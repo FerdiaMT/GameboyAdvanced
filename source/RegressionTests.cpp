@@ -55,16 +55,17 @@ bool testArmMovAndAdd()
 {
     constexpr const char* testName = "arm_mov_and_add";
     Machine machine;
-    machine.cpu.pc = 0x100;
-    machine.bus.write32(0x100, 0xE3A00020); // MOV r0, #0x20
-    machine.bus.write32(0x104, 0xE2801022); // ADD r1, r0, #0x22
+    // BIOS is ROM; execute the synthetic test program from IWRAM instead.
+    machine.cpu.pc = 0x03000000;
+    machine.bus.write32(0x03000000, 0xE3A00020); // MOV r0, #0x20
+    machine.bus.write32(0x03000004, 0xE2801022); // ADD r1, r0, #0x22
 
     EXPECT(testName, machine.cpu.tick() == 1);
     EXPECT(testName, machine.cpu.reg[0] == 0x20);
-    EXPECT(testName, machine.cpu.pc == 0x104);
+    EXPECT(testName, machine.cpu.pc == 0x03000004);
     EXPECT(testName, machine.cpu.tick() == 2);
     EXPECT(testName, machine.cpu.reg[1] == 0x42);
-    EXPECT(testName, machine.cpu.pc == 0x108);
+    EXPECT(testName, machine.cpu.pc == 0x03000008);
     return true;
 }
 

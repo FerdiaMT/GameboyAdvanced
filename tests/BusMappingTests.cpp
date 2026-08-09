@@ -1,5 +1,6 @@
 #include "Bus.h"
 
+#include <array>
 #include <cstdint>
 #include <iostream>
 
@@ -21,7 +22,9 @@ bool testMappedRegionsAndMirrors()
 {
     constexpr const char* name = "mapped_regions_and_mirrors";
     Bus bus;
-    bus.write8(0x00000100, 0x10);
+    std::array<uint8_t, 0x4000> bios{};
+    bios[0x100] = 0x10;
+    bus.loadBiosImage(bios.data(), bios.size());
     bus.write8(0x02000001, 0x20);
     bus.write8(0x03000002, 0x30);
     bus.write8(0x04000003, 0x40);
@@ -30,6 +33,8 @@ bool testMappedRegionsAndMirrors()
     bus.write8(0x07000006, 0x70);
     bus.write8(0x0E000007, 0x80);
 
+    EXPECT(name, bus.read8(0x00000100) == 0x10);
+    bus.write8(0x00000100, 0x99);
     EXPECT(name, bus.read8(0x00000100) == 0x10);
     EXPECT(name, bus.read8(0x02040001) == 0x20);
     EXPECT(name, bus.read8(0x03008002) == 0x30);
@@ -66,6 +71,33 @@ bool testWaitcntLivesInIo()
     return true;
 }
 
+bool testEepromSerialProtocol()
+{
+    constexpr const char* name = "eeprom_serial_protocol";
+    Bus bus;
+    const uint8_t eepromId[] = { 'E','E','P','R','O','M','_','V','1','2','0' };
+    bus.loadCartridgeImage(eepromId, sizeof(eepromId));
+    EXPECT(name, bus.saveType() == Bus::SaveType::Eeprom512);
+
+    constexpr uint32_t port = 0x0DFFFF00;
+    constexpr uint8_t address = 0x15;
+    constexpr uint64_t value = 0x0123456789ABCDEFULL;
+    auto send = [&](uint8_t bit) { bus.write16(port, bit); };
+    send(1); send(0); // write command: 10
+    for (int bit = 5; bit >= 0; --bit) send(address >> bit);
+    for (int bit = 63; bit >= 0; --bit) send(static_cast<uint8_t>(value >> bit));
+    send(0); // stop bit
+
+    send(1); send(1); // read command: 11
+    for (int bit = 5; bit >= 0; --bit) send(address >> bit);
+    send(0); // stop bit
+    for (int count = 0; count < 4; ++count) EXPECT(name, bus.read16(port) == 0);
+    uint64_t received = 0;
+    for (int count = 0; count < 64; ++count) received = (received << 1) | bus.read16(port);
+    EXPECT(name, received == value);
+    return true;
+}
+
 using Test = bool (*)();
 bool run(const char* name, Test test)
 {
@@ -80,6 +112,7 @@ int main()
     const bool passed =
         run("mapped_regions_and_mirrors", testMappedRegionsAndMirrors) &&
         run("cartridge_is_read_only_and_mirrored", testCartridgeIsReadOnlyAndMirrored) &&
-        run("waitcnt_lives_in_io", testWaitcntLivesInIo);
+        run("waitcnt_lives_in_io", testWaitcntLivesInIo) &&
+        run("eeprom_serial_protocol", testEepromSerialProtocol);
     return passed ? 0 : 1;
 }

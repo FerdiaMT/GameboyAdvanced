@@ -407,6 +407,18 @@ bool testObjectsWindowsAndEffects()
     gba.ppu.advance(960);
     EXPECT(name, gba.ppu.framebuffer()[0] == 0xFF7F7F00U);
 
+    // WINOUT must be ignored while every window is disabled. The real BIOS
+    // uses this state for its semi-transparent affine-logo animation.
+    gba.ppu.reset();
+    gba.bus.write16(0x04000000, 0x1100); // BG0 + OBJ, no windows enabled
+    installSimpleRedBackground(gba);
+    installGreenObject(gba, 0x0400, 0);
+    gba.bus.write16(0x04000050, 0x0150);
+    gba.bus.write16(0x04000052, 0x0808);
+    gba.bus.write16(0x0400004A, 0x0000); // WINOUT would hide layers if active
+    gba.ppu.advance(960);
+    EXPECT(name, gba.ppu.framebuffer()[0] == 0xFF7F7F00U);
+
     gba.ppu.reset();
     gba.bus.write16(0x04000000, 0x0083); // Forced blank in Mode 3
     gba.bus.write16(0x06000000, 0x001F);

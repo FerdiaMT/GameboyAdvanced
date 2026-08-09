@@ -2,6 +2,7 @@
 #include "tdmi7/CPU.h"
 #include "tdmi7/Decoder.h"
 
+#include <array>
 #include <cstdint>
 #include <iostream>
 
@@ -31,29 +32,29 @@ bool testArmAndThumbSwiEntry()
 {
     constexpr const char* name = "arm_and_thumb_swi_entry";
     Machine arm;
-    arm.cpu.pc = 0x100;
+    arm.cpu.pc = 0x03000100;
     arm.cpu.N = 1;
     arm.cpu.C = 1;
     const uint32_t armCpsr = arm.cpu.CPSR;
-    arm.bus.write32(0x100, 0xEF000042); // SWI #0x42
+    arm.bus.write32(0x03000100, 0xEF000042); // SWI #0x42
     arm.cpu.tick();
     EXPECT(name, arm.cpu.curMode == tdmi7::CPU::mode::Supervisor);
     EXPECT(name, arm.cpu.pc == 0x08);
-    EXPECT(name, arm.cpu.lr == 0x104);
+    EXPECT(name, arm.cpu.lr == 0x03000104);
     EXPECT(name, arm.cpu.getSPSR() == armCpsr);
     EXPECT(name, arm.cpu.I == 1 && arm.cpu.T == 0);
     EXPECT(name, arm.cpu.N == 1 && arm.cpu.C == 1);
 
     Machine thumb;
-    thumb.cpu.pc = 0x100;
+    thumb.cpu.pc = 0x03000100;
     thumb.cpu.T = 1;
     thumb.cpu.Z = 1;
     const uint32_t thumbCpsr = thumb.cpu.CPSR;
-    thumb.bus.write16(0x100, 0xDF42); // SWI #0x42
+    thumb.bus.write16(0x03000100, 0xDF42); // SWI #0x42
     thumb.cpu.tick();
     EXPECT(name, thumb.cpu.curMode == tdmi7::CPU::mode::Supervisor);
     EXPECT(name, thumb.cpu.pc == 0x08);
-    EXPECT(name, thumb.cpu.lr == 0x102);
+    EXPECT(name, thumb.cpu.lr == 0x03000102);
     EXPECT(name, thumb.cpu.getSPSR() == thumbCpsr);
     EXPECT(name, thumb.cpu.T == 0 && thumb.cpu.Z == 1);
     return true;
@@ -131,20 +132,24 @@ bool testArmIrqReturnInstruction()
 {
     constexpr const char* name = "arm_irq_return_instruction";
     Machine machine;
+	std::array<uint8_t, 0x4000> bios{};
+	const uint32_t returnInstruction = 0xE25EF004; // SUBS pc, lr, #4
+	for (unsigned byte = 0; byte < 4; ++byte)
+		bios[0x18 + byte] = static_cast<uint8_t>(returnInstruction >> (byte * 8));
+	machine.bus.loadBiosImage(bios.data(), bios.size());
     machine.cpu.writeCPSR(static_cast<uint32_t>(tdmi7::CPU::mode::System));
-    machine.cpu.pc = 0x100;
+    machine.cpu.pc = 0x03000100;
     machine.cpu.I = 0;
     const uint32_t originalCpsr = machine.cpu.CPSR;
     machine.cpu.requestIrq();
     machine.cpu.tick();
     EXPECT(name, machine.cpu.pc == 0x18);
-    EXPECT(name, machine.cpu.lr == 0x104);
+    EXPECT(name, machine.cpu.lr == 0x03000104);
 
-    machine.bus.write32(0x18, 0xE25EF004); // SUBS pc, lr, #4
     machine.cpu.tick();
     EXPECT(name, machine.cpu.curMode == tdmi7::CPU::mode::System);
     EXPECT(name, machine.cpu.CPSR == originalCpsr);
-    EXPECT(name, machine.cpu.pc == 0x100);
+    EXPECT(name, machine.cpu.pc == 0x03000100);
     return true;
 }
 
