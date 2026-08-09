@@ -27,3 +27,31 @@ You can run the tests using
 ctest --preset debug -j 4 
 ```
 The GBA object can be ran with the --trace flag, which will return a Simics like instruction trace
+
+## Browser / WebAssembly build
+
+The browser frontend starts the bundled `bin/gba_bios.bin` and `bin/sma.gba`
+automatically. It needs an [Emscripten](https://emscripten.org/) environment;
+the native compiler cannot produce the WebAssembly target.
+
+```sh
+# Activate the local Emscripten SDK for this shell.
+source /home/ferdia/emsdk/emsdk_env.sh
+
+emcmake cmake --preset web
+cmake --build --preset web
+```
+
+Run the `source` command once in each new terminal before configuring a web
+build.
+
+Serve `build/web` over HTTP (browsers do not permit the generated page to load
+its `.wasm` and `.data` files from `file://`):
+
+```sh
+python3 -m http.server --directory build/web 8080
+```
+
+Open `http://localhost:8080/index.html`. The page provides Pause and Reset;
+keyboard controls are Z/A, X/B, A/L, S/R, arrows/D-pad, Enter/Start, and
+Backspace/Select.
