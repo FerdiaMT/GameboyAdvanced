@@ -73,13 +73,13 @@ bool testArmConditionalSkip()
 {
     constexpr const char* testName = "arm_conditional_skip";
     Machine machine;
-    machine.cpu.pc = 0x100;
+    machine.cpu.pc = 0x03000100;
     machine.cpu.Z = 1;
-    machine.bus.write32(0x100, 0x13A000FF); // MOVNE r0, #0xFF
+    machine.bus.write32(0x03000100, 0x13A000FF); // MOVNE r0, #0xFF
 
     machine.cpu.tick();
     EXPECT(testName, machine.cpu.reg[0] == 0);
-    EXPECT(testName, machine.cpu.pc == 0x104);
+    EXPECT(testName, machine.cpu.pc == 0x03000104);
     return true;
 }
 
@@ -87,13 +87,13 @@ bool testArmPcRelativeLiteralLoad()
 {
     constexpr const char* testName = "arm_pc_relative_literal_load";
     Machine machine;
-    machine.cpu.pc = 0x100;
-    machine.bus.write32(0x100, 0xE59F0000); // LDR r0, [pc, #0] reads from 0x108
-    machine.bus.write32(0x108, 0xDEBB20E3);
+    machine.cpu.pc = 0x03000100;
+    machine.bus.write32(0x03000100, 0xE59F0000); // LDR r0, [pc, #0]
+    machine.bus.write32(0x03000108, 0xDEBB20E3);
 
     machine.cpu.tick();
     EXPECT(testName, machine.cpu.reg[0] == 0xDEBB20E3);
-    EXPECT(testName, machine.cpu.pc == 0x104);
+    EXPECT(testName, machine.cpu.pc == 0x03000104);
     return true;
 }
 
@@ -103,19 +103,19 @@ bool testArmTestSwiHalt()
 
     Machine passMachine;
     passMachine.cpu.enableTestSwiHalt(true);
-    passMachine.cpu.pc = 0x100;
-    passMachine.bus.write32(0x100, 0xEF000000); // SWI #0: pass
+    passMachine.cpu.pc = 0x03000100;
+    passMachine.bus.write32(0x03000100, 0xEF000000); // SWI #0: pass
     passMachine.cpu.tick();
     EXPECT(testName, passMachine.cpu.testHalt == tdmi7::CPU::TestHalt::Passed);
-    EXPECT(testName, passMachine.cpu.pc == 0x104);
+    EXPECT(testName, passMachine.cpu.pc == 0x03000104);
 
     Machine failMachine;
     failMachine.cpu.enableTestSwiHalt(true);
-    failMachine.cpu.pc = 0x100;
-    failMachine.bus.write32(0x100, 0xEF000001); // SWI #1: fail
+    failMachine.cpu.pc = 0x03000100;
+    failMachine.bus.write32(0x03000100, 0xEF000001); // SWI #1: fail
     failMachine.cpu.tick();
     EXPECT(testName, failMachine.cpu.testHalt == tdmi7::CPU::TestHalt::Failed);
-    EXPECT(testName, failMachine.cpu.pc == 0x104);
+    EXPECT(testName, failMachine.cpu.pc == 0x03000104);
     return true;
 }
 
@@ -123,17 +123,17 @@ bool testThumbMovAndAdd()
 {
     constexpr const char* testName = "thumb_mov_and_add";
     Machine machine;
-    machine.cpu.pc = 0x100;
+    machine.cpu.pc = 0x03000100;
     machine.cpu.T = 1;
-    machine.bus.write16(0x100, 0x202A); // MOV r0, #0x2A
-    machine.bus.write16(0x102, 0x3003); // ADD r0, #3
+    machine.bus.write16(0x03000100, 0x202A); // MOV r0, #0x2A
+    machine.bus.write16(0x03000102, 0x3003); // ADD r0, #3
 
     EXPECT(testName, machine.cpu.tick() == 1);
     EXPECT(testName, machine.cpu.reg[0] == 0x2A);
-    EXPECT(testName, machine.cpu.pc == 0x102);
+    EXPECT(testName, machine.cpu.pc == 0x03000102);
     EXPECT(testName, machine.cpu.tick() == 2);
     EXPECT(testName, machine.cpu.reg[0] == 0x2D);
-    EXPECT(testName, machine.cpu.pc == 0x104);
+    EXPECT(testName, machine.cpu.pc == 0x03000104);
     return true;
 }
 
@@ -141,14 +141,14 @@ bool testThumbPcRelativeLiteralLoad()
 {
     constexpr const char* testName = "thumb_pc_relative_literal_load";
     Machine machine;
-    machine.cpu.pc = 0x100;
+    machine.cpu.pc = 0x03000100;
     machine.cpu.T = 1;
-    machine.bus.write16(0x100, 0x4800); // LDR r0, [pc, #0] reads from 0x104
-    machine.bus.write32(0x104, 0x12345678);
+    machine.bus.write16(0x03000100, 0x4800); // LDR r0, [pc, #0]
+    machine.bus.write32(0x03000104, 0x12345678);
 
     machine.cpu.tick();
     EXPECT(testName, machine.cpu.reg[0] == 0x12345678);
-    EXPECT(testName, machine.cpu.pc == 0x102);
+    EXPECT(testName, machine.cpu.pc == 0x03000102);
     return true;
 }
 
