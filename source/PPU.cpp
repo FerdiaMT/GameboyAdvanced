@@ -254,27 +254,32 @@ void PPU::renderScanline(uint16_t line)
 		// transparent, so clearing to black hides the BIOS/game-selected
 		// background behind otherwise-correct text and sprite pixels.
 		std::fill(output, output + 240, color555(bus.ppuReadPalette16(0x05000000U)));
-		std::array<unsigned, 4> order = { 0, 1, 2, 3 };
-		std::sort(order.begin(), order.end(), [this](unsigned left, unsigned right)
+		// Pixels must be submitted in hardware priority order, rather than all
+		// BGs followed by all OBJs.  In particular, a high-priority alpha BG can
+		// blend against a lower-priority OBJ only when that OBJ is already the
+		// destination pixel.
+		for (int priority = 3; priority >= 0; --priority)
 		{
-			const unsigned leftPriority = backgrounds[left].control & 3U;
-			const unsigned rightPriority = backgrounds[right].control & 3U;
-			return leftPriority != rightPriority ? leftPriority > rightPriority : left > right;
-		});
-		for (unsigned background : order)
-		{
-			if (!(displayControl & (0x0100U << background))) continue;
-			const bool affine = (mode == 1 && background == 2) || (mode == 2 && background >= 2);
-			const bool valid = mode == 0 || (mode == 1 && background <= 2) || background >= 2;
-			if (valid) affine ? renderAffineBackground(background, line) : renderTextBackground(background, line);
+			// Equal-priority BGs are ordered BG0..BG3 from front to back, so
+			// submit them in reverse order and let the later, lower-numbered BG
+			// replace the pixel.
+			for (int background = 3; background >= 0; --background)
+			{
+				if ((backgrounds[background].control & 3U) != static_cast<unsigned>(priority) ||
+					!(displayControl & (0x0100U << background))) continue;
+				const bool affine = (mode == 1 && background == 2) || (mode == 2 && background >= 2);
+				const bool valid = mode == 0 || (mode == 1 && background <= 2) || background >= 2;
+				if (valid) affine ? renderAffineBackground(static_cast<unsigned>(background), line) :
+					renderTextBackground(static_cast<unsigned>(background), line);
+			}
+			renderObjects(line, static_cast<unsigned>(priority));
 		}
-		renderObjects(line);
 	}
 	else if (mode == 3)
 	{
 		for (uint32_t x = 0; x < 240; ++x)
 			plotPixel(x, line, color555(bus.ppuReadVram16(0x06000000U + (line * 240 + x) * 2)), 3, 4);
-		renderObjects(line);
+		for (int priority = 3; priority >= 0; --priority) renderObjects(line, static_cast<unsigned>(priority));
 	}
 	else if (mode == 4)
 	{
@@ -284,7 +289,7 @@ void PPU::renderScanline(uint16_t line)
 			const uint8_t index = bus.ppuReadVram8(0x06000000U + page + line * 240 + x);
 			plotPixel(x, line, color555(bus.ppuReadPalette16(0x05000000U + index * 2)), 3, 4);
 		}
-		renderObjects(line);
+		for (int priority = 3; priority >= 0; --priority) renderObjects(line, static_cast<unsigned>(priority));
 	}
 	else if (mode == 5)
 	{
@@ -292,7 +297,7 @@ void PPU::renderScanline(uint16_t line)
 		for (uint32_t x = 0; x < 240; ++x)
 			if (x < 160 && line < 128)
 				plotPixel(x, line, color555(bus.ppuReadVram16(0x06000000U + page + (line * 160 + x) * 2)), 3, 4);
-		renderObjects(line);
+		for (int priority = 3; priority >= 0; --priority) renderObjects(line, static_cast<unsigned>(priority));
 	}
 	else std::fill(output, output + 240, color555(bus.ppuReadPalette16(0x05000000U)));
 }
@@ -500,7 +505,7 @@ void PPU::prepareObjectWindow(uint16_t line)
 	}
 }
 
-void PPU::renderObjects(uint16_t line)
+void PPU::renderObjects(uint16_t line, unsigned requestedPriority)
 {
 	static constexpr uint8_t widths[3][4] = { { 8, 16, 32, 64 }, { 16, 32, 32, 64 }, { 8, 8, 16, 32 } };
 	static constexpr uint8_t heights[3][4] = { { 8, 16, 32, 64 }, { 8, 8, 16, 32 }, { 16, 32, 32, 64 } };
@@ -548,6 +553,7 @@ void PPU::renderObjects(uint16_t line)
 		const bool color256 = (attr0 & 0x2000U) != 0;
 		const bool useMosaic = (attr0 & 0x1000U) != 0;
 		const unsigned priority = (attr2 >> 10) & 3U;
+		if (priority != requestedPriority) continue;
 		const unsigned palette = (attr2 >> 12) & 0xFU;
 		const unsigned baseTile = attr2 & 0x3FFU;
 		for (unsigned localX = 0; localX < displayWidth; ++localX)

@@ -114,8 +114,39 @@ bool testObjShowcaseProgram()
     return true;
 }
 
+bool testAlphaBackgroundBlendsOverLowerPriorityObj()
+{
+    GBA gba;
+    gba.reset();
+
+    // BG0 priority 0 is a red alpha layer. OBJ0 priority 1 is blue beneath
+    // it.  The GBA priority pipeline must submit the OBJ before BG0 so the
+    // latter can use it as its alpha-blend destination.
+    gba.bus.write16(0x04000000, 0x1100); // mode 0, BG0 and OBJ enabled
+    gba.bus.write16(0x04000008, 0x0100); // BG0: priority 0, screen base 1
+    gba.bus.write16(0x04000050, 0x1041); // BG0 target A, alpha, OBJ target B
+    gba.bus.write16(0x04000052, 0x0808); // 50% / 50%
+
+    gba.bus.write16(0x05000002, 0x001F); // BG palette entry 1: red
+    gba.bus.write16(0x05000204, 0x7C00); // OBJ palette entry 2: blue
+    for (uint32_t offset = 0; offset < 32; ++offset)
+    {
+        gba.bus.write8(0x06000000 + offset, 0x11); // BG tile 0, colour 1
+        gba.bus.write8(0x06010000 + offset, 0x22); // OBJ tile 0, colour 2
+    }
+    gba.bus.write16(0x06000800, 0); // BG map entry: tile 0
+    gba.bus.write16(0x07000000, 0); // OBJ0 at (0, 0), regular 4bpp
+    gba.bus.write16(0x07000002, 0);
+    gba.bus.write16(0x07000004, 0x0400); // OBJ priority 1
+
+    gba.ppu.advance(960); // render scanline 0 at HBlank
+    return expect(gba.ppu.framebuffer()[0] == 0xFF7F007FU,
+        "alpha BG blends over lower-priority OBJ");
+}
+
 int main()
 {
     return testGradientProgram() && testRgbCheckerboardProgram() && testRgbScrollProgram() &&
-        testBackgroundScrollProgram() && testObjShowcaseProgram() ? 0 : 1;
+        testBackgroundScrollProgram() && testObjShowcaseProgram() &&
+        testAlphaBackgroundBlendsOverLowerPriorityObj() ? 0 : 1;
 }
