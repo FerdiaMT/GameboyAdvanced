@@ -352,7 +352,12 @@ void PPU::renderTextBackground(unsigned backgroundIndex, uint16_t line)
 		else
 		{
 			const uint8_t packed = bus.ppuReadVram8(0x06000000U + charBase + tile * 32U + tileY * 4U + tileX / 2U);
-			colorIndex = static_cast<uint8_t>(((tileX & 1U) ? packed >> 4 : packed & 0x0FU) + ((entry >> 12) & 0xFU) * 16U);
+			const uint8_t tileColorIndex = (tileX & 1U) ? packed >> 4 : packed & 0x0FU;
+			// In 4bpp text backgrounds, colour zero is transparent before the
+			// screen-entry palette-bank offset is applied.  Otherwise banked text
+			// (such as SMA's Nintendo logo) gets an opaque rectangular backdrop.
+			if (tileColorIndex == 0) continue;
+			colorIndex = static_cast<uint8_t>(tileColorIndex + ((entry >> 12) & 0xFU) * 16U);
 		}
 		if (colorIndex != 0) plotPixel(screenX, line, color555(bus.ppuReadPalette16(0x05000000U + colorIndex * 2U)), background.control & 3U, static_cast<uint8_t>(1U << backgroundIndex));
 	}
@@ -414,9 +419,13 @@ void PPU::plotPixel(uint32_t x, uint16_t line, uint32_t color, unsigned priority
 		lineLayers[x] = layer;
 		return;
 	}
-	if ((windowMask(x, line) & layer) == 0 || priority > linePriorities[x]) return;
+	// WININ/WINOUT only gate layers while one of the hardware windows is
+	// enabled. The BIOS leaves WINOUT clear during its semi-transparent affine
+	// OBJ animation; treating that inactive register as a mask hides every
+	// letter until it switches to the static logo.
+	const uint8_t mask = (displayControl & 0xE000U) != 0 ? windowMask(x, line) : 0x3FU;
+	if ((mask & layer) == 0 || priority > linePriorities[x]) return;
 	uint32_t* output = pixels.data() + line * 240;
-	const uint8_t mask = windowMask(x, line);
 	const bool effects = (mask & 0x20U) != 0;
 	const unsigned effect = (blendControl >> 6) & 3U;
 	const bool sourceTarget = (blendControl & layer) != 0;
@@ -574,7 +583,12 @@ void PPU::renderObjects(uint16_t line)
 			else
 			{
 				const uint8_t packed = bus.ppuReadVram8(objBase + tile * 32U + (static_cast<unsigned>(sourceY) & 7U) * 4U + (static_cast<unsigned>(sourceX) & 7U) / 2U);
-				index = static_cast<uint8_t>(((sourceX & 1U) ? packed >> 4 : packed & 0xFU) + palette * 16U);
+				const uint8_t colorIndex = (sourceX & 1U) ? packed >> 4 : packed & 0xFU;
+				// OBJ colour zero is transparent within every 16-colour palette
+				// bank.  Applying the bank offset first turns it into 16, 32, ...
+				// and incorrectly covers the background.
+				if (colorIndex == 0) continue;
+				index = static_cast<uint8_t>(colorIndex + palette * 16U);
 			}
 			if (index != 0)
 			{

@@ -2,6 +2,7 @@
 #include "tdmi7/CPU.h"
 #include "tdmi7/Decoder.h"
 
+#include <array>
 #include <cstdint>
 #include <iostream>
 
@@ -31,29 +32,29 @@ bool testArmAndThumbSwiEntry()
 {
     constexpr const char* name = "arm_and_thumb_swi_entry";
     Machine arm;
-    arm.cpu.pc = 0x100;
+    arm.cpu.pc = 0x03000100;
     arm.cpu.N = 1;
     arm.cpu.C = 1;
     const uint32_t armCpsr = arm.cpu.CPSR;
-    arm.bus.write32(0x100, 0xEF000042); // SWI #0x42
+    arm.bus.write32(0x03000100, 0xEF000042); // SWI #0x42
     arm.cpu.tick();
     EXPECT(name, arm.cpu.curMode == tdmi7::CPU::mode::Supervisor);
     EXPECT(name, arm.cpu.pc == 0x08);
-    EXPECT(name, arm.cpu.lr == 0x104);
+    EXPECT(name, arm.cpu.lr == 0x03000104);
     EXPECT(name, arm.cpu.getSPSR() == armCpsr);
     EXPECT(name, arm.cpu.I == 1 && arm.cpu.T == 0);
     EXPECT(name, arm.cpu.N == 1 && arm.cpu.C == 1);
 
     Machine thumb;
-    thumb.cpu.pc = 0x100;
+    thumb.cpu.pc = 0x03000100;
     thumb.cpu.T = 1;
     thumb.cpu.Z = 1;
     const uint32_t thumbCpsr = thumb.cpu.CPSR;
-    thumb.bus.write16(0x100, 0xDF42); // SWI #0x42
+    thumb.bus.write16(0x03000100, 0xDF42); // SWI #0x42
     thumb.cpu.tick();
     EXPECT(name, thumb.cpu.curMode == tdmi7::CPU::mode::Supervisor);
     EXPECT(name, thumb.cpu.pc == 0x08);
-    EXPECT(name, thumb.cpu.lr == 0x102);
+    EXPECT(name, thumb.cpu.lr == 0x03000102);
     EXPECT(name, thumb.cpu.getSPSR() == thumbCpsr);
     EXPECT(name, thumb.cpu.T == 0 && thumb.cpu.Z == 1);
     return true;
@@ -131,20 +132,24 @@ bool testArmIrqReturnInstruction()
 {
     constexpr const char* name = "arm_irq_return_instruction";
     Machine machine;
+	std::array<uint8_t, 0x4000> bios{};
+	const uint32_t returnInstruction = 0xE25EF004; // SUBS pc, lr, #4
+	for (unsigned byte = 0; byte < 4; ++byte)
+		bios[0x18 + byte] = static_cast<uint8_t>(returnInstruction >> (byte * 8));
+	machine.bus.loadBiosImage(bios.data(), bios.size());
     machine.cpu.writeCPSR(static_cast<uint32_t>(tdmi7::CPU::mode::System));
-    machine.cpu.pc = 0x100;
+    machine.cpu.pc = 0x03000100;
     machine.cpu.I = 0;
     const uint32_t originalCpsr = machine.cpu.CPSR;
     machine.cpu.requestIrq();
     machine.cpu.tick();
     EXPECT(name, machine.cpu.pc == 0x18);
-    EXPECT(name, machine.cpu.lr == 0x104);
+    EXPECT(name, machine.cpu.lr == 0x03000104);
 
-    machine.bus.write32(0x18, 0xE25EF004); // SUBS pc, lr, #4
     machine.cpu.tick();
     EXPECT(name, machine.cpu.curMode == tdmi7::CPU::mode::System);
     EXPECT(name, machine.cpu.CPSR == originalCpsr);
-    EXPECT(name, machine.cpu.pc == 0x100);
+    EXPECT(name, machine.cpu.pc == 0x03000100);
     return true;
 }
 
@@ -152,21 +157,38 @@ bool testUnalignedWordLoadsAndConditionalStore()
 {
     constexpr const char* name = "unaligned_word_loads_and_conditional_store";
     Machine machine;
-    machine.cpu.pc = 0x100;
-    machine.cpu.reg[1] = 0x200;
-    machine.bus.write32(0x100, 0xE5910000); // LDR r0, [r1]
-    machine.bus.write32(0x200, 0x44332211);
-    machine.cpu.reg[1] = 0x201;
+    machine.cpu.pc = 0x03000100;
+    machine.cpu.reg[1] = 0x03000200;
+    machine.bus.write32(0x03000100, 0xE5910000); // LDR r0, [r1]
+    machine.bus.write32(0x03000200, 0x44332211);
+    machine.cpu.reg[1] = 0x03000201;
     machine.cpu.tick();
     EXPECT(name, machine.cpu.reg[0] == 0x11443322);
 
-    machine.cpu.pc = 0x104;
+    machine.cpu.pc = 0x03000104;
     machine.cpu.Z = 1;
     machine.cpu.reg[0] = 0xA5A5A5A5;
-    machine.bus.write32(0x104, 0x15010000); // STRNE r0, [r1]
+    machine.bus.write32(0x03000104, 0x15010000); // STRNE r0, [r1]
     machine.cpu.tick();
-    EXPECT(name, machine.bus.read32(0x200) == 0x44332211);
-    EXPECT(name, machine.cpu.pc == 0x108);
+    EXPECT(name, machine.bus.read32(0x03000200) == 0x44332211);
+    EXPECT(name, machine.cpu.pc == 0x03000108);
+    return true;
+}
+
+bool testNeverConditionDoesNotExecute()
+{
+    constexpr const char* name = "never_condition_does_not_execute";
+    Machine machine;
+    machine.cpu.N = machine.cpu.Z = machine.cpu.C = machine.cpu.V = 1;
+    EXPECT(name, !machine.cpu.checkConditional(0xFU));
+
+    machine.cpu.pc = 0x03000100;
+    machine.cpu.reg[0] = 0x12345678;
+    // MOV r0, #0 with the ARM7TDMI NV condition. The instruction is skipped.
+    machine.bus.write32(machine.cpu.pc, 0xF3A00000U);
+    machine.cpu.tick();
+    EXPECT(name, machine.cpu.reg[0] == 0x12345678U);
+    EXPECT(name, machine.cpu.pc == 0x03000104U);
     return true;
 }
 
@@ -174,33 +196,35 @@ bool testPcOperandsShiftEdgesAndMultiplyTiming()
 {
     constexpr const char* name = "pc_operands_shift_edges_and_multiply_timing";
     Machine machine;
-    machine.cpu.pc = 0x100;
-    machine.cpu.reg[0] = 0x200;
-    machine.bus.write32(0x100, 0xE580F000); // STR r15, [r0]
+    constexpr uint32_t code = 0x03000100;
+    constexpr uint32_t data = 0x03000200;
+    machine.cpu.pc = code;
+    machine.cpu.reg[0] = data;
+    machine.bus.write32(code, 0xE580F000); // STR r15, [r0]
     machine.cpu.tick();
-    EXPECT(name, machine.bus.read32(0x200) == 0x108);
+    EXPECT(name, machine.bus.read32(data) == code + 8);
 
-    machine.cpu.pc = 0x104;
+    machine.cpu.pc = code + 4;
     machine.cpu.reg[1] = 0x80000001;
     machine.cpu.C = 0;
-    machine.bus.write32(0x104, 0xE1B00021); // MOVS r0, r1, LSR #32
+    machine.bus.write32(code + 4, 0xE1B00021); // MOVS r0, r1, LSR #32
     machine.cpu.tick();
     EXPECT(name, machine.cpu.reg[0] == 0);
     EXPECT(name, machine.cpu.C == 1);
 
-    machine.cpu.pc = 0x108;
+    machine.cpu.pc = code + 8;
     machine.cpu.reg[1] = 1;
     machine.cpu.reg[2] = 32;
-    machine.bus.write32(0x108, 0xE1B00211); // MOVS r0, r1, LSL r2
+    machine.bus.write32(code + 8, 0xE1B00211); // MOVS r0, r1, LSL r2
     machine.cpu.tick();
     EXPECT(name, machine.cpu.reg[0] == 0);
     EXPECT(name, machine.cpu.C == 1);
 
-    machine.cpu.pc = 0x10C;
+    machine.cpu.pc = code + 12;
     machine.cpu.reg[1] = 7;
     machine.cpu.reg[2] = 1;
     machine.cpu.reg[3] = 9;
-    machine.bus.write32(0x10C, 0xE0000391); // MUL r0, r1, r3
+    machine.bus.write32(code + 12, 0xE0000391); // MUL r0, r1, r3
     machine.cpu.tick();
     EXPECT(name, machine.cpu.reg[0] == 63);
     EXPECT(name, machine.cpu.curOpCycles == 3); // 1S + 1I for one-byte multiplier
@@ -211,20 +235,21 @@ bool testArmPcOperandThumbBootstrap()
 {
     constexpr const char* name = "arm_pc_operand_thumb_bootstrap";
     Machine machine;
-    machine.cpu.pc = 0x100;
-    machine.bus.write32(0x100, 0xE28F0001); // ADD r0, pc, #1
-    machine.bus.write32(0x104, 0xE12FFF10); // BX r0
-    machine.bus.write16(0x108, 0x2007);     // Thumb: MOV r0, #7
+    constexpr uint32_t code = 0x03000100;
+    machine.cpu.pc = code;
+    machine.bus.write32(code, 0xE28F0001); // ADD r0, pc, #1
+    machine.bus.write32(code + 4, 0xE12FFF10); // BX r0
+    machine.bus.write16(code + 8, 0x2007);     // Thumb: MOV r0, #7
 
     machine.cpu.tick();
-    EXPECT(name, machine.cpu.reg[0] == 0x109);
-    EXPECT(name, machine.cpu.pc == 0x104);
+    EXPECT(name, machine.cpu.reg[0] == code + 9);
+    EXPECT(name, machine.cpu.pc == code + 4);
     machine.cpu.tick();
     EXPECT(name, machine.cpu.T == 1);
-    EXPECT(name, machine.cpu.pc == 0x108);
+    EXPECT(name, machine.cpu.pc == code + 8);
     machine.cpu.tick();
     EXPECT(name, machine.cpu.reg[0] == 7);
-    EXPECT(name, machine.cpu.pc == 0x10A);
+    EXPECT(name, machine.cpu.pc == code + 10);
     return true;
 }
 
@@ -232,16 +257,17 @@ bool testArmBranchLinkReturnAddress()
 {
     constexpr const char* name = "arm_branch_link_return_address";
     Machine machine;
-    machine.cpu.pc = 0x100;
-    machine.bus.write32(0x100, 0xEB000000); // BL to 0x108
+    constexpr uint32_t code = 0x03000100;
+    machine.cpu.pc = code;
+    machine.bus.write32(code, 0xEB000000); // BL to code + 8
 
     machine.cpu.tick();
-    EXPECT(name, machine.cpu.lr == 0x104);
-    EXPECT(name, machine.cpu.pc == 0x108);
+    EXPECT(name, machine.cpu.lr == code + 4);
+    EXPECT(name, machine.cpu.pc == code + 8);
 
-    machine.bus.write32(0x108, 0xE12FFF1E); // BX lr
+    machine.bus.write32(code + 8, 0xE12FFF1E); // BX lr
     machine.cpu.tick();
-    EXPECT(name, machine.cpu.pc == 0x104);
+    EXPECT(name, machine.cpu.pc == code + 4);
     return true;
 }
 
@@ -249,19 +275,21 @@ bool testArmLoadsToProgramCounterDoNotFallThrough()
 {
     constexpr const char* name = "arm_loads_to_program_counter_do_not_fall_through";
     Machine machine;
-    machine.cpu.pc = 0x100;
-    machine.cpu.reg[0] = 0x200;
-    machine.bus.write32(0x100, 0xE590F000); // LDR pc, [r0]
-    machine.bus.write32(0x200, 0x304);
+    constexpr uint32_t code = 0x03000100;
+    constexpr uint32_t data = 0x03000200;
+    machine.cpu.pc = code;
+    machine.cpu.reg[0] = data;
+    machine.bus.write32(code, 0xE590F000); // LDR pc, [r0]
+    machine.bus.write32(data, code + 0x204);
     machine.cpu.tick();
-    EXPECT(name, machine.cpu.pc == 0x304);
+    EXPECT(name, machine.cpu.pc == code + 0x204);
 
-    machine.cpu.pc = 0x108;
-    machine.cpu.reg[0] = 0x204;
-    machine.bus.write32(0x108, 0xE8908000); // LDMIA r0, {pc}
-    machine.bus.write32(0x204, 0x408);
+    machine.cpu.pc = code + 8;
+    machine.cpu.reg[0] = data + 4;
+    machine.bus.write32(code + 8, 0xE8908000); // LDMIA r0, {pc}
+    machine.bus.write32(data + 4, code + 0x308);
     machine.cpu.tick();
-    EXPECT(name, machine.cpu.pc == 0x408);
+    EXPECT(name, machine.cpu.pc == code + 0x308);
     return true;
 }
 
@@ -281,7 +309,8 @@ int main()
         run("exception_vectors_and_return_addresses", testExceptionVectorsAndReturnAddresses) &&
         run("interrupt_priority_masking_and_banked_return", testInterruptPriorityMaskingAndBankedReturn) &&
 		run("arm_irq_return_instruction", testArmIrqReturnInstruction) &&
-        run("unaligned_word_loads_and_conditional_store", testUnalignedWordLoadsAndConditionalStore) &&
+		run("never_condition_does_not_execute", testNeverConditionDoesNotExecute) &&
+		run("unaligned_word_loads_and_conditional_store", testUnalignedWordLoadsAndConditionalStore) &&
         run("pc_operands_shift_edges_and_multiply_timing", testPcOperandsShiftEdgesAndMultiplyTiming) &&
         run("arm_pc_operand_thumb_bootstrap", testArmPcOperandThumbBootstrap) &&
         run("arm_branch_link_return_address", testArmBranchLinkReturnAddress) &&

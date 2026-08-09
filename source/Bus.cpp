@@ -3,6 +3,7 @@
 #include "Bus.h"
 #include <cstdio>
 #include <algorithm>
+#include <cstring>
 #include <string>
 
 void Bus::enableCpuTimingTrace(bool enabled)
@@ -214,7 +215,12 @@ void Bus::recordCpuExternalAccess(CpuTimingAccess access, uint32_t address, uint
     previousCpuWidth = width;
 }
 
-Bus::Bus() = default;
+Bus::Bus()
+{
+    // A freshly erased cartridge save device reads as all ones.  Games use
+    // this state to distinguish a new save from a valid existing one.
+    save.fill(0xFF);
+}
 
 bool Bus::loadBios(const char* filename)
 {
@@ -252,6 +258,7 @@ uint32_t Bus::read32(uint32_t addr, bool)
 
 uint16_t Bus::read16(uint32_t addr, bool)
 {
+	if (isEepromAddress(addr)) return readEepromBit();
     return static_cast<uint16_t>(readMapped8(addr)) |
         (static_cast<uint16_t>(readMapped8(addr + 1)) << 8);
 }
@@ -281,6 +288,11 @@ void Bus::write8(uint32_t addr, uint8_t data)
 
 void Bus::write16(uint32_t addr, uint16_t data)
 {
+	if (isEepromAddress(addr))
+	{
+		writeEepromBit(static_cast<uint8_t>(data & 1U));
+		return;
+	}
 	writeMapped8(addr, static_cast<uint8_t>(data));
 	writeMapped8(addr + 1, static_cast<uint8_t>(data >> 8));
     if (addr == 0x04000204U)
@@ -378,6 +390,7 @@ void Bus::resetSystemState()
 {
 	io.fill(0);
 	waitcnt = 0;
+	resetEepromTransfer();
 	clearCpuTimingTrace();
 }
 
@@ -404,19 +417,128 @@ uint32_t Bus::saveOffset(uint32_t address) const
 	return address & mask;
 }
 
+bool Bus::isEepromAddress(uint32_t address) const
+{
+	return (detectedSaveType == SaveType::Eeprom512 || detectedSaveType == SaveType::Eeprom8K) &&
+		address >= 0x0D000000U && address < 0x0E000000U;
+}
+
+void Bus::resetEepromTransfer()
+{
+	eepromPhase = EepromPhase::Idle;
+	eepromReadCommand = false;
+	eepromAddressBits = 0;
+	eepromAddress = 0;
+	eepromDataBits = 0;
+	eepromData = 0;
+	eepromReadDummyBits = 0;
+	eepromReadDataBits = 0;
+	eepromReadAddress = 0;
+}
+
+void Bus::writeEepromBit(uint8_t bit)
+{
+	bit &= 1U;
+	// A command always starts with one.  Once a read transfer has completed,
+	// the next DMA write begins a fresh command without requiring an explicit
+	// reset from the CPU.
+	if (eepromReadDummyBits != 0 || eepromReadDataBits != 0)
+		resetEepromTransfer();
+
+	const uint8_t addressWidth = detectedSaveType == SaveType::Eeprom8K ? 14 : 6;
+	switch (eepromPhase)
+	{
+	case EepromPhase::Idle:
+		if (bit != 0) eepromPhase = EepromPhase::Command;
+		break;
+	case EepromPhase::Command:
+		// Serial commands are 10 (write) and 11 (read); the leading one was
+		// consumed while leaving Idle.
+		eepromReadCommand = bit != 0;
+		eepromAddress = 0;
+		eepromAddressBits = 0;
+		eepromPhase = EepromPhase::Address;
+		break;
+	case EepromPhase::Address:
+		eepromAddress = static_cast<uint16_t>((eepromAddress << 1) | bit);
+		if (++eepromAddressBits == addressWidth)
+		{
+			eepromPhase = eepromReadCommand ? EepromPhase::Stop : EepromPhase::WriteData;
+			eepromData = 0;
+			eepromDataBits = 0;
+		}
+		break;
+	case EepromPhase::WriteData:
+		eepromData = (eepromData << 1) | bit;
+		if (++eepromDataBits == 64) eepromPhase = EepromPhase::Stop;
+		break;
+	case EepromPhase::Stop:
+		if (eepromReadCommand)
+		{
+			// Reads return four dummy zero bits followed by the stored 64 bits.
+			eepromReadAddress = eepromAddress;
+			eepromReadDummyBits = 4;
+			eepromReadDataBits = 0;
+		}
+		else
+		{
+			const size_t offset = static_cast<size_t>(eepromAddress) * 8U;
+			for (size_t index = 0; index < 8; ++index)
+				save[offset + index] = static_cast<uint8_t>(eepromData >> (56U - index * 8U));
+			resetEepromTransfer();
+		}
+		break;
+	}
+}
+
+uint16_t Bus::readEepromBit()
+{
+	if (eepromReadDummyBits != 0)
+	{
+		--eepromReadDummyBits;
+		return 0;
+	}
+	if (eepromReadDataBits >= 64) return 1;
+	const size_t byteOffset = static_cast<size_t>(eepromReadAddress) * 8U + eepromReadDataBits / 8U;
+	const uint16_t bit = (save[byteOffset] >> (7U - (eepromReadDataBits & 7U))) & 1U;
+	++eepromReadDataBits;
+	return bit;
+}
+
 void Bus::detectSaveType()
 {
-	auto contains = [this](const char* id)
+	// Save-library identifiers may appear anywhere in the Game Pak image.
+	// Scanning separately for every identifier made loading SMA take four full
+	// passes over the ROM. Inspect each possible identifier once, then apply the
+	// same precedence as the former ordered searches.
+	bool hasFlash1M = false;
+	bool hasFlash = false;
+	bool hasEeprom = false;
+	bool hasSram = false;
+	const auto matches = [this](size_t offset, const char* id, size_t length)
 	{
-		const size_t length = std::char_traits<char>::length(id);
-		return cartridgeRom.size() >= length && std::search(cartridgeRom.begin(), cartridgeRom.end(),
-			id, id + length) != cartridgeRom.end();
+		return offset + length <= cartridgeRom.size() &&
+			std::memcmp(cartridgeRom.data() + offset, id, length) == 0;
 	};
-	if (contains("FLASH1M_V")) detectedSaveType = SaveType::Flash128;
-	else if (contains("FLASH512_V") || contains("FLASH_V")) detectedSaveType = SaveType::Flash64;
-	else if (contains("EEPROM_V")) detectedSaveType = SaveType::Eeprom512;
-	else if (contains("SRAM_V")) detectedSaveType = SaveType::Sram;
-	else detectedSaveType = SaveType::Unknown;
+
+	for (size_t offset = 0; offset < cartridgeRom.size(); ++offset)
+	{
+		switch (cartridgeRom[offset])
+		{
+		case 'F':
+			hasFlash1M = hasFlash1M || matches(offset, "FLASH1M_V", 9);
+			hasFlash = hasFlash || matches(offset, "FLASH512_V", 10) || matches(offset, "FLASH_V", 7);
+			break;
+		case 'E': hasEeprom = hasEeprom || matches(offset, "EEPROM_V", 8); break;
+		case 'S': hasSram = hasSram || matches(offset, "SRAM_V", 6); break;
+		default: break;
+		}
+	}
+
+	detectedSaveType = hasFlash1M ? SaveType::Flash128 :
+		hasFlash ? SaveType::Flash64 :
+		hasEeprom ? SaveType::Eeprom512 :
+		hasSram ? SaveType::Sram : SaveType::Unknown;
 }
 
 uint8_t Bus::readMapped8(uint32_t address) const
@@ -449,7 +571,10 @@ void Bus::writeMapped8(uint32_t address, uint8_t data)
 {
     switch (address >> 24)
     {
-    case 0x00: if (address < BiosSize) bios[address] = data; break;
+    // The 16 KiB BIOS mapping is ROM.  In particular, allowing a cartridge
+    // DMA/write to alter the exception vectors makes the first game IRQ loop
+    // forever instead of entering the real BIOS dispatcher.
+    case 0x00: break;
     case 0x02: ewram[address & (EwramSize - 1)] = data; break;
     case 0x03: iwram[address & (IwramSize - 1)] = data; break;
     case 0x04:

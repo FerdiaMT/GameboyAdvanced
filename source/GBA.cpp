@@ -4,7 +4,7 @@
 #include <iomanip>
 #include <ostream>
 
-GBA::GBA(): ppu(bus), cpu(&bus, &decoder), system(bus, cpu, ppu), clockedDevices{ &ppu, &system }
+GBA::GBA(): ppu(bus), cpu(&bus, &decoder), system(bus, cpu, ppu)
 {
 	ppu.setHBlankCallback([this] { system.onHBlank(); });
 	ppu.setVBlankCallback([this] { system.onVBlank(); });
@@ -80,6 +80,10 @@ bool GBA::hasExecutedCartridgeCode() const
 
 void GBA::attachClockedDevice(ClockedDevice& device)
 {
+	// PPU and system control are always advanced directly. Keeping only optional
+	// devices in this list avoids virtual/container dispatch on every CPU step.
+	if (&device == &ppu || &device == &system)
+		return;
 	for (const auto* existing : clockedDevices)
 	{
 		if (existing == &device)
@@ -95,6 +99,10 @@ void GBA::setPressedKeys(uint16_t pressedMask)
 
 void GBA::advanceDevices(uint32_t cycles)
 {
+	// Preserve the original PPU-then-system order: PPU callbacks may raise an
+	// interrupt before the system-control device processes the same elapsed time.
+	ppu.advance(cycles);
+	system.advance(cycles);
 	for (ClockedDevice* device : clockedDevices)
 		device->advance(cycles);
 }

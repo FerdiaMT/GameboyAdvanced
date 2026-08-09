@@ -2,6 +2,7 @@
 #include "tdmi7/CPU.h"
 #include "tdmi7/Decoder.h"
 
+#include <array>
 #include <cstdint>
 #include <iostream>
 #include <vector>
@@ -29,6 +30,18 @@ void writeCartridge32(Bus& bus, uint32_t address, uint32_t value)
         static_cast<uint8_t>(value >> 16), static_cast<uint8_t>(value >> 24),
     };
     bus.loadCartridgeImage(bytes, sizeof(bytes), address);
+}
+
+void writeBios16(std::array<uint8_t, 0x4000>& bios, uint32_t address, uint16_t value)
+{
+    bios[address] = static_cast<uint8_t>(value);
+    bios[address + 1] = static_cast<uint8_t>(value >> 8);
+}
+
+void writeBios32(std::array<uint8_t, 0x4000>& bios, uint32_t address, uint32_t value)
+{
+    writeBios16(bios, address, static_cast<uint16_t>(value));
+    writeBios16(bios, address + 2, static_cast<uint16_t>(value >> 16));
 }
 
 using Access = Bus::CpuTimingAccess;
@@ -83,17 +96,17 @@ bool testThumbSequentialFetches()
 {
     constexpr const char* testName = "thumb_sequential_fetches";
     Machine machine;
-    machine.cpu.pc = 0x100;
+    machine.cpu.pc = 0x03000000;
     machine.cpu.T = 1;
-    machine.bus.write16(0x100, 0x202A); // MOV r0, #42
-    machine.bus.write16(0x102, 0x3001); // ADD r0, #1
+    machine.bus.write16(0x03000000, 0x202A); // MOV r0, #42
+    machine.bus.write16(0x03000002, 0x3001); // ADD r0, #1
 
     EXPECT(testName, machine.cpu.tick() == 4);
     EXPECT(testName, machine.cpu.tick() == 5);
     EXPECT(testName, machine.cpu.reg[0] == 43);
     return expectTrace(testName, machine.bus.cpuTimingTrace(), {
-        { Access::InstructionFetch, 0x100, 2, false, 4, Bus::CpuTimingRegion::Bios },
-        { Access::InstructionFetch, 0x102, 2, true, 1, Bus::CpuTimingRegion::Bios },
+        { Access::InstructionFetch, 0x03000000, 2, false, 4, Bus::CpuTimingRegion::Iwram },
+        { Access::InstructionFetch, 0x03000002, 2, true, 1, Bus::CpuTimingRegion::Iwram },
     });
 }
 
@@ -104,8 +117,10 @@ bool testThumbLoadIncludesInternalCycle()
     machine.cpu.pc = 0x100;
     machine.cpu.T = 1;
     machine.cpu.reg[1] = 0x200;
-    machine.bus.write16(0x100, 0x6808); // LDR r0, [r1, #0]
-    machine.bus.write32(0x200, 0x12345678);
+    std::array<uint8_t, 0x4000> bios{};
+    writeBios16(bios, 0x100, 0x6808); // LDR r0, [r1, #0]
+    writeBios32(bios, 0x200, 0x12345678);
+    machine.bus.loadBiosImage(bios.data(), bios.size());
 
     EXPECT(testName, machine.cpu.tick() == 9);
     EXPECT(testName, machine.cpu.reg[0] == 0x12345678);
@@ -124,10 +139,13 @@ bool testThumbStoreTrace()
     machine.cpu.T = 1;
     machine.cpu.reg[0] = 0xCAFEBABE;
     machine.cpu.reg[1] = 0x200;
-    machine.bus.write16(0x100, 0x6008); // STR r0, [r1, #0]
+    std::array<uint8_t, 0x4000> bios{};
+    writeBios16(bios, 0x100, 0x6008); // STR r0, [r1, #0]
+    writeBios32(bios, 0x200, 0x12345678);
+    machine.bus.loadBiosImage(bios.data(), bios.size());
 
     EXPECT(testName, machine.cpu.tick() == 8);
-    EXPECT(testName, machine.bus.read32(0x200) == 0xCAFEBABE);
+    EXPECT(testName, machine.bus.read32(0x200) == 0x12345678);
     return expectTrace(testName, machine.bus.cpuTimingTrace(), {
         { Access::InstructionFetch, 0x100, 2, false, 4, Bus::CpuTimingRegion::Bios },
         { Access::DataWrite, 0x200, 4, false, 4, Bus::CpuTimingRegion::Bios },
@@ -139,8 +157,10 @@ bool testArmSequentialFetches()
     constexpr const char* testName = "arm_sequential_fetches";
     Machine machine;
     machine.cpu.pc = 0x100;
-    machine.bus.write32(0x100, 0xE3A0002A); // MOV r0, #42
-    machine.bus.write32(0x104, 0xE2800001); // ADD r0, r0, #1
+    std::array<uint8_t, 0x4000> bios{};
+    writeBios32(bios, 0x100, 0xE3A0002A); // MOV r0, #42
+    writeBios32(bios, 0x104, 0xE2800001); // ADD r0, r0, #1
+    machine.bus.loadBiosImage(bios.data(), bios.size());
 
     EXPECT(testName, machine.cpu.tick() == 4);
     EXPECT(testName, machine.cpu.tick() == 5);
@@ -157,8 +177,10 @@ bool testArmLoadTrace()
     Machine machine;
     machine.cpu.pc = 0x100;
     machine.cpu.reg[1] = 0x200;
-    machine.bus.write32(0x100, 0xE5910000); // LDR r0, [r1]
-    machine.bus.write32(0x200, 0x89ABCDEF);
+    std::array<uint8_t, 0x4000> bios{};
+    writeBios32(bios, 0x100, 0xE5910000); // LDR r0, [r1]
+    writeBios32(bios, 0x200, 0x89ABCDEF);
+    machine.bus.loadBiosImage(bios.data(), bios.size());
 
     EXPECT(testName, machine.cpu.tick() == 9);
     EXPECT(testName, machine.cpu.reg[0] == 0x89ABCDEF);
@@ -175,8 +197,10 @@ bool testThumbBranchRefillsFetch()
     Machine machine;
     machine.cpu.pc = 0x100;
     machine.cpu.T = 1;
-    machine.bus.write16(0x100, 0xE000); // B +0, skips 0x102
-    machine.bus.write16(0x104, 0x202A); // MOV r0, #42
+    std::array<uint8_t, 0x4000> bios{};
+    writeBios16(bios, 0x100, 0xE000); // B +0, skips 0x102
+    writeBios16(bios, 0x104, 0x202A); // MOV r0, #42
+    machine.bus.loadBiosImage(bios.data(), bios.size());
 
     EXPECT(testName, machine.cpu.tick() == 6);
     EXPECT(testName, machine.cpu.pc == 0x104);

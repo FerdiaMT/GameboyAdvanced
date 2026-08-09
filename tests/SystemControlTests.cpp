@@ -383,6 +383,32 @@ bool testObjectsWindowsAndEffects()
     gba.ppu.advance(960);
     EXPECT(name, gba.ppu.framebuffer()[0] == 0xFFFF0000U);
 
+    // Colour index zero remains transparent for 4bpp OBJ palette banks other
+    // than zero.  The adjacent index-one pixel proves the OBJ still renders.
+    gba.ppu.reset();
+    gba.bus.write16(0x04000000, 0x1100);
+    installSimpleRedBackground(gba);
+    installGreenObject(gba, 0, 0);
+    gba.bus.write16(0x07000004, 0x1000); // OBJ palette bank 1
+    gba.bus.write8(0x06010000, 0x10);    // x=0: transparent; x=1: colour 1
+    gba.bus.write16(0x05000222, 0x03E0); // bank 1, colour 1: green
+    gba.ppu.advance(960);
+    EXPECT(name, gba.ppu.framebuffer()[0] == 0xFFFF0000U);
+    EXPECT(name, gba.ppu.framebuffer()[1] == 0xFF00FF00U);
+
+    // A 4bpp text-background palette bank must also leave tile colour zero
+    // transparent, rather than drawing its bank's colour-zero rectangle.
+    gba.ppu.reset();
+    gba.bus.write16(0x04000000, 0x0300); // Mode 0, BG0 + BG1
+    installSimpleRedBackground(gba);
+    gba.bus.write16(0x0400000A, 0x1E00); // BG1 priority 0, screen block 30
+    gba.bus.write16(0x0600F000, 0x1002); // tile 2, palette bank 1
+    gba.bus.write8(0x06000040, 0x10);    // x=0: transparent; x=1: colour 1
+    gba.bus.write16(0x05000022, 0x03E0); // BG palette bank 1, colour 1
+    gba.ppu.advance(960);
+    EXPECT(name, gba.ppu.framebuffer()[0] == 0xFFFF0000U);
+    EXPECT(name, gba.ppu.framebuffer()[1] == 0xFF00FF00U);
+
     gba.ppu.reset();
     gba.bus.write16(0x04000000, 0x2300); // BG0/BG1 plus WIN0
     installSimpleRedBackground(gba);
@@ -404,6 +430,18 @@ bool testObjectsWindowsAndEffects()
     installGreenObject(gba, 0x0400, 0); // Semi-transparent OBJ
     gba.bus.write16(0x04000050, 0x0150); // OBJ first target, BG0 second, alpha blend
     gba.bus.write16(0x04000052, 0x0808);
+    gba.ppu.advance(960);
+    EXPECT(name, gba.ppu.framebuffer()[0] == 0xFF7F7F00U);
+
+    // WINOUT must be ignored while every window is disabled. The real BIOS
+    // uses this state for its semi-transparent affine-logo animation.
+    gba.ppu.reset();
+    gba.bus.write16(0x04000000, 0x1100); // BG0 + OBJ, no windows enabled
+    installSimpleRedBackground(gba);
+    installGreenObject(gba, 0x0400, 0);
+    gba.bus.write16(0x04000050, 0x0150);
+    gba.bus.write16(0x04000052, 0x0808);
+    gba.bus.write16(0x0400004A, 0x0000); // WINOUT would hide layers if active
     gba.ppu.advance(960);
     EXPECT(name, gba.ppu.framebuffer()[0] == 0xFF7F7F00U);
 

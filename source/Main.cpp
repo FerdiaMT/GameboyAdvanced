@@ -343,19 +343,20 @@ int main(int argc, char* argv[])
 			auto fpsStart = std::chrono::steady_clock::now();
 			bool quit = false;
 			uint16_t pressedKeys = 0;
+			auto resetEmulator = [&]
+			{
+				gba.reset();
+				gba.cpu.pc = gba.bus.hasBios() ? 0x00000000U : 0x08000000U;
+				gba.setPressedKeys(pressedKeys);
+				nextFrame = gba.masterCycleCount() + frameCycles;
+				nextPresentation = std::chrono::steady_clock::now() + frameDuration;
+			};
+			bool resetRequested = false;
+			quit = display.pollInput(pressedKeys, resetRequested);
+			if (resetRequested) resetEmulator();
 			std::cout << "Controls: Z=A, X=B, Enter=Start, Backspace=Select, arrows=D-pad, A=L, S=R, F5=reset, Escape=quit.\n";
 			while (completedSteps < steps && gba.cpu.testHalt == tdmi7::CPU::TestHalt::None && !quit)
 			{
-				bool resetRequested = false;
-				quit = display.pollInput(pressedKeys, resetRequested);
-				if (resetRequested)
-				{
-					gba.reset();
-					gba.cpu.pc = gba.bus.hasBios() ? 0x00000000U : 0x08000000U;
-					gba.setPressedKeys(pressedKeys);
-					nextFrame = gba.masterCycleCount() + frameCycles;
-					nextPresentation = std::chrono::steady_clock::now() + frameDuration;
-				}
 				gba.setPressedKeys(pressedKeys);
 				gba.tick();
 				++completedSteps;
@@ -381,6 +382,12 @@ int main(int argc, char* argv[])
 					// a slow host frame: resume pacing from the current wall clock.
 					if (now > nextPresentation + frameDuration * 2) nextPresentation = now + frameDuration;
 					while (nextFrame <= gba.masterCycleCount()) nextFrame += frameCycles;
+					// Host input is asynchronous, while the GBA keypad state is held
+					// between samples. Pump SDL once per displayed frame instead of
+					// once per emulated instruction.
+					resetRequested = false;
+					quit = display.pollInput(pressedKeys, resetRequested);
+					if (resetRequested) resetEmulator();
 				}
 			}
 			display.present(gba.ppu.framebuffer());
@@ -390,7 +397,10 @@ int main(int argc, char* argv[])
 			return 1;
 #endif
 		}
-		else result = gba.runSteps(steps, traceFile ? &traceFile : nullptr);
+		// A default-constructed ofstream is in a good state even before it is
+		// opened, so testing traceFile here would enable instruction tracing for
+		// every normal run. tracePath is engaged only by the --trace option.
+		else result = gba.runSteps(steps, tracePath ? &traceFile : nullptr);
 		std::cout << "Completed " << result.steps << " CPU steps (" << result.cycles << " cycles).\n";
 		if (dumpState)
 		{
