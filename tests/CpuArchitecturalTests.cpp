@@ -175,6 +175,23 @@ bool testUnalignedWordLoadsAndConditionalStore()
     return true;
 }
 
+bool testNeverConditionDoesNotExecute()
+{
+    constexpr const char* name = "never_condition_does_not_execute";
+    Machine machine;
+    machine.cpu.N = machine.cpu.Z = machine.cpu.C = machine.cpu.V = 1;
+    EXPECT(name, !machine.cpu.checkConditional(0xFU));
+
+    machine.cpu.pc = 0x03000100;
+    machine.cpu.reg[0] = 0x12345678;
+    // MOV r0, #0 with the ARM7TDMI NV condition. The instruction is skipped.
+    machine.bus.write32(machine.cpu.pc, 0xF3A00000U);
+    machine.cpu.tick();
+    EXPECT(name, machine.cpu.reg[0] == 0x12345678U);
+    EXPECT(name, machine.cpu.pc == 0x03000104U);
+    return true;
+}
+
 bool testPcOperandsShiftEdgesAndMultiplyTiming()
 {
     constexpr const char* name = "pc_operands_shift_edges_and_multiply_timing";
@@ -286,7 +303,8 @@ int main()
         run("exception_vectors_and_return_addresses", testExceptionVectorsAndReturnAddresses) &&
         run("interrupt_priority_masking_and_banked_return", testInterruptPriorityMaskingAndBankedReturn) &&
 		run("arm_irq_return_instruction", testArmIrqReturnInstruction) &&
-        run("unaligned_word_loads_and_conditional_store", testUnalignedWordLoadsAndConditionalStore) &&
+		run("never_condition_does_not_execute", testNeverConditionDoesNotExecute) &&
+		run("unaligned_word_loads_and_conditional_store", testUnalignedWordLoadsAndConditionalStore) &&
         run("pc_operands_shift_edges_and_multiply_timing", testPcOperandsShiftEdgesAndMultiplyTiming) &&
         run("arm_pc_operand_thumb_bootstrap", testArmPcOperandThumbBootstrap) &&
         run("arm_branch_link_return_address", testArmBranchLinkReturnAddress) &&

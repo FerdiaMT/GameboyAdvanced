@@ -322,7 +322,10 @@ bool CPU::checkConditional(uint8_t cond) const
 	case(0xC):return (!Z && (N == V));	break;
 	case(0xD):return (Z || (N != V));	break;
 	case(0xE):return true;				break;
-	case(0xF):printf("0XF INVALID CONDITIONAL CHECK   ---    ");break;
+	// ARM7TDMI reserves condition 0xF as NV (never). It is occasionally used
+	// as padding/data in Game Pak code, so it must quietly suppress execution;
+	// printing here once per iteration can stall a menu loop on host I/O.
+	case(0xF):return false;
 	}
 
 	return false;
