@@ -4,6 +4,8 @@ on:
   pull_request:
   push:
     branches: [main]
+  schedule:
+    - cron: '20 3 * * 0'
   workflow_dispatch:
 
 permissions:
@@ -67,6 +69,20 @@ jobs:
           Path('coverage-site/coverage.md').write_text(f'## Coverage\n\n**Line coverage:** {percent:.1f}%\n')
           PY
           cat coverage-site/coverage.md >> "$GITHUB_STEP_SUMMARY"
+          if [[ "$GITHUB_EVENT_NAME" == "pull_request" ]]; then
+            if ! python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          percent = float(json.loads(Path('coverage-site/summary.json').read_text())
+                          .get('line_coverage', {}).get('percent', 0.0))
+          raise SystemExit(percent < 50.0)
+          PY
+            then
+              echo "Total line coverage is below the required 50%." >&2
+              exit 1
+            fi
+          fi
       - if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -75,9 +91,68 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-  deploy-coverage:
-    needs: coverage
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+  profile:
+    name: BIOS bootstrap Callgrind
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+      - run: |
+          sudo apt-get update
+          sudo apt-get install --yes clang iverilog valgrind
+      - name: Profile BIOS bootstrap instruction reads
+        shell: bash
+        run: |
+          cmake --preset debug
+          cmake --build --preset debug --target GBA_bios_bootstrap_tests --parallel 2
+          mkdir -p profile-site callgrind
+          valgrind --tool=callgrind --callgrind-out-file=callgrind/callgrind.out build/debug/GBA_bios_bootstrap_tests
+          callgrind_annotate --auto=yes callgrind/callgrind.out > callgrind/callgrind.txt
+          ir=$(awk '/^summary:/ { print $2; exit }' callgrind/callgrind.out)
+          if [[ ! "$ir" =~ ^[0-9]+$ ]]; then
+            echo 'Callgrind did not produce an Ir summary.' >&2
+            exit 1
+          fi
+          python3 - "$ir" <<'PY'
+          import json
+          import sys
+
+          ir = int(sys.argv[1])
+          if ir >= 1_000_000:
+              value = f'{ir / 1_000_000:.2f}M'
+          elif ir >= 1_000:
+              value = f'{ir / 1_000:.1f}k'
+          else:
+              value = str(ir)
+          with open('profile-site/bios-bootstrap-ir.json', 'w') as stream:
+              json.dump({
+                  'schemaVersion': 1,
+                  'label': 'BIOS bootstrap Ir',
+                  'message': value,
+                  'color': 'blue',
+              }, stream)
+              stream.write('\n')
+          PY
+          printf '## BIOS bootstrap profile\n\n**Callgrind Ir:** %s\n' "$ir" >> "$GITHUB_STEP_SUMMARY"
+      - if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bios-bootstrap-callgrind
+          path: callgrind
+          if-no-files-found: ignore
+          retention-days: 30
+      - if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: profile-badge
+          path: profile-site
+          retention-days: 30
+
+  deploy-metrics:
+    needs: [coverage, profile]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -90,6 +165,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: coverage-report
+          path: _site
+      - uses: actions/download-artifact@v4
+        with:
+          name: profile-badge
           path: _site
       - uses: actions/upload-pages-artifact@v3
         with:
