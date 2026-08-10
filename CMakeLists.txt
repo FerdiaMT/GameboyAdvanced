@@ -77,16 +77,32 @@ endif()
 # Browser frontend.  It deliberately has its own entry point: the native
 # executable is a CLI/SDL application, whereas browsers need a callback-based
 # main loop and receive input through the page.  Emscripten's virtual file
-# system contains the bundled default BIOS and Super Mario Advance cartridge.
+# system contains the bundled BIOS and selectable cartridge library.
 if(EMSCRIPTEN)
     add_executable(GBA_web source/WebMain.cpp)
     target_link_libraries(GBA_web PRIVATE gba_core)
+    set(GBA_WEB_CONTROLLER_SOURCE "${CMAKE_SOURCE_DIR}/web/assets/nes-controller.png")
+    set(GBA_WEB_CONTROLLER_OUTPUT "${CMAKE_BINARY_DIR}/assets/nes-controller.png")
+    add_custom_command(
+        OUTPUT "${GBA_WEB_CONTROLLER_OUTPUT}"
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${CMAKE_BINARY_DIR}/assets"
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "${GBA_WEB_CONTROLLER_SOURCE}" "${GBA_WEB_CONTROLLER_OUTPUT}"
+        DEPENDS "${GBA_WEB_CONTROLLER_SOURCE}"
+    )
+    add_custom_target(gba_web_assets DEPENDS "${GBA_WEB_CONTROLLER_OUTPUT}")
+    add_dependencies(GBA_web gba_web_assets)
     target_link_options(GBA_web PRIVATE
         "--shell-file" "${CMAKE_SOURCE_DIR}/web/shell.html"
-        "--preload-file=${CMAKE_SOURCE_DIR}/bin/gba_bios.bin@/assets/gba_bios.bin"
-        "--preload-file=${CMAKE_SOURCE_DIR}/bin/sma.gba@/assets/sma.gba"
+        "--preload-file=${CMAKE_SOURCE_DIR}/bin/bios/gba_bios.bin@/assets/gba_bios.bin"
+        "--preload-file=${CMAKE_SOURCE_DIR}/bin/games/sma.gba@/assets/sma.gba"
+        "--preload-file=${CMAKE_SOURCE_DIR}/bin/games/sonic.gba@/assets/sonic.gba"
+        "--preload-file=${CMAKE_SOURCE_DIR}/bin/games/Metroid Fusion (USA).gba@/assets/metroid-fusion.gba"
+        "--preload-file=${CMAKE_SOURCE_DIR}/bin/games/Mother 3 (Tr).gba@/assets/mother-3.gba"
+        "--preload-file=${CMAKE_SOURCE_DIR}/bin/games/Pokemon - Emerald Version (USA, Europe).gba@/assets/pokemon-emerald.gba"
+        "--preload-file=${CMAKE_SOURCE_DIR}/bin/games/Super Mario Advance 4 - Super Mario Bros. 3 (USA, Australia) (Rev 1).gba@/assets/super-mario-advance-4.gba"
         "-sENVIRONMENT=web"
         "-sFILESYSTEM=1"
+        "-sALLOW_MEMORY_GROWTH=1"
         "-sASSERTIONS=1"
     )
     set_target_properties(GBA_web PROPERTIES

@@ -2,6 +2,7 @@
 
 #include <emscripten/emscripten.h>
 
+#include <array>
 #include <cstdint>
 #include <cstdio>
 
@@ -21,6 +22,46 @@ EM_JS(void, webSetup, (),
     Module.gbaKeys = 0;
     Module.gbaPaused = false;
     Module.gbaResetRequested = false;
+    Module.gbaCartridgeChangeRequested = false;
+    Module.gbaCartridgePath = '/assets/super-mario-advance-4.gba';
+    Module.gbaFpsFrameCount = 0;
+    Module.gbaFpsLastUpdate = performance.now();
+
+    const title = document.getElementById('game-title');
+    const status = document.getElementById('status');
+    const gameSelect = document.getElementById('game-select');
+    const romUpload = document.getElementById('rom-upload');
+    const setStatus = message => { status.textContent = message; };
+    const queueCartridgeChange = (path, name) => {
+        Module.gbaCartridgePath = path;
+        Module.gbaCartridgeChangeRequested = true;
+        Module.gbaKeys = 0;
+        title.textContent = name;
+        document.title = `${name} - Game Boy Advance`;
+        setStatus(`Loading ${name}...`);
+    };
+    gameSelect.addEventListener('change', () => {
+        queueCartridgeChange(gameSelect.value, gameSelect.selectedOptions[0].textContent);
+    });
+    romUpload.addEventListener('change', async () => {
+        const [file] = romUpload.files;
+        if (!file) return;
+        if (file.size === 0 || file.size > 0x02000000) {
+            setStatus('Choose a non-empty GBA ROM no larger than 32 MiB.');
+            romUpload.value = null;
+            return;
+        }
+        try {
+            setStatus(`Loading ${file.name}...`);
+            FS.writeFile('/uploaded.gba', new Uint8Array(await file.arrayBuffer()));
+            queueCartridgeChange('/uploaded.gba', file.name);
+        } catch (error) {
+            console.error('Unable to load uploaded ROM.', error);
+            setStatus('Unable to read that ROM file.');
+        } finally {
+            romUpload.value = null;
+        }
+    });
 
     const keyMap = {
         KeyZ: 1 << 0, KeyX: 1 << 1, Backspace: 1 << 2, Enter: 1 << 3,
@@ -55,6 +96,16 @@ EM_JS(bool, webTakeResetRequest, (),
     Module.gbaResetRequested = false;
     return requested;
 });
+EM_JS(bool, webTakeCartridgeChangeRequest, (),
+{
+    const requested = !!Module.gbaCartridgeChangeRequested;
+    Module.gbaCartridgeChangeRequested = false;
+    return requested;
+});
+EM_JS(void, webCopyCartridgePath, (char* destination, size_t capacity),
+{
+    stringToUTF8(Module.gbaCartridgePath, destination, capacity);
+});
 EM_JS(void, webSetStatus, (const char* message),
 {
     document.getElementById('status').textContent = UTF8ToString(message);
@@ -74,6 +125,15 @@ EM_JS(void, webPresentFrame, (const uint32_t* pixels),
             ((pixel & 0x00FF0000) >>> 16) | ((pixel & 0x000000FF) << 16);
     }
     Module.gbaContext.putImageData(image, 0, 0);
+    const now = performance.now();
+    ++Module.gbaFpsFrameCount;
+    const elapsed = now - Module.gbaFpsLastUpdate;
+    if (elapsed >= 500)
+    {
+        document.getElementById('fps').textContent = `${Math.round(Module.gbaFpsFrameCount * 1000 / elapsed)} FPS`;
+        Module.gbaFpsFrameCount = 0;
+        Module.gbaFpsLastUpdate = now;
+    }
 });
 
 class WebEmulator
@@ -87,9 +147,9 @@ public:
             webSetStatus("Unable to load the bundled BIOS.");
             return false;
         }
-        if (!gba.loadCartridge("/assets/sma.gba"))
+        if (!gba.loadCartridge("/assets/super-mario-advance-4.gba"))
         {
-            webSetStatus("Unable to load the bundled Super Mario Advance cartridge.");
+            webSetStatus("Unable to load the bundled Super Mario Advance 4 cartridge.");
             return false;
         }
         nextFrame = gba.masterCycleCount() + FrameCycles;
@@ -100,6 +160,7 @@ public:
 
     void frame()
     {
+        if (webTakeCartridgeChangeRequest()) loadSelectedCartridge();
         if (webTakeResetRequest()) reset();
         if (webIsPaused()) return;
 
@@ -117,6 +178,20 @@ public:
 private:
     GBA gba;
     uint64_t nextFrame = FrameCycles;
+
+    void loadSelectedCartridge()
+    {
+        std::array<char, 1024> path{};
+        webCopyCartridgePath(path.data(), path.size());
+        if (!gba.loadCartridge(path.data()))
+        {
+            webSetStatus("Unable to load the selected cartridge.");
+            return;
+        }
+        nextFrame = gba.masterCycleCount() + FrameCycles;
+        webPresentFrame(gba.ppu.framebuffer().data());
+        webSetStatus("Playing");
+    }
 
     void reset()
     {
