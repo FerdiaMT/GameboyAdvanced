@@ -30,6 +30,23 @@ EM_JS(void, webSetup, (),
     Module.gbaFpsFrameCount = 0;
     Module.gbaFpsLastUpdate = performance.now();
 
+    // A canvas is a replaced element.  Combining a 100%-height rule with a
+    // max-width rule lets browser zoom clamp one axis without recalculating
+    // the other, stretching the 3:2 GBA image vertically.  Size both axes
+    // from the same scale so the display always remains 240:160.
+    const screen = canvas.parentElement;
+    const resizeCanvas = () => {
+        const style = getComputedStyle(screen);
+        const width = screen.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+        const height = screen.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom);
+        const scale = Math.max(0, Math.min(width / 240, height / 160));
+        canvas.style.width = `${240 * scale}px`;
+        canvas.style.height = `${160 * scale}px`;
+    };
+    new ResizeObserver(resizeCanvas).observe(screen);
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
+
     const title = document.getElementById('game-title');
     const status = document.getElementById('status');
     const gameSelect = document.getElementById('game-select');
