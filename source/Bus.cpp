@@ -80,7 +80,7 @@ size_t Bus::cpuTimingExternalAccessCountSince(size_t startIndex) const
 
 void Bus::recordCpuAccess(CpuTimingAccess access, uint32_t address, uint8_t width)
 {
-    if (!cpuTimingTraceEnabled)
+    if (!cpuTimingTraceEnabled) [[likely]]
     {
         return;
     }
@@ -250,6 +250,20 @@ bool Bus::hasBios() const { return loadedBios; }
 //====================
 uint32_t Bus::read32(uint32_t addr, bool)
 {
+	// Game code spends most of its time fetching sequential words from ROM.
+	// Reading those four bytes through the general map repeats the same region
+	// switch four times.  Keep the generic path for boundary/mirror cases, but
+	// take the contiguous Game Pak fast path for the normal case.
+	const uint32_t region = addr >> 24;
+	if (region >= 0x08U && region <= 0x0DU)
+	{
+		const uint32_t offset = cartridgeOffset(addr);
+		if (offset + 4U <= cartridgeRom.size())
+			return static_cast<uint32_t>(cartridgeRom[offset]) |
+				(static_cast<uint32_t>(cartridgeRom[offset + 1U]) << 8) |
+				(static_cast<uint32_t>(cartridgeRom[offset + 2U]) << 16) |
+				(static_cast<uint32_t>(cartridgeRom[offset + 3U]) << 24);
+	}
     return static_cast<uint32_t>(readMapped8(addr)) |
         (static_cast<uint32_t>(readMapped8(addr + 1)) << 8) |
         (static_cast<uint32_t>(readMapped8(addr + 2)) << 16) |
@@ -259,6 +273,14 @@ uint32_t Bus::read32(uint32_t addr, bool)
 uint16_t Bus::read16(uint32_t addr, bool)
 {
 	if (isEepromAddress(addr)) return readEepromBit();
+	const uint32_t region = addr >> 24;
+	if (region >= 0x08U && region <= 0x0DU)
+	{
+		const uint32_t offset = cartridgeOffset(addr);
+		if (offset + 2U <= cartridgeRom.size())
+			return static_cast<uint16_t>(cartridgeRom[offset]) |
+				(static_cast<uint16_t>(cartridgeRom[offset + 1U]) << 8);
+	}
     return static_cast<uint16_t>(readMapped8(addr)) |
         (static_cast<uint16_t>(readMapped8(addr + 1)) << 8);
 }

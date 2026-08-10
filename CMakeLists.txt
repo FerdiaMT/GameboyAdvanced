@@ -12,6 +12,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(GBA_ENABLE_SANITIZERS "Build with AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 option(GBA_ENABLE_COVERAGE "Build with GCC gcov coverage instrumentation" OFF)
+option(GBA_ENABLE_WEB_PROFILE "Build the Node-hosted WebAssembly profiling runner" OFF)
 
 if(GBA_ENABLE_SANITIZERS AND GBA_ENABLE_COVERAGE)
     message(FATAL_ERROR "Sanitizers and gcov coverage cannot be enabled in the same build.")
@@ -120,6 +121,25 @@ if(EMSCRIPTEN)
             -P "${CMAKE_SOURCE_DIR}/cmake/PatchEmscriptenRuntime.cmake"
         VERBATIM
     )
+
+    # This uses the same Emscripten-compiled core as the browser build, but
+    # runs under Node so V8 can write a repeatable CPU profile.  It is opt-in
+    # and deliberately has no impact on the shipped browser bundle.
+    if(GBA_ENABLE_WEB_PROFILE)
+        add_executable(GBA_web_profile source/WebProfileMain.cpp)
+        target_link_libraries(GBA_web_profile PRIVATE gba_core)
+        target_link_options(GBA_web_profile PRIVATE
+            "-sENVIRONMENT=node"
+            "-sNODERAWFS=1"
+            "-sEXIT_RUNTIME=1"
+            "-sINITIAL_MEMORY=134217728"
+            "-g"
+        )
+        set_target_properties(GBA_web_profile PROPERTIES
+            OUTPUT_NAME "gba_web_profile"
+            SUFFIX ".js"
+        )
+    endif()
 endif()
 
 if(NOT EMSCRIPTEN)
@@ -141,6 +161,9 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     endif()
     if(TARGET GBA_web)
         target_compile_options(GBA_web PRIVATE -Wall -Wextra)
+    endif()
+    if(TARGET GBA_web_profile)
+        target_compile_options(GBA_web_profile PRIVATE -Wall -Wextra)
     endif()
 endif()
 

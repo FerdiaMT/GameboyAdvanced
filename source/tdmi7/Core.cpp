@@ -158,7 +158,10 @@ uint32_t CPU::tick()
 	}
 
 	const bool timingTraceEnabled = bus->isCpuTimingTraceEnabled();
-	const size_t timingTraceStart = bus->cpuTimingTrace().size();
+	// Normal emulation leaves CPU timing tracing disabled.  Avoid even touching
+	// the trace vector on every instruction unless a timing test enabled it.
+	size_t timingTraceStart = 0;
+	if (timingTraceEnabled) timingTraceStart = bus->cpuTimingTrace().size();
 
 	if (!T) // if arm mode
 	{

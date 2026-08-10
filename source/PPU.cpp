@@ -248,6 +248,8 @@ void PPU::renderScanline(uint16_t line)
 	lineLayers.fill(0x20U);
 	lineObjectWindow.fill(false);
 	if (displayControl & 0x8000U) prepareObjectWindow(line);
+	std::array<bool, 128> visibleObjects{};
+	selectVisibleObjects(line, visibleObjects);
 	if (mode <= 2)
 	{
 		// In tiled modes palette entry zero is the backdrop colour.  It is not
@@ -272,14 +274,14 @@ void PPU::renderScanline(uint16_t line)
 				if (valid) affine ? renderAffineBackground(static_cast<unsigned>(background), line) :
 					renderTextBackground(static_cast<unsigned>(background), line);
 			}
-			renderObjects(line, static_cast<unsigned>(priority));
+			renderObjects(line, static_cast<unsigned>(priority), visibleObjects);
 		}
 	}
 	else if (mode == 3)
 	{
 		for (uint32_t x = 0; x < 240; ++x)
 			plotPixel(x, line, color555(bus.ppuReadVram16(0x06000000U + (line * 240 + x) * 2)), 3, 4);
-		for (int priority = 3; priority >= 0; --priority) renderObjects(line, static_cast<unsigned>(priority));
+		for (int priority = 3; priority >= 0; --priority) renderObjects(line, static_cast<unsigned>(priority), visibleObjects);
 	}
 	else if (mode == 4)
 	{
@@ -289,7 +291,7 @@ void PPU::renderScanline(uint16_t line)
 			const uint8_t index = bus.ppuReadVram8(0x06000000U + page + line * 240 + x);
 			plotPixel(x, line, color555(bus.ppuReadPalette16(0x05000000U + index * 2)), 3, 4);
 		}
-		for (int priority = 3; priority >= 0; --priority) renderObjects(line, static_cast<unsigned>(priority));
+		for (int priority = 3; priority >= 0; --priority) renderObjects(line, static_cast<unsigned>(priority), visibleObjects);
 	}
 	else if (mode == 5)
 	{
@@ -297,7 +299,7 @@ void PPU::renderScanline(uint16_t line)
 		for (uint32_t x = 0; x < 240; ++x)
 			if (x < 160 && line < 128)
 				plotPixel(x, line, color555(bus.ppuReadVram16(0x06000000U + page + (line * 160 + x) * 2)), 3, 4);
-		for (int priority = 3; priority >= 0; --priority) renderObjects(line, static_cast<unsigned>(priority));
+		for (int priority = 3; priority >= 0; --priority) renderObjects(line, static_cast<unsigned>(priority), visibleObjects);
 	}
 	else std::fill(output, output + 240, color555(bus.ppuReadPalette16(0x05000000U)));
 }
@@ -505,13 +507,9 @@ void PPU::prepareObjectWindow(uint16_t line)
 	}
 }
 
-void PPU::renderObjects(uint16_t line, unsigned requestedPriority)
+void PPU::selectVisibleObjects(uint16_t line, std::array<bool, 128>& visibleObjects) const
 {
-	static constexpr uint8_t widths[3][4] = { { 8, 16, 32, 64 }, { 16, 32, 32, 64 }, { 8, 8, 16, 32 } };
 	static constexpr uint8_t heights[3][4] = { { 8, 16, 32, 64 }, { 8, 8, 16, 32 }, { 16, 32, 32, 64 } };
-	const bool oneDimensional = (displayControl & 0x0040U) != 0;
-	const uint32_t objBase = (displayControl & 7U) >= 3 ? 0x06014000U : 0x06010000U;
-	std::array<bool, 128> visibleObjects{};
 	unsigned objectCount = 0;
 	// Hardware evaluates at most 32 OBJ entries on one scanline, in OAM order.
 	for (unsigned object = 0; object < 128 && objectCount < 32; ++object)
@@ -527,6 +525,14 @@ void PPU::renderObjects(uint16_t line, unsigned requestedPriority)
 		const unsigned height = heights[shape][size] * (affine && (attr0 & 0x0200U) ? 2U : 1U);
 		if (((line - (attr0 & 0xFFU)) & 0xFFU) < height) visibleObjects[object] = true, ++objectCount;
 	}
+}
+
+void PPU::renderObjects(uint16_t line, unsigned requestedPriority, const std::array<bool, 128>& visibleObjects)
+{
+	static constexpr uint8_t widths[3][4] = { { 8, 16, 32, 64 }, { 16, 32, 32, 64 }, { 8, 8, 16, 32 } };
+	static constexpr uint8_t heights[3][4] = { { 8, 16, 32, 64 }, { 8, 8, 16, 32 }, { 16, 32, 32, 64 } };
+	const bool oneDimensional = (displayControl & 0x0040U) != 0;
+	const uint32_t objBase = (displayControl & 7U) >= 3 ? 0x06014000U : 0x06010000U;
 	unsigned objectPixels = 0;
 	for (int object = 127; object >= 0; --object)
 	{
@@ -556,6 +562,22 @@ void PPU::renderObjects(uint16_t line, unsigned requestedPriority)
 		if (priority != requestedPriority) continue;
 		const unsigned palette = (attr2 >> 12) & 0xFU;
 		const unsigned baseTile = attr2 & 0x3FFU;
+		const bool horizontalFlip = (attr1 & 0x1000U) != 0;
+		const unsigned rowTiles = oneDimensional ? (width / 8U) * (color256 ? 2U : 1U) : 32U;
+		const bool semiTransparent = ((attr0 >> 10) & 3U) == 1;
+		int pa = 0;
+		int pb = 0;
+		int pc = 0;
+		int pd = 0;
+		if (affine)
+		{
+			const unsigned matrix = (attr1 >> 9) & 0x1FU;
+			const uint32_t matrixBase = 0x07000000U + matrix * 32U;
+			pa = static_cast<int16_t>(bus.ppuReadOam16(matrixBase + 6U));
+			pb = static_cast<int16_t>(bus.ppuReadOam16(matrixBase + 14U));
+			pc = static_cast<int16_t>(bus.ppuReadOam16(matrixBase + 22U));
+			pd = static_cast<int16_t>(bus.ppuReadOam16(matrixBase + 30U));
+		}
 		for (unsigned localX = 0; localX < displayWidth; ++localX)
 		{
 			const int screenX = spriteX + static_cast<int>(localX);
@@ -569,20 +591,13 @@ void PPU::renderObjects(uint16_t line, unsigned requestedPriority)
 			}
 			if (affine)
 			{
-				const unsigned matrix = (attr1 >> 9) & 0x1FU;
-				const uint32_t matrixBase = 0x07000000U + matrix * 32U;
-				const int pa = static_cast<int16_t>(bus.ppuReadOam16(matrixBase + 6U));
-				const int pb = static_cast<int16_t>(bus.ppuReadOam16(matrixBase + 14U));
-				const int pc = static_cast<int16_t>(bus.ppuReadOam16(matrixBase + 22U));
-				const int pd = static_cast<int16_t>(bus.ppuReadOam16(matrixBase + 30U));
 				const int dx = sourceX - static_cast<int>(displayWidth / 2U);
 				const int dy = sourceY - static_cast<int>(displayHeight / 2U);
 				sourceX = ((pa * dx + pb * dy) >> 8) + static_cast<int>(width / 2U);
 				sourceY = ((pc * dx + pd * dy) >> 8) + static_cast<int>(height / 2U);
 			}
-			else if (attr1 & 0x1000U) sourceX = static_cast<int>(width) - 1 - sourceX;
+			else if (horizontalFlip) sourceX = static_cast<int>(width) - 1 - sourceX;
 			if (sourceX < 0 || sourceY < 0 || sourceX >= static_cast<int>(width) || sourceY >= static_cast<int>(height)) continue;
-			const unsigned rowTiles = oneDimensional ? (width / 8U) * (color256 ? 2U : 1U) : 32U;
 			const unsigned tile = baseTile + (static_cast<unsigned>(sourceY) / 8U) * rowTiles + (static_cast<unsigned>(sourceX) / 8U) * (color256 ? 2U : 1U);
 			uint8_t index;
 			if (color256) index = bus.ppuReadVram8(objBase + tile * 32U + (static_cast<unsigned>(sourceY) & 7U) * 8U + (static_cast<unsigned>(sourceX) & 7U));
@@ -599,7 +614,7 @@ void PPU::renderObjects(uint16_t line, unsigned requestedPriority)
 			if (index != 0)
 			{
 				if (objectPixels++ >= 960) return; // 960 OBJ pixels per scanline.
-				plotPixel(static_cast<uint32_t>(screenX), line, color555(bus.ppuReadPalette16(0x05000200U + index * 2U)), priority, 0x10U, ((attr0 >> 10) & 3U) == 1);
+				plotPixel(static_cast<uint32_t>(screenX), line, color555(bus.ppuReadPalette16(0x05000200U + index * 2U)), priority, 0x10U, semiTransparent);
 			}
 		}
 	}

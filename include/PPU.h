@@ -51,7 +51,8 @@ class PPU final : public ClockedDevice
 	void renderScanline(uint16_t line);
 	void renderTextBackground(unsigned background, uint16_t line);
 	void renderAffineBackground(unsigned background, uint16_t line);
-	void renderObjects(uint16_t line, unsigned priority);
+	void selectVisibleObjects(uint16_t line, std::array<bool, 128>& visibleObjects) const;
+	void renderObjects(uint16_t line, unsigned priority, const std::array<bool, 128>& visibleObjects);
 	void prepareObjectWindow(uint16_t line);
 	void plotPixel(uint32_t x, uint16_t line, uint32_t color, unsigned priority, uint8_t layer, bool semiTransparent = false);
 	uint8_t windowMask(uint32_t x, uint16_t line) const;

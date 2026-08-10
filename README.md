@@ -58,3 +58,17 @@ python3 -m http.server --directory build/web 8080
 Open `http://localhost:8080/index.html`. The page provides Pause and Reset;
 keyboard controls are Z/A, X/B, A/L, S/R, arrows/D-pad, Enter/Start, and
 Backspace/Select.
+
+### WebAssembly CPU profile
+
+The optional Node-hosted profiling runner executes the same Emscripten-compiled
+core against a BIOS and ROM, allowing V8 to produce named WebAssembly samples:
+
+```sh
+source /home/ferdia/emsdk/emsdk_env.sh
+emcmake cmake -S . -B build/web-profile -DCMAKE_BUILD_TYPE=Release -DGBA_ENABLE_WEB_PROFILE=ON
+cmake --build build/web-profile --target GBA_web_profile
+node --prof build/web-profile/gba_web_profile.js bin/bios/gba_bios.bin \
+  "bin/games/Super Mario Advance 4 - Super Mario Bros. 3 (USA, Australia) (Rev 1).gba" 10000000
+node --prof-process isolate-*.log
+```
