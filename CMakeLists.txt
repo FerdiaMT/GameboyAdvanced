@@ -109,6 +109,14 @@ if(EMSCRIPTEN)
         OUTPUT_NAME "index"
         SUFFIX ".html"
     )
+    add_custom_command(
+        TARGET GBA_web
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND}
+            -DINPUT=$<TARGET_FILE_DIR:GBA_web>/index.js
+            -P "${CMAKE_SOURCE_DIR}/cmake/PatchEmscriptenRuntime.cmake"
+        VERBATIM
+    )
 endif()
 
 if(NOT EMSCRIPTEN)
