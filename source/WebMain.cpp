@@ -9,6 +9,9 @@
 namespace
 {
 constexpr uint64_t FrameCycles = 1232U * 228U;
+constexpr double GbaClockHz = 16'777'216.0;
+constexpr double FrameDurationMs = static_cast<double>(FrameCycles) * 1000.0 / GbaClockHz;
+constexpr double MaximumFrameGapMs = 250.0;
 
 EM_JS(void, webSetup, (),
 {
@@ -153,6 +156,7 @@ public:
             return false;
         }
         nextFrame = gba.masterCycleCount() + FrameCycles;
+        resetFramePacing();
         webSetStatus("Playing");
         webPresentFrame(gba.ppu.framebuffer().data());
         return true;
@@ -162,22 +166,55 @@ public:
     {
         if (webTakeCartridgeChangeRequest()) loadSelectedCartridge();
         if (webTakeResetRequest()) reset();
-        if (webIsPaused()) return;
+
+        const double now = emscripten_get_now();
+        if (webIsPaused())
+        {
+            resetFramePacing(now);
+            return;
+        }
+
+        double elapsedMs = now - lastHostTimeMs;
+        lastHostTimeMs = now;
+        if (elapsedMs < 0.0) elapsedMs = 0.0;
+
+        // requestAnimationFrame runs at the display refresh rate.  Running a
+        // GBA frame for every callback makes a 120 Hz display emulate at twice
+        // speed, so accumulate real time and only advance complete 59.73 Hz
+        // GBA video frames.  Dropping an unusually large gap prevents a
+        // backgrounded tab from trying to catch up hundreds of frames at once.
+        if (elapsedMs > MaximumFrameGapMs)
+        {
+            accumulatedFrameTimeMs = 0.0;
+            return;
+        }
+        accumulatedFrameTimeMs += elapsedMs;
+        if (accumulatedFrameTimeMs < FrameDurationMs) return;
 
         gba.setPressedKeys(webPressedKeys());
-        // Execute a full hardware video frame per browser animation frame.
-        // No wall-clock sleeping is used: requestAnimationFrame owns pacing in
-        // the browser and the loop remains deterministic between frames.
-        while (gba.masterCycleCount() < nextFrame)
-            gba.tick();
+        do
+        {
+            while (gba.masterCycleCount() < nextFrame)
+                gba.tick();
+            nextFrame += FrameCycles;
+            while (nextFrame <= gba.masterCycleCount()) nextFrame += FrameCycles;
+            accumulatedFrameTimeMs -= FrameDurationMs;
+        }
+        while (accumulatedFrameTimeMs >= FrameDurationMs);
         webPresentFrame(gba.ppu.framebuffer().data());
-        nextFrame += FrameCycles;
-        while (nextFrame <= gba.masterCycleCount()) nextFrame += FrameCycles;
     }
 
 private:
     GBA gba;
     uint64_t nextFrame = FrameCycles;
+    double lastHostTimeMs = 0.0;
+    double accumulatedFrameTimeMs = 0.0;
+
+    void resetFramePacing(double now = emscripten_get_now())
+    {
+        lastHostTimeMs = now;
+        accumulatedFrameTimeMs = 0.0;
+    }
 
     void loadSelectedCartridge()
     {
@@ -189,6 +226,7 @@ private:
             return;
         }
         nextFrame = gba.masterCycleCount() + FrameCycles;
+        resetFramePacing();
         webPresentFrame(gba.ppu.framebuffer().data());
         webSetStatus("Playing");
     }
@@ -198,6 +236,7 @@ private:
         gba.reset();
         gba.cpu.pc = gba.bus.hasBios() ? 0x00000000U : 0x08000000U;
         nextFrame = gba.masterCycleCount() + FrameCycles;
+        resetFramePacing();
         webSetStatus("Playing");
     }
 };
