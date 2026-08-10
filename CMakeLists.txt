@@ -102,7 +102,7 @@ if(EMSCRIPTEN)
         "--preload-file=${CMAKE_SOURCE_DIR}/bin/games/Super Mario Advance 4 - Super Mario Bros. 3 (USA, Australia) (Rev 1).gba@/assets/super-mario-advance-4.gba"
         "-sENVIRONMENT=web"
         "-sFILESYSTEM=1"
-        "-sALLOW_MEMORY_GROWTH=1"
+        "-sINITIAL_MEMORY=134217728"
         "-sASSERTIONS=1"
     )
     set_target_properties(GBA_web PROPERTIES
