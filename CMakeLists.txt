@@ -109,6 +109,9 @@ if(EMSCRIPTEN)
         OUTPUT_NAME "index"
         SUFFIX ".html"
     )
+    set_property(TARGET GBA_web APPEND PROPERTY LINK_DEPENDS
+        "${CMAKE_SOURCE_DIR}/web/shell.html"
+    )
     add_custom_command(
         TARGET GBA_web
         POST_BUILD
