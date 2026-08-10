@@ -118,6 +118,57 @@ bool testEepromSerialProtocol()
     return true;
 }
 
+bool testFlash128CommandProtocol()
+{
+	constexpr const char* name = "flash128_command_protocol";
+	Bus bus;
+	const uint8_t flashId[] = { 'F','L','A','S','H','1','M','_','V','1','0','2' };
+	bus.loadCartridgeImage(flashId, sizeof(flashId));
+	EXPECT(name, bus.saveType() == Bus::SaveType::Flash128);
+
+	constexpr uint32_t save = 0x0E000000U;
+	auto unlock = [&]
+	{
+		bus.write8(save + 0x5555U, 0xAAU);
+		bus.write8(save + 0x2AAAU, 0x55U);
+	};
+	auto command = [&](uint8_t value) { unlock(); bus.write8(save + 0x5555U, value); };
+
+	bus.write8(save + 0x1234U, 0x00U);
+	EXPECT(name, bus.read8(save + 0x1234U) == 0xFFU);
+	command(0x90U);
+	EXPECT(name, bus.read8(save) == 0xC2U);
+	EXPECT(name, bus.read8(save + 1U) == 0x09U);
+	bus.write8(save, 0xF0U);
+
+	command(0xA0U);
+	bus.write8(save + 0x1234U, 0x3CU);
+	EXPECT(name, bus.read8(save + 0x1234U) == 0x3CU);
+	command(0xA0U);
+	bus.write8(save + 0x1234U, 0xFFU);
+	EXPECT(name, bus.read8(save + 0x1234U) == 0x3CU);
+
+	command(0xB0U);
+	bus.write8(save, 1U);
+	command(0xA0U);
+	bus.write8(save + 0x1234U, 0x7EU);
+	EXPECT(name, bus.read8(save + 0x1234U) == 0x7EU);
+	command(0xB0U);
+	bus.write8(save, 0U);
+	EXPECT(name, bus.read8(save + 0x1234U) == 0x3CU);
+
+	command(0x80U);
+	unlock();
+	bus.write8(save + 0x1234U, 0x30U);
+	EXPECT(name, bus.read8(save + 0x1234U) == 0xFFU);
+
+	command(0xA0U);
+	bus.write8(save + 0x1234U, 0x00U);
+	bus.loadCartridgeImage(flashId, sizeof(flashId));
+	EXPECT(name, bus.read8(save + 0x1234U) == 0xFFU);
+	return true;
+}
+
 using Test = bool (*)();
 bool run(const char* name, Test test)
 {
@@ -134,6 +185,7 @@ int main()
         run("cartridge_is_read_only_and_mirrored", testCartridgeIsReadOnlyAndMirrored) &&
         run("waitcnt_lives_in_io", testWaitcntLivesInIo) &&
 		run("save_type_detection", testSaveTypeDetection) &&
-        run("eeprom_serial_protocol", testEepromSerialProtocol);
+		run("eeprom_serial_protocol", testEepromSerialProtocol) &&
+		run("flash128_command_protocol", testFlash128CommandProtocol);
     return passed ? 0 : 1;
 }

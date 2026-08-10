@@ -359,6 +359,12 @@ bool Bus::loadROM(const char* filename, uint32_t loadAddr)
         return false;
     }
 
+	// A newly inserted cartridge has its own save chip. Save persistence is a
+	// frontend concern; without it, games must never inherit another title's
+	// volatile save contents when the active cartridge changes.
+	save.fill(0xFF);
+	resetFlashCommand();
+	resetEepromTransfer();
 	detectSaveType();
 
     printf("rom loaded\n");
@@ -374,6 +380,9 @@ void Bus::loadCartridgeImage(const uint8_t* data, size_t size, uint32_t loadAddr
         return;
     cartridgeRom.resize(std::max(cartridgeRom.size(), offset + size));
     std::copy(data, data + size, cartridgeRom.begin() + offset);
+	save.fill(0xFF);
+	resetFlashCommand();
+	resetEepromTransfer();
 	detectSaveType();
 }
 
@@ -390,6 +399,7 @@ void Bus::resetSystemState()
 {
 	io.fill(0);
 	waitcnt = 0;
+	resetFlashCommand();
 	resetEepromTransfer();
 	clearCpuTimingTrace();
 }
@@ -415,6 +425,104 @@ uint32_t Bus::saveOffset(uint32_t address) const
 	const uint32_t mask = detectedSaveType == SaveType::Sram ? 0x7FFFU :
 		detectedSaveType == SaveType::Flash128 ? 0x1FFFFU : 0xFFFFU;
 	return address & mask;
+}
+
+bool Bus::isFlash() const
+{
+	return detectedSaveType == SaveType::Flash64 || detectedSaveType == SaveType::Flash128;
+}
+
+void Bus::resetFlashCommand()
+{
+	flashMode = FlashMode::Read;
+	flashCommandPhase = FlashCommandPhase::Ready;
+	flashBank = 0;
+}
+
+uint8_t Bus::readSave8(uint32_t address) const
+{
+	if (!isFlash()) return save[saveOffset(address)];
+
+	const uint16_t offset = static_cast<uint16_t>(address);
+	if (flashMode == FlashMode::Identify)
+	{
+		// FLASH1M_V* games use the Macronix 128 KiB device ID.  The 64 KiB
+		// device ID is sufficient for the common FLASH_V/FLASH512_V library.
+		if (offset == 0) return 0xC2;
+		if (offset == 1) return detectedSaveType == SaveType::Flash128 ? 0x09 : 0x1C;
+	}
+
+	const size_t bankOffset = detectedSaveType == SaveType::Flash128 ? static_cast<size_t>(flashBank) * 0x10000U : 0;
+	return save[bankOffset + offset];
+}
+
+void Bus::writeSave8(uint32_t address, uint8_t data)
+{
+	if (!isFlash())
+	{
+		save[saveOffset(address)] = data;
+		return;
+	}
+
+	const uint16_t offset = static_cast<uint16_t>(address);
+	// A reset/read-array command is valid from every Flash command state.
+	if (data == 0xF0U)
+	{
+		resetFlashCommand();
+		return;
+	}
+
+	switch (flashCommandPhase)
+	{
+	case FlashCommandPhase::Ready:
+		if (offset == 0x5555U && data == 0xAAU) flashCommandPhase = FlashCommandPhase::Unlock1;
+		break;
+	case FlashCommandPhase::Unlock1:
+		flashCommandPhase = offset == 0x2AAAU && data == 0x55U ? FlashCommandPhase::Unlock2 : FlashCommandPhase::Ready;
+		break;
+	case FlashCommandPhase::Unlock2:
+		if (offset != 0x5555U) { flashCommandPhase = FlashCommandPhase::Ready; break; }
+		switch (data)
+		{
+		case 0x90U: flashMode = FlashMode::Identify; flashCommandPhase = FlashCommandPhase::Ready; break;
+		case 0xA0U: flashMode = FlashMode::Read; flashCommandPhase = FlashCommandPhase::Program; break;
+		case 0x80U: flashMode = FlashMode::Read; flashCommandPhase = FlashCommandPhase::EraseUnlock1; break;
+		case 0xB0U: flashMode = FlashMode::Read; flashCommandPhase = FlashCommandPhase::BankSwitch; break;
+		default: flashCommandPhase = FlashCommandPhase::Ready; break;
+		}
+		break;
+	case FlashCommandPhase::Program:
+	{
+		const size_t bankOffset = detectedSaveType == SaveType::Flash128 ? static_cast<size_t>(flashBank) * 0x10000U : 0;
+		// NOR Flash can only clear bits without an erase operation.
+		save[bankOffset + offset] &= data;
+		flashCommandPhase = FlashCommandPhase::Ready;
+		break;
+	}
+	case FlashCommandPhase::EraseUnlock1:
+		flashCommandPhase = offset == 0x5555U && data == 0xAAU ? FlashCommandPhase::EraseUnlock2 : FlashCommandPhase::Ready;
+		break;
+	case FlashCommandPhase::EraseUnlock2:
+		flashCommandPhase = offset == 0x2AAAU && data == 0x55U ? FlashCommandPhase::EraseCommand : FlashCommandPhase::Ready;
+		break;
+	case FlashCommandPhase::EraseCommand:
+		if (offset == 0x5555U && data == 0x10U)
+		{
+			save.fill(0xFF);
+		}
+		else if (data == 0x30U)
+		{
+			const size_t bankOffset = detectedSaveType == SaveType::Flash128 ? static_cast<size_t>(flashBank) * 0x10000U : 0;
+			const size_t sectorStart = bankOffset + (offset & ~static_cast<uint16_t>(0x0FFFU));
+			std::fill_n(save.begin() + sectorStart, 0x1000U, static_cast<uint8_t>(0xFF));
+		}
+		flashCommandPhase = FlashCommandPhase::Ready;
+		break;
+	case FlashCommandPhase::BankSwitch:
+		if (offset == 0 && detectedSaveType == SaveType::Flash128) flashBank = data & 1U;
+		flashCommandPhase = FlashCommandPhase::Ready;
+		break;
+	}
 }
 
 bool Bus::isEepromAddress(uint32_t address) const
@@ -562,7 +670,7 @@ uint8_t Bus::readMapped8(uint32_t address) const
         const uint32_t offset = cartridgeOffset(address);
         return offset < cartridgeRom.size() ? cartridgeRom[offset] : 0;
     }
-    case 0x0E: return save[saveOffset(address)];
+    case 0x0E: return readSave8(address);
     default: return 0;
     }
 }
@@ -584,7 +692,7 @@ void Bus::writeMapped8(uint32_t address, uint8_t data)
     case 0x05: palette[address & (PaletteSize - 1)] = data; break;
     case 0x06: vram[vramOffset(address)] = data; break;
     case 0x07: oam[address & (OamSize - 1)] = data; break;
-    case 0x0E: save[saveOffset(address)] = data; break;
+    case 0x0E: writeSave8(address, data); break;
     default: break; // Cartridge ROM and unmapped regions are read-only/open bus.
     }
 }

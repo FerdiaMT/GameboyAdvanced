@@ -3,33 +3,93 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Super Mario Advance</title>
+  <title>Game Boy Advance</title>
   <style>
     :root { color-scheme: dark; font-family: ui-sans-serif, system-ui, sans-serif; background: #1d1d21; color: #eceaec; }
     body { min-height: 100vh; margin: 0; display: grid; place-items: center; padding: 1.5rem; box-sizing: border-box; }
     main { width: min(100%, 800px); }
-    header { display: flex; justify-content: space-between; align-items: baseline; margin: 0 0 .65rem; color: #b9b6c0; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin: 0 0 .65rem; color: #b9b6c0; font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; }
+    .title { display: flex; align-items: baseline; gap: .55rem; min-width: 0; }
     h1 { margin: 0; color: #f3f1f5; font-size: .95rem; font-weight: 650; letter-spacing: .02em; text-transform: none; }
+    #fps { color: #9b98a2; font-variant-numeric: tabular-nums; letter-spacing: .02em; text-transform: none; white-space: nowrap; }
+    .cartridge-controls { display: flex; align-items: center; gap: .45rem; min-width: 0; }
+    select, .upload { border: 1px solid #55515c; border-radius: .3rem; background: #242329; color: #e8e5eb; font: inherit; letter-spacing: normal; text-transform: none; }
+    select { max-width: 15rem; padding: .35rem .5rem; }
+    .upload { padding: .35rem .6rem; cursor: pointer; }
+    .upload:hover, .upload:focus-within, select:hover, select:focus-visible { border-color: #b2a6db; background: #302c3b; outline: none; }
+    .upload input { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; }
     .screen { padding: .65rem; background: #101014; border: 1px solid #3b3941; border-radius: .55rem; box-shadow: 0 .7rem 2.5rem #0007; }
     canvas { display: block; width: 100%; height: auto; aspect-ratio: 3 / 2; background: #000; image-rendering: pixelated; outline: none; }
     footer { display: flex; align-items: center; gap: .45rem; margin-top: .7rem; min-height: 2rem; color: #9b98a2; font-size: .78rem; }
     button { appearance: none; border: 1px solid #55515c; border-radius: .3rem; padding: .35rem .6rem; background: transparent; color: #e8e5eb; font: inherit; cursor: pointer; }
     button:hover, button:focus-visible { border-color: #b2a6db; background: #302c3b; outline: none; }
-    .keys { margin-left: auto; text-align: right; }
+    .controller-guide { position: relative; width: min(100%, 15rem); margin-left: auto; padding-bottom: 1.2rem; }
+    .controller-guide img { display: block; width: 100%; height: auto; opacity: .72; }
+    .control-annotations { position: absolute; inset: 0 auto auto 0; width: 100%; height: auto; overflow: visible; pointer-events: none; }
+    .control-annotations > path, .control-annotations > rect { fill: #1d1d21; stroke: #b9b6c0; stroke-width: 7; stroke-linecap: round; stroke-linejoin: round; }
+    .control-annotations text { fill: #eceaec; font-family: ui-sans-serif, system-ui, sans-serif; font-size: 54px; font-weight: 650; letter-spacing: 2px; text-anchor: middle; }
     #status { color: #9b98a2; }
-    @media (max-width: 560px) { body { padding: .75rem; } .keys { display: none; } }
+    @media (max-width: 560px) { body { padding: .75rem; } header { align-items: flex-start; flex-direction: column; gap: .55rem; } .cartridge-controls, select { width: 100%; max-width: none; } .controller-guide { display: none; } }
   </style>
 </head>
 <body>
   <main>
-    <header><h1>Super Mario Advance</h1><span id="status" aria-live="polite">Loading…</span></header>
+    <header>
+      <div class="title"><h1 id="game-title">Super Mario Advance 4</h1><span id="fps">FPS --</span></div>
+      <div class="cartridge-controls">
+        <select id="game-select" aria-label="Choose a bundled game">
+          <option value="/assets/super-mario-advance-4.gba">Super Mario Advance 4</option>
+          <option value="/assets/sonic.gba">Sonic Advance</option>
+          <option value="/assets/pokemon-emerald.gba">Pokémon Emerald</option>
+          <option value="/assets/metroid-fusion.gba">Metroid Fusion</option>
+          <option value="/assets/mother-3.gba">Mother 3</option>
+          <option value="/assets/sma.gba">Super Mario Advance 1</option>
+        </select>
+        <label class="upload">Upload ROM<input id="rom-upload" type="file" accept=".gba,application/octet-stream"></label>
+      </div>
+    </header>
     <div class="screen">
       <canvas id="screen" width="240" height="160" tabindex="0" aria-label="Game display"></canvas>
     </div>
     <footer>
       <button id="pause" type="button">Pause</button>
       <button id="reset" type="button">Reset</button>
-      <span class="keys">Z / X · arrows · Enter / Backspace</span>
+      <span id="status" aria-live="polite">Loading…</span>
+      <div class="controller-guide">
+        <img src="assets/nes-controller.png" alt="NES-style controller diagram. Backspace is Select, Enter is Start, X is B, and Z is A.">
+        <svg class="control-annotations" viewBox="0 0 1834 1000" aria-hidden="true">
+          <defs>
+            <marker id="key-arrow" viewBox="0 0 12 12" refX="10" refY="6" markerWidth="12" markerHeight="12" orient="auto-start-reverse">
+              <path d="M1 1L11 6L1 11Z" fill="#b9b6c0" stroke="none"/>
+            </marker>
+          </defs>
+          <path d="M220 872L320 652" fill="none" marker-end="url(#key-arrow)"/>
+          <rect x="180" y="870" width="80" height="54" rx="14"/>
+          <text x="220" y="911">↑</text>
+          <rect x="90" y="936" width="80" height="54" rx="14"/>
+          <text x="130" y="977">←</text>
+          <rect x="180" y="936" width="80" height="54" rx="14"/>
+          <text x="220" y="977">↓</text>
+          <rect x="270" y="936" width="80" height="54" rx="14"/>
+          <text x="310" y="977">→</text>
+
+          <path d="M650 894L732 628" fill="none" marker-end="url(#key-arrow)"/>
+          <rect x="500" y="890" width="300" height="76" rx="18"/>
+          <text x="650" y="944">BACKSPACE</text>
+
+          <path d="M944 894L960 628" fill="none" marker-end="url(#key-arrow)"/>
+          <rect x="827" y="890" width="234" height="76" rx="18"/>
+          <text x="944" y="944">ENTER</text>
+
+          <path d="M1275 894L1275 620" fill="none" marker-end="url(#key-arrow)"/>
+          <rect x="1203" y="890" width="144" height="76" rx="18"/>
+          <text x="1275" y="944">X</text>
+
+          <path d="M1504 894L1504 620" fill="none" marker-end="url(#key-arrow)"/>
+          <rect x="1432" y="890" width="144" height="76" rx="18"/>
+          <text x="1504" y="944">Z</text>
+        </svg>
+      </div>
     </footer>
   </main>
   {{{ SCRIPT }}}

@@ -30,9 +30,12 @@ The GBA object can be ran with the --trace flag, which will return a Simics like
 
 ## Browser / WebAssembly build
 
-The browser frontend starts the bundled `bin/gba_bios.bin` and `bin/sma.gba`
+The browser frontend starts the bundled BIOS and Super Mario Advance 4
 automatically. It needs an [Emscripten](https://emscripten.org/) environment;
-the native compiler cannot produce the WebAssembly target.
+the native compiler cannot produce the WebAssembly target. The selector in the
+top-right switches between the ROMs in `bin/games/`; **Upload ROM** loads a
+local `.gba` file into the browser's temporary in-memory filesystem (up to
+32 MiB).
 
 ```sh
 # Activate the local Emscripten SDK for this shell.

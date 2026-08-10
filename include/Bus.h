@@ -33,6 +33,11 @@ private:
 	std::array<uint8_t, SaveSize> save{};
 	std::vector<uint8_t> cartridgeRom;
 	SaveType detectedSaveType = SaveType::Unknown;
+	enum class FlashMode : uint8_t { Read, Identify };
+	enum class FlashCommandPhase : uint8_t { Ready, Unlock1, Unlock2, Program, EraseUnlock1, EraseUnlock2, EraseCommand, BankSwitch };
+	FlashMode flashMode = FlashMode::Read;
+	FlashCommandPhase flashCommandPhase = FlashCommandPhase::Ready;
+	uint8_t flashBank = 0;
 	enum class EepromPhase : uint8_t { Idle, Command, Address, WriteData, Stop };
 	EepromPhase eepromPhase = EepromPhase::Idle;
 	bool eepromReadCommand = false;
@@ -173,6 +178,10 @@ private:
 	static uint32_t vramOffset(uint32_t address);
 	static uint32_t cartridgeOffset(uint32_t address);
 	uint32_t saveOffset(uint32_t address) const;
+	uint8_t readSave8(uint32_t address) const;
+	void writeSave8(uint32_t address, uint8_t data);
+	bool isFlash() const;
+	void resetFlashCommand();
 	bool isEepromAddress(uint32_t address) const;
 	void writeEepromBit(uint8_t bit);
 	uint16_t readEepromBit();
